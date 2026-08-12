@@ -1,0 +1,86 @@
+@import "tailwindcss";
+
+/* ---------------------------------------------------------------------
+   Strivo design tokens.
+   Change these values (and only these) to re-skin the whole product —
+   every screen and component consumes colors/radius/shadow through these
+   theme variables rather than hardcoded values.
+--------------------------------------------------------------------- */
+@theme {
+  --color-brand-primary: #7c3aed;    /* purple */
+  --color-brand-secondary: #4f6ef7;  /* blue */
+  --color-brand-primary-soft: #ede9fe;
+  --color-brand-secondary-soft: #ecfeff;
+
+  --color-ink: #0f172a;       /* dark navy — primary text */
+  --color-ink-soft: #5b6478;  /* secondary text */
+  --color-ink-faint: #94a0b8; /* tertiary / placeholder text */
+
+  --color-surface: #ffffff;
+  --color-bg: #f8f7fc;
+  --color-border: #ece9f5;
+
+  --color-success: #16a34a;
+  --color-danger: #dc2626;
+  --color-warning: #d97706;
+
+  --radius-card: 1.25rem;
+  --radius-pill: 999px;
+  --radius-input: 0.85rem;
+
+  --shadow-card: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(76, 29, 149, 0.06);
+  --shadow-nav: 0 -2px 16px rgba(15, 23, 42, 0.06);
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, Helvetica, Arial, sans-serif;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+::selection {
+  background: var(--color-brand-primary-soft);
+}
+
+.bg-gradient-brand {
+  background-image: linear-gradient(135deg, var(--color-brand-secondary), var(--color-brand-primary));
+}
+
+.text-gradient-brand {
+  background-image: linear-gradient(135deg, var(--color-brand-secondary), var(--color-brand-primary));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 rgba(124, 58, 237, 0.35); }
+  100% { box-shadow: 0 0 0 22px rgba(124, 58, 237, 0); }
+}
+.animate-pulse-ring {
+  animation: pulse-ring 1.6s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes bar-pulse {
+  0% { transform: scaleY(0.4); opacity: 0.5; }
+  100% { transform: scaleY(1); opacity: 1; }
+}
