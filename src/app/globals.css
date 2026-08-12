@@ -84,3 +84,28 @@ body {
   0% { transform: scaleY(0.4); opacity: 0.5; }
   100% { transform: scaleY(1); opacity: 1; }
 }
+
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes float-blob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(12px, -14px) scale(1.06); }
+}
+.animate-float-blob {
+  animation: float-blob 9s ease-in-out infinite;
+}
+
+@keyframes shimmer-border {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.animate-shimmer-border {
+  background-size: 200% 100%;
+  animation: shimmer-border 4s linear infinite;
+}

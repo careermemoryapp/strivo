@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Flame, ChevronRight } from "lucide-react";
+import { Flame, ChevronRight, Sparkles, ArrowUp } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Card } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
@@ -10,7 +10,7 @@ import { LogoWithWordmark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { HOME_SUBTITLE, QUICK_ACTIONS } from "@/lib/config";
-import { timeOfDayGreeting } from "@/lib/utils";
+import { timeOfDayGreeting, cn } from "@/lib/utils";
 import { ACTION_ICON_DEFS, chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 
@@ -21,11 +21,19 @@ type HomeData = {
   recentChats: Chat[];
 };
 
+type StartChatArgs = {
+  id: string;
+  chatTitle: string;
+  category: string;
+  prompt: string;
+};
+
 export default function HomePage() {
   const router = useRouter();
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  const [heroInput, setHeroInput] = useState("");
 
   const load = useCallback(async () => {
     setError(null);
@@ -43,13 +51,13 @@ export default function HomePage() {
     load();
   }, [load]);
 
-  async function handleQuickAction(action: (typeof QUICK_ACTIONS)[number]) {
-    setPendingAction(action.id);
+  async function startChat({ id, chatTitle, category, prompt }: StartChatArgs) {
+    setPendingAction(id);
     try {
       const res = await fetch("/api/chats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: action.chatTitle, category: action.category, initialMessage: action.prompt }),
+        body: JSON.stringify({ title: chatTitle, category, initialMessage: prompt || undefined }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error();
@@ -58,6 +66,19 @@ export default function HomePage() {
       setPendingAction(null);
       setError("Couldn't start that conversation. Please try again.");
     }
+  }
+
+  function handleQuickAction(action: (typeof QUICK_ACTIONS)[number]) {
+    startChat({ id: action.id, chatTitle: action.chatTitle, category: action.category, prompt: action.prompt });
+  }
+
+  function handleHeroSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = heroInput.trim();
+    if (!trimmed || pendingAction) return;
+    const title = trimmed.length > 48 ? `${trimmed.slice(0, 48)}…` : trimmed;
+    setHeroInput("");
+    startChat({ id: "hero", chatTitle: title, category: "Others", prompt: trimmed });
   }
 
   if (error && !data) {
@@ -79,15 +100,26 @@ export default function HomePage() {
   const firstName = data.user?.firstName || "there";
 
   return (
-    <div>
-      <div className="flex items-center justify-between px-5 pt-6">
+    <div className="relative overflow-hidden">
+      {/* Decorative ambient blobs — purely visual, gives the screen an "alive" AI feel */}
+      <div
+        className="pointer-events-none absolute -top-16 -right-20 h-56 w-56 rounded-full bg-brand-primary/20 blur-3xl animate-float-blob"
+        aria-hidden="true"
+      />
+      <div
+        className="pointer-events-none absolute top-24 -left-24 h-48 w-48 rounded-full bg-brand-secondary/20 blur-3xl animate-float-blob"
+        style={{ animationDelay: "-4s" }}
+        aria-hidden="true"
+      />
+
+      <div className="relative flex items-center justify-between px-5 pt-6">
         <LogoWithWordmark size={24} />
         <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
           <Avatar firstName={data.user?.firstName} lastName={data.user?.lastName} size={36} />
         </button>
       </div>
 
-      <div className="px-5 pt-5">
+      <div className="relative px-5 pt-5">
         <h1 className="text-2xl font-bold text-ink">
           {timeOfDayGreeting()}, <span className="text-gradient-brand">{firstName}</span> 👋
         </h1>
@@ -95,41 +127,71 @@ export default function HomePage() {
       </div>
 
       {error && (
-        <div className="px-5 pt-4">
+        <div className="relative px-5 pt-4">
           <ErrorBanner message={error} onRetry={load} />
         </div>
       )}
 
-      <div className="px-5 pt-6">
-        <Card className="p-0 overflow-hidden">
-          <h2 className="px-4 pt-4 pb-2 font-semibold text-ink">What do you want to accomplish today?</h2>
-          <div className="divide-y divide-border">
-            {QUICK_ACTIONS.map((action) => {
-              const iconDef = ACTION_ICON_DEFS[action.icon];
-              const Icon = iconDef.icon;
-              return (
-                <button
-                  key={action.id}
-                  onClick={() => handleQuickAction(action)}
-                  disabled={!!pendingAction}
-                  className="flex w-full items-center gap-3 px-4 py-3.5 text-left disabled:opacity-50"
-                >
-                  <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconDef.bg} ${iconDef.text}`}>
-                    <Icon size={18} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-ink">{action.title}</p>
-                    <p className="text-xs text-ink-soft">{action.description}</p>
-                  </div>
-                  {pendingAction === action.id ? <Spinner /> : <ChevronRight size={17} className="text-ink-faint shrink-0" />}
-                </button>
-              );
-            })}
+      {/* Hero "ask anything" bar — the AI-forward entry point into the app */}
+      <div className="relative px-5 pt-5">
+        <form
+          onSubmit={handleHeroSubmit}
+          className="relative rounded-card p-[1.5px] bg-gradient-to-r from-brand-secondary via-brand-primary to-brand-secondary animate-shimmer-border shadow-card"
+        >
+          <div className="flex items-center gap-2 rounded-[calc(var(--radius-card)-1.5px)] bg-surface px-4 py-3.5">
+            <Sparkles size={18} className="shrink-0 text-brand-primary" />
+            <input
+              value={heroInput}
+              onChange={(e) => setHeroInput(e.target.value)}
+              placeholder="Ask anything — career advice, prep, or just talk…"
+              disabled={!!pendingAction}
+              className="min-w-0 flex-1 bg-transparent text-sm text-ink placeholder:text-ink-faint outline-none disabled:opacity-60"
+            />
+            <button
+              type="submit"
+              disabled={!heroInput.trim() || !!pendingAction}
+              aria-label="Start chat"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-white disabled:opacity-30"
+            >
+              {pendingAction === "hero" ? <Spinner /> : <ArrowUp size={16} />}
+            </button>
           </div>
-        </Card>
+        </form>
       </div>
 
-      <div className="px-5 pt-4">
+      <div className="relative px-5 pt-6">
+        <h2 className="mb-3 font-semibold text-ink">What do you want to accomplish today?</h2>
+        <div className="grid grid-cols-2 gap-3">
+          {QUICK_ACTIONS.map((action, i) => {
+            const iconDef = ACTION_ICON_DEFS[action.icon];
+            const Icon = iconDef.icon;
+            const isOthers = action.id === "others";
+            return (
+              <button
+                key={action.id}
+                onClick={() => handleQuickAction(action)}
+                disabled={!!pendingAction}
+                style={{ animationDelay: `${i * 60}ms` }}
+                className={cn(
+                  "animate-fade-in-up flex flex-col items-start gap-2.5 rounded-card border p-4 text-left transition-transform active:scale-[0.97] disabled:opacity-50",
+                  isOthers ? "col-span-2 flex-row items-center border-dashed border-border bg-surface" : "border-border bg-surface shadow-card"
+                )}
+              >
+                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconDef.bg} ${iconDef.text}`}>
+                  {pendingAction === action.id ? <Spinner /> : <Icon size={18} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-ink">{action.title}</p>
+                  <p className="text-xs text-ink-soft">{action.description}</p>
+                </div>
+                {isOthers && <ChevronRight size={17} className="text-ink-faint shrink-0" />}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="relative px-5 pt-4">
         <Card className="flex items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary-soft text-brand-primary">
             <MicIcon />
@@ -148,7 +210,7 @@ export default function HomePage() {
       </div>
 
       {data.recentChats.length > 0 && (
-        <div className="px-5 pt-4">
+        <div className="relative px-5 pt-4">
           <div className="mb-3 flex items-center justify-between">
             <h2 className="font-semibold text-ink">Continue where you left off</h2>
             <button onClick={() => router.push("/chats")} className="flex items-center text-sm font-medium text-brand-primary">
@@ -184,7 +246,7 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="px-5 pt-4 pb-2">
+      <div className="relative px-5 pt-4 pb-2">
         <Card className="flex items-center gap-3">
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
             <Flame size={20} />
