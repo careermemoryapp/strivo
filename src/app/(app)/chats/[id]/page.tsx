@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState, use as usePromise } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, MoreVertical, ArrowUp, Sparkles, Trash2 } from "lucide-react";
+import { ChevronLeft, MoreVertical, ArrowUp, Sparkles, Trash2, Mic, Square } from "lucide-react";
 import { ChatBubble } from "@/components/ChatBubble";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 import type { Chat } from "@/lib/repo/chats";
 import type { Message } from "@/lib/repo/messages";
 
@@ -23,6 +24,7 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
   const [lastFailedContent, setLastFailedContent] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const speech = useSpeechRecognition();
 
   async function load() {
     setLoadError(null);
@@ -46,12 +48,33 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
+  // While the mic is listening, mirror the recognized speech into the text
+  // box live. Only the resulting TEXT is ever saved or sent — the audio
+  // itself never leaves the browser and is never stored anywhere.
+  useEffect(() => {
+    if (speech.listening) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirroring live speech transcript into the input box
+      setInput(speech.fullText);
+    }
+  }, [speech.listening, speech.fullText]);
+
+  function toggleMic() {
+    if (speech.listening) {
+      speech.stop();
+      return;
+    }
+    speech.reset();
+    speech.start();
+  }
+
   async function send(content: string) {
     if (!content.trim() || sending) return;
+    if (speech.listening) speech.stop();
     setSending(true);
     setSendError(null);
     setLastFailedContent(null);
     setInput("");
+    speech.reset();
 
     // Optimistic user bubble.
     const optimisticUser: Message = {
@@ -186,6 +209,11 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
       </div>
 
       <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 px-5 pb-2">
+        {speech.error && (
+          <div className="mb-2">
+            <ErrorBanner message={speech.error} />
+          </div>
+        )}
         {sendError && (
           <div className="mb-2">
             <ErrorBanner message={sendError} onRetry={lastFailedContent ? () => send(lastFailedContent) : undefined} />
@@ -199,6 +227,18 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
           className="flex items-end gap-2 rounded-card border border-border bg-surface p-2"
           style={{ boxShadow: "var(--shadow-card)" }}
         >
+          {speech.supported && (
+            <button
+              type="button"
+              onClick={toggleMic}
+              aria-label={speech.listening ? "Stop voice input" : "Speak instead of typing"}
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${
+                speech.listening ? "bg-red-500 text-white animate-pulse" : "bg-brand-primary-soft text-brand-primary"
+              }`}
+            >
+              {speech.listening ? <Square size={16} /> : <Mic size={18} />}
+            </button>
+          )}
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -209,7 +249,7 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
               }
             }}
             rows={1}
-            placeholder="Ask your AI about your career or experiences..."
+            placeholder={speech.listening ? "Listening…" : "Ask your AI about your career or experiences..."}
             className="flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink placeholder:text-ink-faint outline-none max-h-28"
           />
           <button

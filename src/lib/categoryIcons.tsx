@@ -58,4 +58,5 @@ export const ACTION_ICON_DEFS: Record<string, IconDef> = {
   users: { icon: Users, bg: "bg-violet-50", text: "text-violet-500" },
   briefcase: { icon: Briefcase, bg: "bg-orange-50", text: "text-orange-500" },
   sparkles: { icon: Sparkles, bg: "bg-teal-50", text: "text-teal-500" },
+  award: { icon: Award, bg: "bg-amber-50", text: "text-amber-500" },
 };

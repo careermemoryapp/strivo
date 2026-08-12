@@ -44,10 +44,6 @@ export default function HomePage() {
   }, [load]);
 
   async function handleQuickAction(action: (typeof QUICK_ACTIONS)[number]) {
-    if (action.prompt === "__CAPTURE__") {
-      router.push("/record");
-      return;
-    }
     setPendingAction(action.id);
     try {
       const res = await fetch("/api/chats", {

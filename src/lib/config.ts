@@ -6,6 +6,11 @@ export const APP_TAGLINE = "Your personal AI, built from your own experiences.";
 
 export const HOME_SUBTITLE = "Capture today. Remember forever. Achieve more.";
 
+// Each quick action starts a new chat with `prompt` as the opening user
+// message. Prompts are phrased as plain first-person statements (not
+// instructions to the AI) — the system prompt in lib/ai.ts is responsible
+// for making the assistant ask a clarifying question before it searches
+// memories, so that logic lives in one place instead of being repeated here.
 export const QUICK_ACTIONS = [
   {
     id: "interview",
@@ -14,8 +19,7 @@ export const QUICK_ACTIONS = [
     chatTitle: "Interview Preparation",
     category: "Interview Prep",
     icon: "target",
-    prompt:
-      "Help me prepare for an upcoming interview. Ask me what role I'm interviewing for, then use my real experiences to suggest strong stories and examples I can share.",
+    prompt: "I want to prepare for an upcoming interview.",
   },
   {
     id: "resume",
@@ -24,8 +28,7 @@ export const QUICK_ACTIONS = [
     chatTitle: "Resume Builder",
     category: "Career Advice",
     icon: "file-text",
-    prompt:
-      "Help me update my resume. Use my real experiences to draft strong, impact-driven bullet points.",
+    prompt: "I want to update my resume.",
   },
   {
     id: "promotion",
@@ -34,8 +37,7 @@ export const QUICK_ACTIONS = [
     chatTitle: "Promotion Coach",
     category: "Career Advice",
     icon: "trending-up",
-    prompt:
-      "Help me prepare a case for promotion. Use my real experiences to showcase my growth and achievements.",
+    prompt: "I want to prepare a case for my promotion.",
   },
   {
     id: "leadership",
@@ -44,39 +46,37 @@ export const QUICK_ACTIONS = [
     chatTitle: "Leadership Coach",
     category: "Career Advice",
     icon: "users",
-    prompt:
-      "Help me find examples from my real experiences that demonstrate leadership.",
+    prompt: "I want to find examples from my experience that show my leadership.",
   },
   {
-    id: "capture",
-    title: "Capture today's work",
-    description: "Save your wins and progress",
-    chatTitle: "",
-    category: "Other",
-    icon: "briefcase",
-    prompt: "__CAPTURE__",
+    id: "performance",
+    title: "Prepare for performance review",
+    description: "Highlight your achievements and growth",
+    chatTitle: "Performance Review",
+    category: "Career Advice",
+    icon: "award",
+    prompt: "I want to prepare for my performance review.",
   },
   {
-    id: "reflect",
-    title: "Reflect",
-    description: "Journal your thoughts and learnings",
-    chatTitle: "Reflection",
-    category: "Personal",
+    id: "advice",
+    title: "Get career advice",
+    description: "Grounded in your real experiences",
+    chatTitle: "Career Advice",
+    category: "Career Advice",
     icon: "sparkles",
-    prompt:
-      "I'd like to reflect on something. Ask me a thoughtful question to help me journal about my recent thoughts and learnings.",
+    prompt: "I'd like some career advice.",
   },
 ] as const;
 
 export const CHAT_CATEGORIES = ["All", "Interview Prep", "Career Advice", "Personal", "Other"] as const;
 
 export const NEW_CHAT_TEMPLATES = [
-  { category: "Interview Prep", title: "Interview Preparation", prompt: "Help me prepare for an interview using my real experiences." },
-  { category: "Career Advice", title: "Resume Builder", prompt: "Help me write strong resume bullet points using my real experiences." },
-  { category: "Career Advice", title: "Promotion Coach", prompt: "Help me build a case for promotion using my real experiences." },
-  { category: "Career Advice", title: "Leadership Coach", prompt: "Help me identify and articulate my leadership experiences." },
-  { category: "Career Advice", title: "Career Advice", prompt: "I'd like career advice grounded in my real experiences." },
-  { category: "Career Advice", title: "Performance Review", prompt: "Help me prepare for my performance review using my real experiences." },
-  { category: "Personal", title: "Reflection", prompt: "I'd like to reflect on something using my real experiences." },
+  { category: "Interview Prep", title: "Interview Preparation", prompt: "I want to prepare for an interview." },
+  { category: "Career Advice", title: "Resume Builder", prompt: "I want to update my resume." },
+  { category: "Career Advice", title: "Promotion Coach", prompt: "I want to prepare a case for my promotion." },
+  { category: "Career Advice", title: "Leadership Coach", prompt: "I want to find examples that show my leadership." },
+  { category: "Career Advice", title: "Career Advice", prompt: "I'd like some career advice." },
+  { category: "Career Advice", title: "Performance Review", prompt: "I want to prepare for my performance review." },
+  { category: "Personal", title: "Reflection", prompt: "I'd like to reflect on something." },
   { category: "Other", title: "General Chat", prompt: "" },
 ] as const;
