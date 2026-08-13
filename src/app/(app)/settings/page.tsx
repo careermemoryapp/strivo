@@ -7,6 +7,7 @@ import {
   User, CreditCard, Download, Bell, Shield, Palette, HelpCircle, Info, LogOut, Trash2, ChevronRight, X,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
+import { LogoWithWordmark } from "@/components/Logo";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { APP_NAME } from "@/lib/config";
@@ -58,6 +59,9 @@ export default function SettingsPage() {
 
   return (
     <div>
+      <div className="flex items-center px-5 pt-6">
+        <LogoWithWordmark size={28} />
+      </div>
       <PageHeader title="Settings" back />
 
       <div className="px-5 space-y-6 pb-8">

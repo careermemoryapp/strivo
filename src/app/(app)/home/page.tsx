@@ -21,6 +21,18 @@ type HomeData = {
   recentChats: Chat[];
 };
 
+// Light keyword match so a chat started from the "ask anything" box still
+// gets a specific category icon instead of always falling back to "Others" —
+// e.g. typing "I have a leadership interview" tags it Leadership, not Others.
+function guessCategory(text: string): string {
+  const lower = text.toLowerCase();
+  if (/\bresume|\bcv\b/.test(lower)) return "Resume";
+  if (/\bperformance review|\bperformance\b/.test(lower)) return "Performance Review";
+  if (/\bleadership|\bleader\b/.test(lower)) return "Leadership";
+  if (/\binterview/.test(lower)) return "Interview";
+  return "Others";
+}
+
 type StartChatArgs = {
   id: string;
   chatTitle: string;
@@ -78,7 +90,7 @@ export default function HomePage() {
     if (!trimmed || pendingAction) return;
     const title = trimmed.length > 48 ? `${trimmed.slice(0, 48)}…` : trimmed;
     setHeroInput("");
-    startChat({ id: "hero", chatTitle: title, category: "Others", prompt: trimmed });
+    startChat({ id: "hero", chatTitle: title, category: guessCategory(trimmed), prompt: trimmed });
   }
 
   if (error && !data) {
@@ -113,7 +125,7 @@ export default function HomePage() {
       />
 
       <div className="relative flex items-center justify-between px-5 pt-6">
-        <LogoWithWordmark size={30} />
+        <LogoWithWordmark size={36} />
         <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
           <Avatar firstName={data.user?.firstName} lastName={data.user?.lastName} size={36} />
         </button>

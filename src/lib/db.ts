@@ -128,6 +128,22 @@ function migrate(db: DatabaseSync) {
     END
     WHERE category IN ('Interview Prep', 'Career Advice', 'Personal', 'Other');
   `);
+
+  // The Home "ask anything" box used to file every chat under the generic
+  // "Others" bucket regardless of what was typed. Give those existing chats
+  // a real category (and icon) based on their title, same heuristic as the
+  // client-side guess for new ones. Only touches chats still sitting on the
+  // generic bucket, so a real "general chat" stays put.
+  db.exec(`
+    UPDATE chats SET category = CASE
+      WHEN category = 'Others' AND (title LIKE '%resume%' OR title LIKE '%cv %' OR title LIKE '% cv') THEN 'Resume'
+      WHEN category = 'Others' AND title LIKE '%performance%' THEN 'Performance Review'
+      WHEN category = 'Others' AND (title LIKE '%leadership%' OR title LIKE '%leader %') THEN 'Leadership'
+      WHEN category = 'Others' AND title LIKE '%interview%' THEN 'Interview'
+      ELSE category
+    END
+    WHERE category = 'Others';
+  `);
 }
 
 export function getDb(): DatabaseSync {

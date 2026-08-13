@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { Search, ChevronDown, Brain } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import { LogoWithWordmark } from "@/components/Logo";
+import { Avatar } from "@/components/Avatar";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import { MemoryCard } from "@/components/MemoryCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Spinner } from "@/components/Spinner";
@@ -11,6 +14,8 @@ import { groupMemoriesByTime } from "@/lib/utils";
 import type { Memory } from "@/lib/repo/memories";
 
 export default function MemoriesPage() {
+  const router = useRouter();
+  const user = useCurrentUser();
   const [memories, setMemories] = useState<Memory[] | null>(null);
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<"newest" | "oldest">("newest");
@@ -41,9 +46,19 @@ export default function MemoriesPage() {
 
   return (
     <div>
-      <PageHeader title="All Memories" subtitle="Your experiences, insights and moments that matter." />
+      <div className="flex items-center justify-between px-5 pt-6">
+        <LogoWithWordmark size={36} />
+        <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
+          <Avatar firstName={user?.firstName} lastName={user?.lastName} size={34} />
+        </button>
+      </div>
 
-      <div className="px-5 space-y-3">
+      <div className="px-5 pt-5">
+        <h1 className="text-2xl font-bold text-ink">All Memories</h1>
+        <p className="mt-1 text-sm text-ink-soft">Your experiences, insights and moments that matter.</p>
+      </div>
+
+      <div className="px-5 pt-4 space-y-3">
         <div className="flex items-center gap-2">
           <div className="relative flex-1">
             <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />

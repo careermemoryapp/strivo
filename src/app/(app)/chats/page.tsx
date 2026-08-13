@@ -70,7 +70,7 @@ export default function ChatsPage() {
   return (
     <div>
       <div className="flex items-center justify-between px-5 pt-6">
-        <LogoWithWordmark size={30} />
+        <LogoWithWordmark size={36} />
         <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
           <Avatar firstName={user?.firstName} lastName={user?.lastName} size={34} />
         </button>
