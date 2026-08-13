@@ -80,7 +80,14 @@ export async function retrieveRelevantMemories(
             return { memory: m, score: 0 };
           }
         })
-        .filter((s) => s.score > 0.15)
+        // text-embedding-3-small cosine similarities for genuinely unrelated
+        // text still commonly land around 0.1-0.2 (embeddings cluster in a
+        // fairly narrow cone), so a 0.15 cutoff let almost everything
+        // through — e.g. asking about a resume would also pull in unrelated
+        // memories. 0.3 is a meaningfully higher bar for "actually about
+        // this." If nothing clears it, we fall through to keyword search
+        // below rather than showing weakly-related memories.
+        .filter((s) => s.score > 0.3)
         .sort((a, b) => b.score - a.score)
         .slice(0, topK);
       if (scored.length > 0) {
