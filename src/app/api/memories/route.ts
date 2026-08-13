@@ -19,7 +19,7 @@ export async function GET(req: Request) {
 const createSchema = z.object({
   transcript: z.string().trim().min(1, "Memory can't be empty"),
   title: z.string().trim().max(120).optional(),
-  source: z.enum(["voice", "text"]).default("text"),
+  source: z.enum(["voice", "text", "file"]).default("text"),
 });
 
 function fallbackTitle(transcript: string): string {

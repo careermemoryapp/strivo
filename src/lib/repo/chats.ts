@@ -30,9 +30,26 @@ export function getChatById(userId: string, id: string): Chat | undefined {
     .get(id, userId) as Chat | undefined;
 }
 
-export function listChats(userId: string, opts: { search?: string; category?: string } = {}): Chat[] {
+// Chats with zero messages (e.g. opened from a quick action but abandoned
+// before the user typed anything) are noise, not real conversations — they
+// should never show up in the Chats list or Home's "continue" section.
+// We hard-delete ones that have sat empty for a while so the DB doesn't
+// accumulate clutter, and we always filter out empty chats from listChats
+// regardless of age so the UI never shows one.
+function pruneStaleEmptyChats(userId: string) {
   const db = getDb();
-  const clauses = ["user_id = ?"];
+  const cutoff = new Date(Date.now() - 60 * 60 * 1000).toISOString(); // 1 hour
+  db.prepare(
+    `DELETE FROM chats
+     WHERE user_id = ? AND created_at < ?
+       AND NOT EXISTS (SELECT 1 FROM messages WHERE messages.chat_id = chats.id)`
+  ).run(userId, cutoff);
+}
+
+export function listChats(userId: string, opts: { search?: string; category?: string } = {}): Chat[] {
+  pruneStaleEmptyChats(userId);
+  const db = getDb();
+  const clauses = ["user_id = ?", "EXISTS (SELECT 1 FROM messages WHERE messages.chat_id = chats.id)"];
   const params: unknown[] = [userId];
   if (opts.search && opts.search.trim()) {
     clauses.push("(LOWER(title) LIKE ? OR LOWER(COALESCE(last_message,'')) LIKE ?)");

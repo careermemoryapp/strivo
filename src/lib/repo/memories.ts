@@ -10,7 +10,7 @@ export type Memory = {
   tags: string | null; // JSON string array
   embedding: string | null; // JSON number array
   metadata_status: "pending" | "ready" | "failed";
-  source: "voice" | "text";
+  source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
   summary_feedback: "yes" | "no" | null;
   created_at: string;
@@ -21,7 +21,7 @@ export function createMemory(input: {
   userId: string;
   title: string;
   transcript: string;
-  source: "voice" | "text";
+  source: "voice" | "text" | "file";
 }): Memory {
   const db = getDb();
   const id = newId("mem");

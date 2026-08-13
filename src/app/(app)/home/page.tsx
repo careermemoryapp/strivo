@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { Flame, ChevronRight, Sparkles, ArrowUp } from "lucide-react";
+import { ChevronRight, Sparkles, ArrowUp } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Card } from "@/components/Card";
 import { Avatar } from "@/components/Avatar";
@@ -113,7 +113,7 @@ export default function HomePage() {
       />
 
       <div className="relative flex items-center justify-between px-5 pt-6">
-        <LogoWithWordmark size={24} />
+        <LogoWithWordmark size={30} />
         <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
           <Avatar firstName={data.user?.firstName} lastName={data.user?.lastName} size={36} />
         </button>
@@ -246,25 +246,7 @@ export default function HomePage() {
         </div>
       )}
 
-      <div className="relative px-5 pt-4 pb-2">
-        <Card className="flex items-center gap-3">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-50 text-emerald-500">
-            <Flame size={20} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-semibold text-ink">
-              {data.streak > 0 ? "You're doing great! 🔥" : "Start your streak"}
-            </p>
-            <p className="text-xs text-ink-soft">
-              {data.streak > 0 ? "Keep capturing, keep growing." : "Capture a memory today to start one."}
-            </p>
-          </div>
-          <div className="shrink-0 text-right">
-            <p className="text-2xl font-bold text-emerald-500 leading-none">{data.streak}</p>
-            <p className="text-[11px] text-ink-faint">days in a row</p>
-          </div>
-        </Card>
-      </div>
+      <div className="pb-6" />
     </div>
   );
 }

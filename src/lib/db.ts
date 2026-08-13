@@ -36,7 +36,8 @@ function migrate(db: DatabaseSync) {
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
       profile_image TEXT,
-      subscription_status TEXT NOT NULL DEFAULT 'free',
+      subscription_status TEXT NOT NULL DEFAULT 'trial',
+      trial_ends_at TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -91,6 +92,41 @@ function migrate(db: DatabaseSync) {
       used INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
+  `);
+
+  // --- Incremental migrations for columns/data added after initial launch ---
+  // SQLite has no "ADD COLUMN IF NOT EXISTS", so we check pragma table_info
+  // first and only add the column if it's missing. Safe to run on every boot.
+  const userColumns = (db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name);
+  if (!userColumns.includes("trial_ends_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at TEXT;`);
+  }
+
+  // Backfill trial_ends_at for any existing users who don't have one yet
+  // (e.g. accounts created before the subscription system existed) — gives
+  // them a fresh 6-month trial starting now rather than leaving it null.
+  db.exec(`
+    UPDATE users
+    SET trial_ends_at = datetime(COALESCE(created_at, CURRENT_TIMESTAMP), '+6 months')
+    WHERE trial_ends_at IS NULL;
+  `);
+
+  // One-time cleanup: the chat category taxonomy was renamed (Interview Prep ->
+  // Interview, Career Advice -> Resume/Leadership/Performance Review/Others,
+  // Personal/Other -> Others). Remap any chats still on the old values so their
+  // category icon/filter tab keeps working instead of silently losing its icon.
+  db.exec(`
+    UPDATE chats SET category = CASE
+      WHEN category = 'Interview Prep' THEN 'Interview'
+      WHEN category = 'Career Advice' AND title LIKE '%Resume%' THEN 'Resume'
+      WHEN category = 'Career Advice' AND title LIKE '%Leadership%' THEN 'Leadership'
+      WHEN category = 'Career Advice' AND title LIKE '%Performance%' THEN 'Performance Review'
+      WHEN category = 'Career Advice' THEN 'Others'
+      WHEN category = 'Personal' THEN 'Others'
+      WHEN category = 'Other' THEN 'Others'
+      ELSE category
+    END
+    WHERE category IN ('Interview Prep', 'Career Advice', 'Personal', 'Other');
   `);
 }
 

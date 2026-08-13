@@ -11,11 +11,13 @@ import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/utils";
 import { CHAT_CATEGORIES, NEW_CHAT_TEMPLATES } from "@/lib/config";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import { chatCategoryDef } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 
 export default function ChatsPage() {
   const router = useRouter();
+  const user = useCurrentUser();
   const [chats, setChats] = useState<Chat[] | null>(null);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string>("All");
@@ -68,9 +70,9 @@ export default function ChatsPage() {
   return (
     <div>
       <div className="flex items-center justify-between px-5 pt-6">
-        <LogoWithWordmark size={22} />
+        <LogoWithWordmark size={30} />
         <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-          <Avatar size={34} />
+          <Avatar firstName={user?.firstName} lastName={user?.lastName} size={34} />
         </button>
       </div>
 

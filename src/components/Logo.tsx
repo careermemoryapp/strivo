@@ -18,24 +18,37 @@ export function LogoMark({ size = 28, className }: { size?: number; className?: 
       aria-hidden
     >
       <defs>
-        <linearGradient id="strivo-logo-fill" x1="4" y1="26" x2="28" y2="6" gradientUnits="userSpaceOnUse">
+        <linearGradient id="strivo-logo-bg" x1="0" y1="32" x2="32" y2="0" gradientUnits="userSpaceOnUse">
           <stop stopColor="#7c3aed" />
           <stop offset="1" stopColor="#4f6ef7" />
         </linearGradient>
-        <linearGradient id="strivo-logo-arrow" x1="18" y1="14" x2="28" y2="4" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#4f6ef7" />
-          <stop offset="1" stopColor="#0ea5e9" />
+        <linearGradient id="strivo-logo-fill" x1="4" y1="27" x2="27" y2="5" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffffff" stopOpacity="0.98" />
+          <stop offset="1" stopColor="#ffffff" stopOpacity="0.85" />
         </linearGradient>
+        <linearGradient id="strivo-logo-arrow" x1="17" y1="15" x2="28" y2="4" gradientUnits="userSpaceOnUse">
+          <stop stopColor="#ffffff" />
+          <stop offset="1" stopColor="#e0f2fe" />
+        </linearGradient>
+        <filter id="strivo-logo-shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="1.5" stdDeviation="1.5" floodColor="#4c1d95" floodOpacity="0.28" />
+        </filter>
       </defs>
-      {/* Three ascending bars — rising momentum */}
-      <rect x="4" y="18" width="6" height="10" rx="2" fill="url(#strivo-logo-fill)" />
-      <rect x="13" y="12" width="6" height="16" rx="2" fill="url(#strivo-logo-fill)" />
-      <rect x="22" y="6" width="6" height="22" rx="2" fill="url(#strivo-logo-fill)" />
+
+      {/* Rounded-square brand tile, like a proper app icon */}
+      <rect x="0.5" y="0.5" width="31" height="31" rx="9" fill="url(#strivo-logo-bg)" />
+
+      <g filter="url(#strivo-logo-shadow)">
+        {/* Three ascending bars — rising momentum */}
+        <rect x="6.5" y="18" width="5" height="8.5" rx="1.8" fill="url(#strivo-logo-fill)" />
+        <rect x="13.5" y="13" width="5" height="13.5" rx="1.8" fill="url(#strivo-logo-fill)" />
+        <rect x="20.5" y="7.5" width="5" height="19" rx="1.8" fill="url(#strivo-logo-fill)" />
+      </g>
       {/* Upward arrow accent, echoing the rise of the bars */}
       <path
-        d="M18.5 9.5 27 4l.9 8.4"
+        d="M17 10.2 25.5 5.3l.9 7.6"
         stroke="url(#strivo-logo-arrow)"
-        strokeWidth="2.4"
+        strokeWidth="2.3"
         strokeLinecap="round"
         strokeLinejoin="round"
         fill="none"
@@ -46,9 +59,12 @@ export function LogoMark({ size = 28, className }: { size?: number; className?: 
 
 export function LogoWithWordmark({ size = 26, className }: { size?: number; className?: string }) {
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex items-center gap-2.5", className)}>
       <LogoMark size={size} />
-      <span className="font-semibold text-ink" style={{ fontSize: size * 0.62 }}>
+      <span
+        className="font-extrabold text-ink tracking-tight"
+        style={{ fontSize: size * 0.72, letterSpacing: "-0.02em" }}
+      >
         Strivo
       </span>
     </div>

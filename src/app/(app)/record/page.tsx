@@ -1,20 +1,25 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
-  Mic, Square, Keyboard, Check, ArrowRight, Home as HomeIcon, RotateCcw,
+  Mic, Square, Check, ArrowRight, Home as HomeIcon, RotateCcw,
   Target, Sparkles as SparklesIcon, CheckCircle2, MessageSquareText, Lock, ChevronRight, FileText,
+  Upload, Paperclip,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { LogoWithWordmark } from "@/components/Logo";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
+import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/utils";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 
 type Stage = "capture" | "review" | "success";
+type Mode = "voice" | "type" | "upload";
+type Source = "voice" | "text" | "file";
 
 const TIPS = [
   { icon: Target, title: "Be specific", desc: "Add context and details that matter." },
@@ -22,12 +27,24 @@ const TIPS = [
   { icon: CheckCircle2, title: "One thought", desc: "Focus on one idea or moment at a time." },
 ];
 
+const MAX_RECORD_SECONDS = 10 * 60;
+const UPLOAD_ACCEPT = ".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt";
+
+function formatClock(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export default function RecordPage() {
   const router = useRouter();
   const speech = useSpeechRecognition();
+  const user = useCurrentUser();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [stage, setStage] = useState<Stage>("capture");
-  const [mode, setMode] = useState<"voice" | "type">("voice");
+  const [mode, setMode] = useState<Mode>("voice");
+  const [source, setSource] = useState<Source>("voice");
   const [typedText, setTypedText] = useState("");
   const [reviewText, setReviewText] = useState("");
   const [previewTab, setPreviewTab] = useState<"Transcript" | "Summary">("Transcript");
@@ -36,11 +53,70 @@ export default function RecordPage() {
   const [savedMemoryId, setSavedMemoryId] = useState<string | null>(null);
   const [aiGenerated, setAiGenerated] = useState(true);
 
-  const liveText = mode === "voice" ? speech.fullText : typedText;
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [hitLimit, setHitLimit] = useState(false);
+
+  const [extracting, setExtracting] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+
+  const liveText = mode === "voice" ? speech.fullText : mode === "type" ? typedText : "";
+
+  // 10-minute cap on a single recording stretch — auto-stops and locks the
+  // button until a fresh recording is started, per product requirement.
+  useEffect(() => {
+    if (!speech.listening) return;
+    const interval = setInterval(() => {
+      setElapsedSeconds((s) => {
+        if (s + 1 >= MAX_RECORD_SECONDS) {
+          speech.stop();
+          setHitLimit(true);
+          return MAX_RECORD_SECONDS;
+        }
+        return s + 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- speech.stop is a stable useCallback ref
+  }, [speech.listening]);
+
+  function toggleRecording() {
+    if (speech.listening) {
+      speech.stop();
+    } else {
+      setElapsedSeconds(0);
+      setHitLimit(false);
+      speech.start();
+    }
+  }
 
   function goReview() {
+    setSource(mode === "voice" ? "voice" : "text");
     setReviewText(liveText.trim());
     setStage("review");
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file later
+    if (!file) return;
+    setExtracting(true);
+    setUploadError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/memories/extract", { method: "POST", body: formData });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Couldn't read that file.");
+      setUploadedFileName(file.name);
+      setSource("file");
+      setReviewText(data.text);
+      setStage("review");
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Couldn't read that file. Please try again.");
+    } finally {
+      setExtracting(false);
+    }
   }
 
   function startOver() {
@@ -48,6 +124,12 @@ export default function RecordPage() {
     setTypedText("");
     setReviewText("");
     setSaveError(null);
+    setUploadError(null);
+    setUploadedFileName(null);
+    setElapsedSeconds(0);
+    setHitLimit(false);
+    setMode("voice");
+    setSource("voice");
     setStage("capture");
   }
 
@@ -62,7 +144,7 @@ export default function RecordPage() {
       const res = await fetch("/api/memories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: reviewText, source: mode === "voice" ? "voice" : "text" }),
+        body: JSON.stringify({ transcript: reviewText, source }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
@@ -115,7 +197,15 @@ export default function RecordPage() {
   if (stage === "review") {
     return (
       <div>
-        <PageHeader title="Review Memory" subtitle="Edit anything before saving." back />
+        <PageHeader
+          title="Review Memory"
+          subtitle={
+            source === "file" && uploadedFileName
+              ? `Extracted from ${uploadedFileName} — edit anything before saving.`
+              : "Edit anything before saving."
+          }
+          back
+        />
         <div className="px-5 pt-2 space-y-4">
           {saveError && <ErrorBanner message={saveError} />}
           <textarea
@@ -138,12 +228,15 @@ export default function RecordPage() {
     );
   }
 
+  const remainingSeconds = MAX_RECORD_SECONDS - elapsedSeconds;
+  const nearLimit = speech.listening && remainingSeconds <= 30;
+
   return (
     <div>
       <div className="flex items-center justify-between px-5 pt-6">
-        <LogoWithWordmark size={22} />
+        <LogoWithWordmark size={30} />
         <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-          <Avatar size={34} />
+          <Avatar firstName={user?.firstName} lastName={user?.lastName} size={34} />
         </button>
       </div>
 
@@ -154,7 +247,29 @@ export default function RecordPage() {
 
       <div className="px-5 pt-5">
         <div className="rounded-card bg-brand-primary-soft/40 border border-border p-6">
-          {mode === "voice" ? (
+          <div className="mb-5 flex gap-1 rounded-pill bg-surface border border-border p-1">
+            {(
+              [
+                { id: "voice" as const, label: "Voice" },
+                { id: "type" as const, label: "Type" },
+                { id: "upload" as const, label: "Upload" },
+              ]
+            ).map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setMode(tab.id)}
+                disabled={speech.listening}
+                className={cn(
+                  "flex-1 rounded-pill py-2 text-xs font-semibold disabled:opacity-50",
+                  mode === tab.id ? "bg-brand-primary-soft text-brand-primary" : "text-ink-faint"
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {mode === "voice" && (
             <div className="flex flex-col items-center">
               {!speech.supported && (
                 <div className="w-full mb-4">
@@ -166,11 +281,16 @@ export default function RecordPage() {
                   <ErrorBanner message={`${speech.error} You can allow microphone access in your browser settings, or use Type Instead.`} />
                 </div>
               )}
+              {hitLimit && !speech.listening && (
+                <div className="w-full mb-4">
+                  <ErrorBanner message="Reached the 10-minute limit for a single recording — recording stopped automatically. You can review what was captured, or start a new recording." />
+                </div>
+              )}
 
               <div className="flex items-center gap-2">
                 <Waveform active={speech.listening} />
                 <button
-                  onClick={() => (speech.listening ? speech.stop() : speech.start())}
+                  onClick={toggleRecording}
                   disabled={!speech.supported}
                   aria-label={speech.listening ? "Stop recording" : "Tap to record"}
                   className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-surface text-brand-primary disabled:opacity-40"
@@ -185,22 +305,17 @@ export default function RecordPage() {
               <p className="mt-4 text-base font-semibold text-ink">
                 {speech.listening ? "Listening… tap to stop" : "Tap to Record"}
               </p>
-              <p className="mt-0.5 text-xs text-ink-soft">Speak freely and your AI will capture the key points.</p>
-
-              <div className="mt-5 flex w-full items-center gap-3">
-                <div className="h-px flex-1 bg-border" />
-                <span className="text-xs text-ink-faint">or</span>
-                <div className="h-px flex-1 bg-border" />
-              </div>
-
-              <button
-                onClick={() => setMode("type")}
-                className="mt-4 flex items-center gap-2 rounded-pill border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-brand-primary"
-              >
-                <Keyboard size={16} /> Type instead
-              </button>
+              {speech.listening ? (
+                <p className={cn("mt-0.5 text-xs font-medium", nearLimit ? "text-red-600" : "text-ink-soft")}>
+                  {formatClock(remainingSeconds)} left of a 10-minute stretch
+                </p>
+              ) : (
+                <p className="mt-0.5 text-xs text-ink-soft">Speak freely — up to 10 minutes at a stretch.</p>
+              )}
             </div>
-          ) : (
+          )}
+
+          {mode === "type" && (
             <div>
               <textarea
                 value={typedText}
@@ -210,24 +325,56 @@ export default function RecordPage() {
                 placeholder="Type what you want to remember…"
                 className="w-full rounded-card border border-border bg-surface p-4 text-ink outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-soft resize-none"
               />
-              {speech.supported && (
-                <button
-                  onClick={() => setMode("voice")}
-                  className="mt-4 flex w-full items-center justify-center gap-2 rounded-pill border border-border bg-surface px-5 py-2.5 text-sm font-semibold text-brand-primary"
-                >
-                  <Mic size={16} /> Use voice instead
-                </button>
-              )}
             </div>
           )}
 
-          <Button
-            className="w-full mt-5"
-            onClick={goReview}
-            disabled={speech.listening || !liveText.trim()}
-          >
-            Review &amp; Save
-          </Button>
+          {mode === "upload" && (
+            <div className="flex flex-col items-center text-center">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept={UPLOAD_ACCEPT}
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <div
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-brand-primary"
+                style={{ boxShadow: "0 12px 32px rgba(124,58,237,0.2)" }}
+              >
+                <Paperclip size={26} />
+              </div>
+              <p className="mt-4 text-base font-semibold text-ink">Upload a document</p>
+              <p className="mt-0.5 text-xs text-ink-soft max-w-xs">
+                PDF, Word, PowerPoint, or Excel — we&apos;ll pull out the text and turn it into a memory.
+              </p>
+
+              {uploadError && (
+                <div className="w-full mt-4">
+                  <ErrorBanner message={uploadError} />
+                </div>
+              )}
+
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={extracting}
+                className="mt-5 flex items-center gap-2 rounded-pill bg-gradient-brand px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+              >
+                {extracting ? <Spinner className="border-white/40 border-t-white h-4 w-4" /> : <Upload size={16} />}
+                {extracting ? "Reading file…" : "Choose File"}
+              </button>
+              <p className="mt-3 text-[11px] text-ink-faint">.pdf, .docx, .pptx, .xlsx, .csv, .txt — up to 15MB</p>
+            </div>
+          )}
+
+          {mode !== "upload" && (
+            <Button
+              className="w-full mt-5"
+              onClick={goReview}
+              disabled={speech.listening || !liveText.trim()}
+            >
+              Review &amp; Save
+            </Button>
+          )}
         </div>
       </div>
 
@@ -248,49 +395,51 @@ export default function RecordPage() {
         </div>
       </div>
 
-      <div className="px-5 pt-4">
-        <div className="rounded-card border border-border bg-surface overflow-hidden">
-          <div className="flex gap-1 p-2 border-b border-border">
-            <button
-              onClick={() => setPreviewTab("Transcript")}
-              className={cn(
-                "flex-1 rounded-pill py-2 text-sm font-medium",
-                previewTab === "Transcript" ? "text-brand-primary" : "text-ink-faint"
-              )}
-            >
-              Transcript
-            </button>
-            <button
-              onClick={() => setPreviewTab("Summary")}
-              className={cn(
-                "flex-1 rounded-pill py-2 text-sm font-medium",
-                previewTab === "Summary" ? "text-brand-primary" : "text-ink-faint"
-              )}
-            >
-              Summary (AI)
-            </button>
-          </div>
-          <div className="p-6 flex flex-col items-center text-center">
-            {previewTab === "Transcript" ? (
-              liveText.trim() ? (
-                <p className="text-sm text-ink whitespace-pre-wrap">{liveText}</p>
+      {mode !== "upload" && (
+        <div className="px-5 pt-4">
+          <div className="rounded-card border border-border bg-surface overflow-hidden">
+            <div className="flex gap-1 p-2 border-b border-border">
+              <button
+                onClick={() => setPreviewTab("Transcript")}
+                className={cn(
+                  "flex-1 rounded-pill py-2 text-sm font-medium",
+                  previewTab === "Transcript" ? "text-brand-primary" : "text-ink-faint"
+                )}
+              >
+                Transcript
+              </button>
+              <button
+                onClick={() => setPreviewTab("Summary")}
+                className={cn(
+                  "flex-1 rounded-pill py-2 text-sm font-medium",
+                  previewTab === "Summary" ? "text-brand-primary" : "text-ink-faint"
+                )}
+              >
+                Summary (AI)
+              </button>
+            </div>
+            <div className="p-6 flex flex-col items-center text-center">
+              {previewTab === "Transcript" ? (
+                liveText.trim() ? (
+                  <p className="text-sm text-ink whitespace-pre-wrap">{liveText}</p>
+                ) : (
+                  <>
+                    <MessageSquareText size={22} className="text-ink-faint mb-2" />
+                    <p className="text-sm font-medium text-ink">Your transcript will appear here</p>
+                    <p className="text-xs text-ink-soft mt-0.5">Start recording to capture your thoughts…</p>
+                  </>
+                )
               ) : (
                 <>
-                  <MessageSquareText size={22} className="text-ink-faint mb-2" />
-                  <p className="text-sm font-medium text-ink">Your transcript will appear here</p>
-                  <p className="text-xs text-ink-soft mt-0.5">Start recording to capture your thoughts…</p>
+                  <FileText size={22} className="text-ink-faint mb-2" />
+                  <p className="text-sm font-medium text-ink">Summary appears after saving</p>
+                  <p className="text-xs text-ink-soft mt-0.5">Your AI generates this once you save the memory.</p>
                 </>
-              )
-            ) : (
-              <>
-                <FileText size={22} className="text-ink-faint mb-2" />
-                <p className="text-sm font-medium text-ink">Summary appears after saving</p>
-                <p className="text-xs text-ink-soft mt-0.5">Your AI generates this once you save the memory.</p>
-              </>
-            )}
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       <button className="mx-5 mt-4 mb-6 flex items-center gap-3 rounded-card border border-border bg-brand-primary-soft/30 p-3.5 text-left">
         <Lock size={18} className="text-brand-primary shrink-0" />

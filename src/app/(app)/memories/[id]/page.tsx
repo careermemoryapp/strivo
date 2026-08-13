@@ -4,7 +4,7 @@ import { useEffect, useState, use as usePromise } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
-  MoreVertical, Trash2, Pencil, FileText, Sparkles, Mic, Type, CheckCircle2,
+  MoreVertical, Trash2, Pencil, FileText, Sparkles, Mic, Type, CheckCircle2, Paperclip,
   ThumbsUp, ThumbsDown, Share2, Copy,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -128,7 +128,7 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
   if (error) {
     return (
       <div>
-        <PageHeader title={<LogoWithWordmark size={20} />} back />
+        <PageHeader title={<LogoWithWordmark size={24} />} back />
         <div className="px-5">
           <ErrorBanner message={error} />
         </div>
@@ -151,7 +151,7 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
   return (
     <div>
       <PageHeader
-        title={<LogoWithWordmark size={20} />}
+        title={<LogoWithWordmark size={24} />}
         back
         right={
           <div className="relative">
@@ -197,8 +197,8 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
             <span>{format(new Date(memory.created_at), "MMM d, yyyy, h:mm a")}</span>
             <span>•</span>
             <span className="flex items-center gap-1">
-              {memory.source === "voice" ? <Mic size={13} /> : <Type size={13} />}
-              {memory.source === "voice" ? "Voice" : "Text"}
+              {memory.source === "voice" ? <Mic size={13} /> : memory.source === "file" ? <Paperclip size={13} /> : <Type size={13} />}
+              {memory.source === "voice" ? "Voice" : memory.source === "file" ? "Document" : "Text"}
             </span>
           </div>
         </div>
@@ -265,7 +265,11 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
                 <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs text-ink-faint">
                   <span className="flex items-center gap-1">
                     <Sparkles size={12} />
-                    {memory.source === "voice" ? "Generated from your speech" : "Written by you"}
+                    {memory.source === "voice"
+                      ? "Generated from your speech"
+                      : memory.source === "file"
+                        ? "Extracted from an uploaded document"
+                        : "Written by you"}
                   </span>
                   <span>{wordCount} words</span>
                 </div>

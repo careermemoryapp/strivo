@@ -65,7 +65,7 @@ export default function SettingsPage() {
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">Account</h3>
           <Card className="p-0 divide-y divide-border overflow-hidden">
             <Row icon={<User size={18} />} label="Profile" onClick={() => router.push("/settings/profile")} />
-            <Row icon={<CreditCard size={18} />} label="Subscription" comingSoon />
+            <Row icon={<CreditCard size={18} />} label="Subscription" onClick={() => router.push("/settings/subscription")} />
             <Row icon={<Download size={18} />} label="Export Data" comingSoon />
           </Card>
         </div>
