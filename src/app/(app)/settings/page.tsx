@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { format } from "date-fns";
 import {
   User, CreditCard, Download, Bell, Shield, Palette, HelpCircle, Info, LogOut, Trash2, ChevronRight, X,
 } from "lucide-react";
@@ -10,6 +11,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { LogoWithWordmark } from "@/components/Logo";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { Avatar } from "@/components/Avatar";
 import { APP_NAME } from "@/lib/config";
 
 function Row({
@@ -42,10 +44,28 @@ function Row({
   );
 }
 
+type ProfileSummary = { firstName: string; lastName: string; email: string; createdAt: string };
+
 export default function SettingsPage() {
   const router = useRouter();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [profile, setProfile] = useState<ProfileSummary | null>(null);
+
+  useEffect(() => {
+    fetch("/api/user/profile")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (!data?.user) return;
+        setProfile({
+          firstName: data.user.first_name,
+          lastName: data.user.last_name,
+          email: data.user.email,
+          createdAt: data.user.created_at,
+        });
+      })
+      .catch(() => {});
+  }, []);
 
   async function handleDeleteAccount() {
     setDeleting(true);
@@ -65,6 +85,21 @@ export default function SettingsPage() {
       <PageHeader title="Settings" back />
 
       <div className="px-5 space-y-6 pb-8">
+        {profile && (
+          <Card className="flex items-center gap-3.5">
+            <Avatar firstName={profile.firstName} lastName={profile.lastName} size={52} />
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-ink truncate">
+                {profile.firstName} {profile.lastName}
+              </p>
+              <p className="text-xs text-ink-soft truncate">{profile.email}</p>
+              <p className="mt-0.5 text-[11px] text-ink-faint">
+                Member since {format(new Date(profile.createdAt), "MMMM yyyy")}
+              </p>
+            </div>
+          </Card>
+        )}
+
         <div>
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">Account</h3>
           <Card className="p-0 divide-y divide-border overflow-hidden">
@@ -86,8 +121,8 @@ export default function SettingsPage() {
         <div>
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">Support</h3>
           <Card className="p-0 divide-y divide-border overflow-hidden">
-            <Row icon={<HelpCircle size={18} />} label="Help & Support" comingSoon />
-            <Row icon={<Info size={18} />} label={`About ${APP_NAME}`} comingSoon />
+            <Row icon={<HelpCircle size={18} />} label="Help & Support" onClick={() => router.push("/settings/help")} />
+            <Row icon={<Info size={18} />} label={`About ${APP_NAME}`} onClick={() => router.push("/settings/about")} />
           </Card>
         </div>
 

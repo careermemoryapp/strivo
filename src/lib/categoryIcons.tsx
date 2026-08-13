@@ -8,6 +8,11 @@ type IconDef = {
   icon: ComponentType<{ size?: number; className?: string }>;
   bg: string;
   text: string;
+  // Tailwind gradient "from-*" stop matching `bg`, used for richer hero
+  // headers (e.g. memory detail page). Written out explicitly (not derived
+  // from `bg` at runtime) so Tailwind's static scanner can see the literal
+  // class name and generate the CSS for it.
+  from?: string;
 };
 
 // Memory categories. Each maps to a distinct icon + soft color pair so the
@@ -15,15 +20,15 @@ type IconDef = {
 // design. Add a new category here (and to CATEGORY_OPTIONS in lib/ai.ts) to
 // extend the taxonomy.
 export const MEMORY_CATEGORIES: Record<string, IconDef> = {
-  Work: { icon: Briefcase, bg: "bg-blue-50", text: "text-blue-500" },
-  Meeting: { icon: Users, bg: "bg-emerald-50", text: "text-emerald-500" },
-  Career: { icon: Award, bg: "bg-purple-50", text: "text-purple-500" },
-  Idea: { icon: Lightbulb, bg: "bg-amber-50", text: "text-amber-500" },
-  Review: { icon: TrendingUp, bg: "bg-teal-50", text: "text-teal-500" },
-  Learning: { icon: GraduationCap, bg: "bg-violet-50", text: "text-violet-500" },
-  Achievement: { icon: Trophy, bg: "bg-orange-50", text: "text-orange-500" },
-  Personal: { icon: Heart, bg: "bg-pink-50", text: "text-pink-500" },
-  General: { icon: FileText, bg: "bg-slate-100", text: "text-slate-500" },
+  Work: { icon: Briefcase, bg: "bg-blue-50", text: "text-blue-500", from: "from-blue-100" },
+  Meeting: { icon: Users, bg: "bg-emerald-50", text: "text-emerald-500", from: "from-emerald-100" },
+  Career: { icon: Award, bg: "bg-purple-50", text: "text-purple-500", from: "from-purple-100" },
+  Idea: { icon: Lightbulb, bg: "bg-amber-50", text: "text-amber-500", from: "from-amber-100" },
+  Review: { icon: TrendingUp, bg: "bg-teal-50", text: "text-teal-500", from: "from-teal-100" },
+  Learning: { icon: GraduationCap, bg: "bg-violet-50", text: "text-violet-500", from: "from-violet-100" },
+  Achievement: { icon: Trophy, bg: "bg-orange-50", text: "text-orange-500", from: "from-orange-100" },
+  Personal: { icon: Heart, bg: "bg-pink-50", text: "text-pink-500", from: "from-pink-100" },
+  General: { icon: FileText, bg: "bg-slate-100", text: "text-slate-500", from: "from-slate-200" },
 };
 
 export function memoryCategoryDef(category?: string | null): IconDef {

@@ -144,7 +144,7 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  const { icon: Icon, bg, text } = memoryCategoryDef(memory.category);
+  const { icon: Icon, text, from } = memoryCategoryDef(memory.category);
   const keyPoints = safeJsonParse<string[]>(memory.key_points, []);
   const wordCount = memory.transcript.trim().split(/\s+/).filter(Boolean).length;
 
@@ -181,15 +181,18 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
       />
 
       <div className="px-5 space-y-4">
-        <div className={`rounded-card p-5 ${bg}`}>
-          <div className="flex items-start gap-3">
+        <div
+          className={`rounded-card p-5 bg-gradient-to-br ${from} to-surface`}
+          style={{ boxShadow: "var(--shadow-card)" }}
+        >
+          <div className="flex items-center gap-3.5">
             <div
-              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-surface ${text}`}
-              style={{ boxShadow: "0 2px 8px rgba(15,23,42,0.08)" }}
+              className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface ${text}`}
+              style={{ boxShadow: "0 2px 6px rgba(15,23,42,0.1)" }}
             >
-              <Icon size={22} />
+              <Icon size={24} />
             </div>
-            <div className="min-w-0 flex-1 pt-0.5">
+            <div className="min-w-0 flex-1">
               <h1 className="text-xl font-bold text-ink leading-tight">{memory.title}</h1>
               <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
                 {memory.category && (

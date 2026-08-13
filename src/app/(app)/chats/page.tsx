@@ -134,7 +134,7 @@ export default function ChatsPage() {
 
         <div className="space-y-2.5 pb-4">
           {chats?.map((chat) => (
-            <ChatCard key={chat.id} chat={chat} />
+            <ChatCard key={chat.id} chat={chat} onChanged={() => load(search, category)} />
           ))}
         </div>
       </div>

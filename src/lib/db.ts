@@ -92,6 +92,20 @@ function migrate(db: DatabaseSync) {
       used INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
+
+    -- Help & Support submissions. No destination email is configured yet,
+    -- so these are just persisted here for now — once a support inbox is
+    -- decided on, a follow-up can add actual email delivery without
+    -- changing this table.
+    CREATE TABLE IF NOT EXISTS support_messages (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      email TEXT NOT NULL,
+      subject TEXT,
+      message TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'new',
+      created_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

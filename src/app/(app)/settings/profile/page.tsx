@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { Avatar } from "@/components/Avatar";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { format } from "date-fns";
 
 type ProfileUser = { firstName: string; lastName: string; email: string; created_at: string };
 
@@ -73,6 +74,9 @@ export default function ProfilePage() {
             <div className="flex flex-col items-center py-4">
               <Avatar firstName={firstName} lastName={lastName} size={72} />
               <p className="mt-3 text-sm text-ink-soft">{user.email}</p>
+              <p className="mt-0.5 text-xs text-ink-faint">
+                Member since {format(new Date(user.created_at), "MMMM d, yyyy")}
+              </p>
             </div>
 
             <form onSubmit={handleSave} className="space-y-4">
