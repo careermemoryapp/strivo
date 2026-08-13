@@ -181,25 +181,30 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
       />
 
       <div className="px-5 space-y-4">
-        <div className="flex items-start gap-3">
-          <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${bg} ${text}`}>
-            <Icon size={22} />
-          </div>
-          <div className="min-w-0 flex-1 pt-0.5">
-            <h1 className="text-xl font-bold text-ink leading-tight">{memory.title}</h1>
-            <div className="mt-1.5 flex items-center gap-2 flex-wrap text-xs text-ink-soft">
-              {memory.category && (
-                <span className="rounded-pill bg-brand-primary-soft px-2.5 py-1 text-[11px] font-medium text-brand-primary">
-                  {memory.category}
+        <div className={`rounded-card p-5 ${bg}`}>
+          <div className="flex items-start gap-3">
+            <div
+              className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-surface ${text}`}
+              style={{ boxShadow: "0 2px 8px rgba(15,23,42,0.08)" }}
+            >
+              <Icon size={22} />
+            </div>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <h1 className="text-xl font-bold text-ink leading-tight">{memory.title}</h1>
+              <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
+                {memory.category && (
+                  <span className={`rounded-pill bg-surface px-2.5 py-1 text-[11px] font-semibold ${text}`}>
+                    {memory.category}
+                  </span>
+                )}
+                <span className="text-ink-soft">•</span>
+                <span className="text-ink-soft">{format(new Date(memory.created_at), "MMM d, yyyy, h:mm a")}</span>
+                <span className="text-ink-soft">•</span>
+                <span className="flex items-center gap-1 text-ink-soft">
+                  {memory.source === "voice" ? <Mic size={12} /> : memory.source === "file" ? <Paperclip size={12} /> : <Type size={12} />}
+                  {memory.source === "voice" ? "Voice" : memory.source === "file" ? "Document" : "Text"}
                 </span>
-              )}
-              <span>•</span>
-              <span>{format(new Date(memory.created_at), "MMM d, yyyy, h:mm a")}</span>
-              <span>•</span>
-              <span className="flex items-center gap-1">
-                {memory.source === "voice" ? <Mic size={12} /> : memory.source === "file" ? <Paperclip size={12} /> : <Type size={12} />}
-                {memory.source === "voice" ? "Voice" : memory.source === "file" ? "Document" : "Text"}
-              </span>
+              </div>
             </div>
           </div>
         </div>
