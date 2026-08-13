@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Strivo</string>
+    <string name="title_activity_main">Strivo</string>
+    <string name="package_name">ai.strivo.app</string>
+    <string name="custom_url_scheme">ai.strivo.app</string>
+</resources>
