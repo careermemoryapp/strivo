@@ -68,26 +68,35 @@ export async function retrieveRelevantMemories(
 ): Promise<RetrievalResult> {
   // 1. Try semantic retrieval.
   const withEmbeddings = listMemoriesWithEmbeddings(userId);
+  const queryTokensForGate = tokenize(query);
   if (withEmbeddings.length > 0) {
     const queryEmbedding = await embedText(query);
     if (queryEmbedding) {
       const scored = withEmbeddings
         .map((m) => {
+          let score = 0;
           try {
             const emb = JSON.parse(m.embedding as string) as number[];
-            return { memory: m, score: cosineSimilarity(queryEmbedding, emb) };
+            score = cosineSimilarity(queryEmbedding, emb);
           } catch {
-            return { memory: m, score: 0 };
+            score = 0;
           }
+          return { memory: m, score, keywordHits: keywordScore(queryTokensForGate, m) };
         })
         // text-embedding-3-small cosine similarities for genuinely unrelated
         // text still commonly land around 0.1-0.2 (embeddings cluster in a
         // fairly narrow cone), so a 0.15 cutoff let almost everything
         // through — e.g. asking about a resume would also pull in unrelated
         // memories. 0.3 is a meaningfully higher bar for "actually about
-        // this." If nothing clears it, we fall through to keyword search
-        // below rather than showing weakly-related memories.
-        .filter((s) => s.score > 0.3)
+        // this," but short/repetitive/low-quality transcripts (e.g. a
+        // garbled voice transcription) can still land an artificially high
+        // score purely from embedding drift, with zero real topical overlap.
+        // So: a merely-decent semantic score (0.3-0.45) also needs at least
+        // one literal keyword in common with the query to count — only a
+        // strong semantic match (>0.45) is trusted on its own. If nothing
+        // clears this bar, we fall through to keyword search below rather
+        // than showing weakly- or spuriously-related memories.
+        .filter((s) => s.score > 0.45 || (s.score > 0.3 && s.keywordHits > 0))
         .sort((a, b) => b.score - a.score)
         .slice(0, topK);
       if (scored.length > 0) {

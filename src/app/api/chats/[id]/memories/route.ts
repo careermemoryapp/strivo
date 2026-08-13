@@ -5,8 +5,11 @@ import { listMessages } from "@/lib/repo/messages";
 import { getMemoryById } from "@/lib/repo/memories";
 import { safeJsonParse } from "@/lib/utils";
 
-// Returns the union of memories that were actually retrieved and used
-// across this conversation's AI replies (most recently used first).
+// Returns the memories that informed the most recent AI reply in this
+// conversation. Deliberately scoped to just the latest turn (not a union
+// across every reply ever sent) — otherwise loosely-related memories from
+// earlier questions in a long conversation never drop off the list, even
+// once they're no longer relevant to what's being discussed now.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -15,18 +18,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const chat = getChatById(userId, id);
   if (!chat) return NextResponse.json({ error: "Chat not found" }, { status: 404 });
 
-  const messages = listMessages(userId, id).filter((m) => m.sender === "ai").reverse();
-  const seen = new Set<string>();
-  const memoryIds: string[] = [];
-  for (const m of messages) {
-    const ids = safeJsonParse<string[]>(m.retrieved_memories, []);
-    for (const mid of ids) {
-      if (!seen.has(mid)) {
-        seen.add(mid);
-        memoryIds.push(mid);
-      }
-    }
-  }
+  const aiMessages = listMessages(userId, id).filter((m) => m.sender === "ai");
+  const latest = aiMessages[aiMessages.length - 1];
+  const memoryIds = latest ? safeJsonParse<string[]>(latest.retrieved_memories, []) : [];
 
   const memories = memoryIds
     .map((mid) => getMemoryById(userId, mid))
