@@ -7,6 +7,7 @@ import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { Tabs } from "@/components/Tabs";
 import { format } from "date-fns";
 
 type Subscription = {
@@ -14,6 +15,10 @@ type Subscription = {
   trialEndsAt: string | null;
   daysLeft: number | null;
   priceLabel: string;
+  monthlyPriceLabel: string;
+  annualPriceLabel: string;
+  annualListPriceLabel: string;
+  trialMonths: number;
 };
 
 const PERKS = [
@@ -27,6 +32,7 @@ export default function SubscriptionPage() {
   const [sub, setSub] = useState<Subscription | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [billing, setBilling] = useState<"Monthly" | "Annually">("Annually");
 
   useEffect(() => {
     fetch("/api/subscription")
@@ -34,6 +40,8 @@ export default function SubscriptionPage() {
       .then((data) => setSub(data.subscription))
       .catch(() => setError("Couldn't load your subscription details."));
   }, []);
+
+  const activePriceLabel = sub ? (billing === "Monthly" ? sub.monthlyPriceLabel : sub.annualPriceLabel) : "";
 
   return (
     <div>
@@ -64,30 +72,45 @@ export default function SubscriptionPage() {
                   <p className="mt-1 text-sm text-white/80">
                     Your free trial ends{" "}
                     {sub.trialEndsAt ? format(new Date(sub.trialEndsAt), "MMMM d, yyyy") : "soon"}. Then it&apos;s{" "}
-                    {sub.priceLabel}.
+                    {sub.annualPriceLabel} (or {sub.monthlyPriceLabel}).
                   </p>
                 </>
               )}
               {sub.status === "active" && (
                 <p className="mt-2 text-sm text-white/80">
-                  You&apos;re all set — renews annually at {sub.priceLabel}.
+                  You&apos;re all set — renews at {sub.priceLabel}.
                 </p>
               )}
               {sub.status === "expired" && (
                 <p className="mt-2 text-sm text-white/80">
-                  Your 6 months of free access ended. Upgrade to keep using Strivo.
+                  Your {sub.trialMonths}-month free trial ended. Upgrade to keep using Strivo.
                 </p>
               )}
             </Card>
 
             <Card>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold text-ink">Strivo Plus</p>
-                  <p className="text-xs text-ink-soft">Billed annually, cancel anytime</p>
+              <div className="flex items-center justify-between gap-3">
+                <p className="font-semibold text-ink">Strivo Plus</p>
+                <div className="w-40">
+                  <Tabs tabs={["Monthly", "Annually"]} active={billing} onChange={(t) => setBilling(t as "Monthly" | "Annually")} />
                 </div>
-                <p className="text-2xl font-bold text-ink">{sub.priceLabel}</p>
               </div>
+
+              <div className="mt-4 flex items-baseline gap-2">
+                {billing === "Annually" && (
+                  <p className="text-sm text-ink-faint line-through">{sub.annualListPriceLabel}</p>
+                )}
+                <p className="text-2xl font-bold text-ink">{activePriceLabel}</p>
+                {billing === "Annually" && (
+                  <span className="rounded-pill bg-brand-primary/10 px-2 py-0.5 text-xs font-semibold text-brand-primary">
+                    Save 50%
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-ink-soft">
+                {billing === "Annually" ? "Billed annually, cancel anytime" : "Billed monthly, cancel anytime"} via
+                Google Play
+              </p>
 
               <div className="mt-4 space-y-2.5">
                 {PERKS.map((perk) => (
@@ -112,7 +135,8 @@ export default function SubscriptionPage() {
             </Card>
 
             <p className="text-center text-xs text-ink-faint">
-              Every new Strivo account gets 6 months free. After your trial, continued access is {sub.priceLabel}.
+              Every new Strivo account gets {sub.trialMonths} months free. After your trial, continued access is{" "}
+              {sub.annualPriceLabel} (or {sub.monthlyPriceLabel}).
             </p>
           </>
         )}

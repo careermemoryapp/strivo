@@ -118,10 +118,11 @@ function migrate(db: DatabaseSync) {
 
   // Backfill trial_ends_at for any existing users who don't have one yet
   // (e.g. accounts created before the subscription system existed) — gives
-  // them a fresh 6-month trial starting now rather than leaving it null.
+  // them a fresh trial starting now rather than leaving it null. Kept in
+  // sync with TRIAL_MONTHS in lib/repo/users.ts.
   db.exec(`
     UPDATE users
-    SET trial_ends_at = datetime(COALESCE(created_at, CURRENT_TIMESTAMP), '+6 months')
+    SET trial_ends_at = datetime(COALESCE(created_at, CURRENT_TIMESTAMP), '+2 months')
     WHERE trial_ends_at IS NULL;
   `);
 

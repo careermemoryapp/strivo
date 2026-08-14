@@ -17,20 +17,39 @@ export type SubscriptionInfo = {
   trialEndsAt: string | null;
   daysLeft: number | null;
   priceLabel: string;
+  monthlyPriceLabel: string;
+  annualPriceLabel: string;
+  annualListPriceLabel: string;
+  trialMonths: number;
 };
 
-const ANNUAL_PRICE_LABEL = "$14.99/year";
+// Single source of truth for pricing. Billed exclusively through Google Play
+// Billing (no Stripe/Razorpay) once payments go live, so these labels are
+// display-only until the Play Billing integration is wired up.
+export const TRIAL_MONTHS = 2;
+export const MONTHLY_PRICE_LABEL = "$5.99/month";
+export const ANNUAL_PRICE_LABEL = "$35.99/year";
+// What 12 months would cost at the monthly rate — shown struck through next
+// to the annual price so the "50% off" framing is self-evident.
+export const ANNUAL_LIST_PRICE_LABEL = "$71.88/year";
 
 export function getSubscriptionInfo(user: Pick<User, "subscription_status" | "trial_ends_at">): SubscriptionInfo {
+  const shared = {
+    priceLabel: ANNUAL_PRICE_LABEL,
+    monthlyPriceLabel: MONTHLY_PRICE_LABEL,
+    annualPriceLabel: ANNUAL_PRICE_LABEL,
+    annualListPriceLabel: ANNUAL_LIST_PRICE_LABEL,
+    trialMonths: TRIAL_MONTHS,
+  };
   if (user.subscription_status === "active") {
-    return { status: "active", trialEndsAt: user.trial_ends_at, daysLeft: null, priceLabel: ANNUAL_PRICE_LABEL };
+    return { status: "active", trialEndsAt: user.trial_ends_at, daysLeft: null, ...shared };
   }
   const endMs = user.trial_ends_at ? new Date(user.trial_ends_at).getTime() : null;
   if (endMs && endMs > Date.now()) {
     const daysLeft = Math.max(0, Math.ceil((endMs - Date.now()) / (24 * 60 * 60 * 1000)));
-    return { status: "trial", trialEndsAt: user.trial_ends_at, daysLeft, priceLabel: ANNUAL_PRICE_LABEL };
+    return { status: "trial", trialEndsAt: user.trial_ends_at, daysLeft, ...shared };
   }
-  return { status: "expired", trialEndsAt: user.trial_ends_at, daysLeft: 0, priceLabel: ANNUAL_PRICE_LABEL };
+  return { status: "expired", trialEndsAt: user.trial_ends_at, daysLeft: 0, ...shared };
 }
 
 export function createUser(input: {
@@ -42,9 +61,9 @@ export function createUser(input: {
   const db = getDb();
   const id = newId("user");
   const created_at = nowIso();
-  // Every new account starts with a 6-month free trial.
+  // Every new account starts with a free trial (see TRIAL_MONTHS above).
   const trialEnd = new Date();
-  trialEnd.setMonth(trialEnd.getMonth() + 6);
+  trialEnd.setMonth(trialEnd.getMonth() + TRIAL_MONTHS);
   db.prepare(
     `INSERT INTO users (id, first_name, last_name, email, password_hash, profile_image, subscription_status, trial_ends_at, created_at)
      VALUES (?, ?, ?, ?, ?, NULL, 'trial', ?, ?)`

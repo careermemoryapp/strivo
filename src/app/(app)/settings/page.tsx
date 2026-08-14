@@ -5,7 +5,7 @@ import { signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
-  User, CreditCard, Download, Bell, Shield, Palette, HelpCircle, Info, LogOut, Trash2, ChevronRight, X,
+  User, CreditCard, Download, Bell, Shield, Palette, HelpCircle, Info, LogOut, Trash2, ChevronRight, X, FileText,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
 import { LogoWithWordmark } from "@/components/Logo";
@@ -113,7 +113,6 @@ export default function SettingsPage() {
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">Preferences</h3>
           <Card className="p-0 divide-y divide-border overflow-hidden">
             <Row icon={<Bell size={18} />} label="Notifications" comingSoon />
-            <Row icon={<Shield size={18} />} label="Privacy" comingSoon />
             <Row icon={<Palette size={18} />} label="Appearance" comingSoon />
           </Card>
         </div>
@@ -123,6 +122,8 @@ export default function SettingsPage() {
           <Card className="p-0 divide-y divide-border overflow-hidden">
             <Row icon={<HelpCircle size={18} />} label="Help & Support" onClick={() => router.push("/settings/help")} />
             <Row icon={<Info size={18} />} label={`About ${APP_NAME}`} onClick={() => router.push("/settings/about")} />
+            <Row icon={<FileText size={18} />} label="Terms & Conditions" onClick={() => window.open("/terms", "_blank")} />
+            <Row icon={<Shield size={18} />} label="Privacy Policy" onClick={() => window.open("/privacy", "_blank")} />
           </Card>
         </div>
 

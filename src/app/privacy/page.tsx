@@ -132,6 +132,10 @@ export default function PrivacyPolicyPage() {
               <a href="mailto:shikhar333@gmail.com" className="text-brand-primary hover:underline">
                 shikhar333@gmail.com
               </a>
+              . See also our{" "}
+              <Link href="/terms" className="text-brand-primary hover:underline">
+                Terms &amp; Conditions
+              </Link>
               .
             </p>
           </section>

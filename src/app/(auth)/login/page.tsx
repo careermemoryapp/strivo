@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { signIn } from "next-auth/react";
 import { Sparkles } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { APP_NAME } from "@/lib/config";
@@ -70,6 +71,18 @@ export default function LoginPage() {
       <p className="mt-6 text-center text-xs text-ink-faint">
         New here? Signing in with Google creates your {APP_NAME} account automatically —
         no separate sign up needed.
+      </p>
+
+      <p className="mt-3 text-center text-xs text-ink-faint">
+        By continuing, you agree to our{" "}
+        <Link href="/terms" className="text-brand-primary hover:underline" target="_blank">
+          Terms &amp; Conditions
+        </Link>{" "}
+        and{" "}
+        <Link href="/privacy" className="text-brand-primary hover:underline" target="_blank">
+          Privacy Policy
+        </Link>
+        .
       </p>
     </div>
   );
