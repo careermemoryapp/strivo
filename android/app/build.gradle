@@ -22,6 +22,15 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
     }
+    // Must match the Java version declared by the capacitor-android and
+    // capacitor-cordova-android-plugins library modules (see their
+    // build.gradle files). Without this, Gradle can't resolve a matching
+    // variant between this app module and those libraries and fails with
+    // "No matching variant of project :capacitor-android was found".
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_21
+        targetCompatibility JavaVersion.VERSION_21
+    }
 }
 
 repositories {
