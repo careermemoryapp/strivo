@@ -126,6 +126,19 @@ function migrate(db: DatabaseSync) {
     WHERE trial_ends_at IS NULL;
   `);
 
+  // One-time correction: accounts created before the trial length changed
+  // from 6 months to 2 months already have "+6 months" baked into their
+  // trial_ends_at, since that value is set once at signup and never
+  // recalculated. Re-derive it from created_at for anyone still mid-trial
+  // so they move onto the current 2-month policy too. Safe to run on every
+  // boot — it always recomputes to the same value, so it's a no-op once
+  // everyone is already on the 2-month trial.
+  db.exec(`
+    UPDATE users
+    SET trial_ends_at = datetime(COALESCE(created_at, CURRENT_TIMESTAMP), '+2 months')
+    WHERE subscription_status = 'trial';
+  `);
+
   // One-time cleanup: the chat category taxonomy was renamed (Interview Prep ->
   // Interview, Career Advice -> Resume/Leadership/Performance Review/Others,
   // Personal/Other -> Others). Remap any chats still on the old values so their
