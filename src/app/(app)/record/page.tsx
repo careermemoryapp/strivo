@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import {
   Mic, Square, Check, ArrowRight, Home as HomeIcon, RotateCcw,
-  Target, Sparkles as SparklesIcon, CheckCircle2, MessageSquareText, Lock, ChevronRight, FileText,
+  Target, Sparkles as SparklesIcon, CheckCircle2, Lock, ChevronRight,
   Upload, Paperclip,
 } from "lucide-react";
 import { PageHeader } from "@/components/PageHeader";
@@ -46,7 +46,6 @@ export default function RecordPage() {
   const [mode, setMode] = useState<Mode>("voice");
   const [typedText, setTypedText] = useState("");
   const [uploadText, setUploadText] = useState("");
-  const [previewTab, setPreviewTab] = useState<"Transcript" | "Summary">("Transcript");
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedMemoryId, setSavedMemoryId] = useState<string | null>(null);
@@ -297,6 +296,26 @@ export default function RecordPage() {
               ) : (
                 <p className="mt-0.5 text-xs text-ink-soft">Speak freely — up to 5 minutes at a stretch.</p>
               )}
+
+              {/* Shows right where the user is already looking, instead of
+                  a separate panel further down the page — makes it obvious
+                  the recording is still being processed, and then shows
+                  exactly what was captured before they hit Create Memory. */}
+              {(content.trim() || speech.transcribing) && (
+                <div className="w-full mt-5 rounded-input border border-border bg-surface p-4 text-left">
+                  {speech.transcribing ? (
+                    <div className="flex items-center gap-2">
+                      <Spinner className="h-4 w-4 border-brand-primary-soft border-t-brand-primary" />
+                      <p className="text-sm font-medium text-ink-soft">Transcribing your recording…</p>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="text-xs font-semibold text-ink-faint uppercase tracking-wide mb-1.5">Transcript</p>
+                      <p className="text-sm text-ink whitespace-pre-wrap">{content}</p>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
@@ -377,52 +396,6 @@ export default function RecordPage() {
                 <p className="text-[11px] text-ink-soft leading-snug">{tip.desc}</p>
               </div>
             ))}
-          </div>
-        </div>
-      </div>
-
-      <div className="px-5 pt-4">
-        <div className="rounded-card border border-border bg-surface overflow-hidden">
-          <div className="flex gap-1 p-2 border-b border-border">
-            <button
-              onClick={() => setPreviewTab("Transcript")}
-              className={cn(
-                "flex-1 rounded-pill py-2 text-sm font-medium",
-                previewTab === "Transcript" ? "text-brand-primary" : "text-ink-faint"
-              )}
-            >
-              Transcript
-            </button>
-            <button
-              onClick={() => setPreviewTab("Summary")}
-              className={cn(
-                "flex-1 rounded-pill py-2 text-sm font-medium",
-                previewTab === "Summary" ? "text-brand-primary" : "text-ink-faint"
-              )}
-            >
-              Summary (AI)
-            </button>
-          </div>
-          <div className="p-6 flex flex-col items-center text-center">
-            {previewTab === "Transcript" ? (
-              content.trim() ? (
-                <p className="text-sm text-ink whitespace-pre-wrap">{content}</p>
-              ) : (
-                <>
-                  <MessageSquareText size={22} className="text-ink-faint mb-2" />
-                  <p className="text-sm font-medium text-ink">Your transcript will appear here</p>
-                  <p className="text-xs text-ink-soft mt-0.5">
-                    {mode === "upload" ? "Upload a file to capture its text…" : "Start recording to capture your thoughts…"}
-                  </p>
-                </>
-              )
-            ) : (
-              <>
-                <FileText size={22} className="text-ink-faint mb-2" />
-                <p className="text-sm font-medium text-ink">Summary appears after saving</p>
-                <p className="text-xs text-ink-soft mt-0.5">Your AI generates this once you create the memory.</p>
-              </>
-            )}
           </div>
         </div>
       </div>
