@@ -76,8 +76,20 @@ function LoginForm() {
       const bridgeUrl = `${window.location.origin}/login?callbackUrl=${encodeURIComponent(
         "/api/auth/mobile-bridge"
       )}`;
-      await Browser.open({ url: bridgeUrl });
-      setLoading(false);
+      try {
+        await Browser.open({ url: bridgeUrl });
+      } catch {
+        // Most likely cause: this device still has an older build of the
+        // app installed that predates the @capacitor/browser plugin being
+        // added, so the native side can't fulfill this call. Surfacing an
+        // error here (instead of leaving the button stuck spinning forever)
+        // is the whole point of this catch block.
+        setError(
+          "Couldn't open the sign-in page. Make sure you have the latest version of the app installed."
+        );
+      } finally {
+        setLoading(false);
+      }
       return;
     }
 
