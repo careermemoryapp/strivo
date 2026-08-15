@@ -48,4 +48,14 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Voice-to-text recording (Web Speech API / getUserMedia in the web
+         app) needs the mic. Capacitor's Bridge already has the runtime
+         permission-request flow wired up for this out of the box
+         (BridgeWebChromeClient.onPermissionRequest grants RECORD_AUDIO when
+         the web page asks for microphone access) — the only piece that was
+         actually missing was declaring the permission here so Android will
+         let that grant happen at all. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 </manifest>
