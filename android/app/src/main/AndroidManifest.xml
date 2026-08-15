@@ -22,6 +22,16 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- Deep link used to hand a completed Google sign-in back from
+                 the system browser into this app (see /api/auth/mobile-bridge
+                 and MainActivity's handleAuthCallbackIntent). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ai.strivo.app" android:host="auth-callback" />
+            </intent-filter>
+
         </activity>
 
         <provider

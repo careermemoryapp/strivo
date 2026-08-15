@@ -1,12 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
+import { useSearchParams } from "next/navigation";
+import { Browser } from "@capacitor/browser";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { APP_NAME } from "@/lib/config";
+
+// Minimal shape of the global Capacitor injects into every page loaded
+// inside the native app's WebView (including this remote strivo.ai page —
+// the bridge is attached to the WebView itself, not to locally-bundled
+// assets). Absent entirely on a normal desktop/mobile browser.
+type CapacitorGlobal = { isNativePlatform?: () => boolean };
+declare global {
+  interface Window {
+    Capacitor?: CapacitorGlobal;
+  }
+}
+
+function isNativeApp(): boolean {
+  return typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.());
+}
 
 function GoogleIcon() {
   return (
@@ -31,14 +48,40 @@ function GoogleIcon() {
   );
 }
 
-export default function LoginPage() {
+function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const searchParams = useSearchParams();
+  // /api/auth/mobile-bridge sets this when it sends the system browser back
+  // here so the *app's* handleGoogle (below) doesn't run — this instance of
+  // the page is being viewed inside a real Chrome tab, not the app WebView,
+  // so isNativeApp() is false here and the normal in-page NextAuth flow
+  // (already proven to work in a real browser) just runs as-is.
+  const callbackUrl = searchParams.get("callbackUrl") || "/home";
 
   async function handleGoogle() {
     setLoading(true);
     setError(null);
-    const res = await signIn("google", { callbackUrl: "/home" });
+
+    // Google refuses to show its sign-in screen inside an embedded WebView
+    // (which is what the Android app's Capacitor WebView is) — the
+    // "Continue" button just renders disabled. So instead of navigating
+    // this WebView to accounts.google.com, we hand the whole flow off to
+    // the phone's system browser (a real Chrome, which Google allows), and
+    // point its callbackUrl at /api/auth/mobile-bridge. That route hands a
+    // one-time token back to this app via a deep link, and the app trades
+    // it for a real session cookie inside its own WebView. See
+    // MainActivity.java + /api/auth/mobile-bridge + /api/auth/mobile-consume.
+    if (isNativeApp()) {
+      const bridgeUrl = `${window.location.origin}/login?callbackUrl=${encodeURIComponent(
+        "/api/auth/mobile-bridge"
+      )}`;
+      await Browser.open({ url: bridgeUrl });
+      setLoading(false);
+      return;
+    }
+
+    const res = await signIn("google", { callbackUrl });
     if (res?.error) {
       setError("Couldn't sign in with Google. Please try again.");
       setLoading(false);
@@ -85,5 +128,14 @@ export default function LoginPage() {
         .
       </p>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  // useSearchParams needs a Suspense boundary in the app router.
+  return (
+    <Suspense fallback={null}>
+      <LoginForm />
+    </Suspense>
   );
 }

@@ -106,6 +106,23 @@ function migrate(db: DatabaseSync) {
       status TEXT NOT NULL DEFAULT 'new',
       created_at TEXT NOT NULL
     );
+
+    -- Google blocks its sign-in screen inside embedded WebViews (which is
+    -- what the Android app's Capacitor WebView is), so Google auth for the
+    -- native app has to happen in the system browser instead. This table is
+    -- the handoff: after sign-in completes in the system browser, we mint a
+    -- short-lived single-use token that carries that browser's already-valid
+    -- NextAuth session cookie value across to the app's own WebView cookie
+    -- jar (they don't share cookies with each other). See
+    -- /api/auth/mobile-bridge and /api/auth/mobile-consume.
+    CREATE TABLE IF NOT EXISTS mobile_auth_tokens (
+      id TEXT PRIMARY KEY,
+      token TEXT NOT NULL UNIQUE,
+      session_cookie_value TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---
