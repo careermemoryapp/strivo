@@ -91,7 +91,7 @@ export default function RecordPage() {
   }
 
   function switchMode(next: Mode) {
-    if (speech.listening) return;
+    if (speech.listening || speech.transcribing) return;
     setSaveError(null);
     setMode(next);
   }
@@ -194,7 +194,7 @@ export default function RecordPage() {
 
   const remainingSeconds = MAX_RECORD_SECONDS - elapsedSeconds;
   const nearLimit = speech.listening && remainingSeconds <= 30;
-  const createDisabled = speech.listening || extracting || saving || !content.trim();
+  const createDisabled = speech.listening || speech.transcribing || extracting || saving || !content.trim();
 
   return (
     <div>
@@ -223,7 +223,7 @@ export default function RecordPage() {
               <button
                 key={tab.id}
                 onClick={() => switchMode(tab.id)}
-                disabled={speech.listening}
+                disabled={speech.listening || speech.transcribing}
                 className={cn(
                   "flex-1 rounded-pill py-2 text-xs font-semibold disabled:opacity-50",
                   mode === tab.id ? "bg-brand-primary-soft text-brand-primary" : "text-ink-faint"
@@ -249,7 +249,13 @@ export default function RecordPage() {
               )}
               {speech.error && (
                 <div className="w-full mb-4">
-                  <ErrorBanner message={`${speech.error} You can allow microphone access in your browser settings, or use Type Instead.`} />
+                  <ErrorBanner
+                    message={
+                      speech.error === "Microphone access was denied."
+                        ? `${speech.error} You can allow microphone access in your browser settings, or use Type Instead.`
+                        : speech.error
+                    }
+                  />
                 </div>
               )}
               {hitLimit && !speech.listening && (
@@ -262,24 +268,32 @@ export default function RecordPage() {
                 <Waveform active={speech.listening} />
                 <button
                   onClick={toggleRecording}
-                  disabled={!speech.supported}
+                  disabled={!speech.supported || speech.transcribing}
                   aria-label={speech.listening ? "Stop recording" : "Tap to record"}
                   className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-surface text-brand-primary disabled:opacity-40"
                   style={{ boxShadow: "0 12px 32px rgba(124,58,237,0.25)" }}
                 >
                   {speech.listening && <span className="absolute inset-0 rounded-full animate-pulse-ring" />}
-                  {speech.listening ? <Square size={30} /> : <Mic size={36} />}
+                  {speech.transcribing ? (
+                    <Spinner className="border-brand-primary-soft border-t-brand-primary h-8 w-8" />
+                  ) : speech.listening ? (
+                    <Square size={30} />
+                  ) : (
+                    <Mic size={36} />
+                  )}
                 </button>
                 <Waveform active={speech.listening} />
               </div>
 
               <p className="mt-4 text-base font-semibold text-ink">
-                {speech.listening ? "Listening… tap to stop" : "Tap to Record"}
+                {speech.transcribing ? "Transcribing…" : speech.listening ? "Listening… tap to stop" : "Tap to Record"}
               </p>
               {speech.listening ? (
                 <p className={cn("mt-0.5 text-xs font-medium", nearLimit ? "text-red-600" : "text-ink-soft")}>
                   {formatClock(remainingSeconds)} left of a 5-minute stretch
                 </p>
+              ) : speech.transcribing ? (
+                <p className="mt-0.5 text-xs text-ink-soft">Turning your recording into text…</p>
               ) : (
                 <p className="mt-0.5 text-xs text-ink-soft">Speak freely — up to 5 minutes at a stretch.</p>
               )}

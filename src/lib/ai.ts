@@ -97,6 +97,26 @@ export async function embedText(text: string): Promise<number[] | null> {
   }
 }
 
+// Transcribes a recorded voice memo with OpenAI's Whisper model — far more
+// accurate than the browser's free built-in speech recognizer, especially
+// on mixed-language (e.g. Hindi/English) speech. Returns null on any
+// failure so the caller can surface a clear "try again" error rather than
+// silently losing the recording.
+export async function transcribeAudio(file: File): Promise<string | null> {
+  const openai = getClient();
+  if (!openai) return null;
+  try {
+    const result = await openai.audio.transcriptions.create({
+      file,
+      model: "whisper-1",
+    });
+    return (result.text ?? "").trim();
+  } catch (err) {
+    console.error("transcribeAudio failed:", err);
+    return null;
+  }
+}
+
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 const SYSTEM_PROMPT_BASE = `You are the user's personal career intelligence assistant, part of a product called Strivo.

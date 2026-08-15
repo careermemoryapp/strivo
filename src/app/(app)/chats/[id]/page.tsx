@@ -48,15 +48,18 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
-  // While the mic is listening, mirror the recognized speech into the text
-  // box live. Only the resulting TEXT is ever saved or sent — the audio
-  // itself never leaves the browser and is never stored anywhere.
+  // Mirror the transcribed speech into the text box once it's ready. The
+  // recording is sent to the server to be transcribed (OpenAI's Whisper —
+  // far more accurate than the browser's built-in recognizer, especially
+  // on mixed-language speech), so fullText only updates a moment after you
+  // stop recording, not live while you talk. Only the resulting text is
+  // ever saved or sent onward; the audio itself isn't stored.
   useEffect(() => {
-    if (speech.listening) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirroring live speech transcript into the input box
+    if (speech.listening || speech.transcribing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- mirroring speech transcript into the input box
       setInput(speech.fullText);
     }
-  }, [speech.listening, speech.fullText]);
+  }, [speech.listening, speech.transcribing, speech.fullText]);
 
   function toggleMic() {
     if (speech.listening) {
@@ -231,12 +234,19 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
             <button
               type="button"
               onClick={toggleMic}
+              disabled={speech.transcribing}
               aria-label={speech.listening ? "Stop voice input" : "Speak instead of typing"}
-              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${
+              className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition disabled:opacity-50 ${
                 speech.listening ? "bg-red-500 text-white animate-pulse" : "bg-brand-primary-soft text-brand-primary"
               }`}
             >
-              {speech.listening ? <Square size={16} /> : <Mic size={18} />}
+              {speech.transcribing ? (
+                <Spinner className="border-brand-primary-soft border-t-brand-primary h-4 w-4" />
+              ) : speech.listening ? (
+                <Square size={16} />
+              ) : (
+                <Mic size={18} />
+              )}
             </button>
           )}
           <textarea
@@ -249,12 +259,14 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
               }
             }}
             rows={1}
-            placeholder={speech.listening ? "Listening…" : "Ask your AI about your career or experiences..."}
+            placeholder={
+              speech.listening ? "Listening…" : speech.transcribing ? "Transcribing…" : "Ask your AI about your career or experiences..."
+            }
             className="flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink placeholder:text-ink-faint outline-none max-h-28"
           />
           <button
             type="submit"
-            disabled={!input.trim() || sending}
+            disabled={!input.trim() || sending || speech.transcribing}
             aria-label="Send"
             className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-white disabled:opacity-40"
           >

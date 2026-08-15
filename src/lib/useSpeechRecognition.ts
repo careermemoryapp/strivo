@@ -2,163 +2,126 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
-// Minimal typing for the Web Speech API, which isn't in TS's default DOM lib.
-interface SpeechRecognitionEventLike {
-  resultIndex: number;
-  results: {
-    length: number;
-    [index: number]: { isFinal: boolean; [altIndex: number]: { transcript: string } };
-  };
-}
-interface SpeechRecognitionLike {
-  continuous: boolean;
-  interimResults: boolean;
-  lang: string;
-  start: () => void;
-  stop: () => void;
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
-  onerror: ((event: { error: string }) => void) | null;
-  onend: (() => void) | null;
-}
+// This used to wrap the browser's built-in Web Speech API (live captions
+// while you talk). That engine is free but its accuracy on mixed-language
+// speech (e.g. Hindi/English) is poor, and Chrome silently ends/restarts
+// its recognition session periodically even mid-recording — both were
+// reported as real problems by testers. This now records real audio with
+// MediaRecorder and sends it to the server for transcription with OpenAI's
+// Whisper model (the same category of model ChatGPT/Claude's voice input
+// uses), which is far more accurate and doesn't have the browser engine's
+// stop-on-its-own flakiness. The one UX trade-off: no live captions while
+// speaking — the transcript appears a few seconds after you stop, same as
+// sending a voice note. The hook keeps the same name/shape (state,
+// listening, fullText, error, supported, start, stop, reset) so the Record
+// and Chat screens didn't need to change how they consume it.
 
-type SpeechRecognitionCtor = new () => SpeechRecognitionLike;
+export type SpeechState = "idle" | "listening" | "transcribing" | "error" | "unsupported";
 
-declare global {
-  interface Window {
-    SpeechRecognition?: SpeechRecognitionCtor;
-    webkitSpeechRecognition?: SpeechRecognitionCtor;
-  }
+function isSupported(): boolean {
+  return (
+    typeof window !== "undefined" &&
+    typeof navigator !== "undefined" &&
+    !!navigator.mediaDevices?.getUserMedia &&
+    typeof MediaRecorder !== "undefined"
+  );
 }
-
-export type SpeechState = "idle" | "listening" | "error" | "unsupported";
 
 export function useSpeechRecognition() {
   const [state, setState] = useState<SpeechState>("idle");
   const [finalText, setFinalText] = useState("");
-  const [interimText, setInterimText] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
+
+  const streamRef = useRef<MediaStream | null>(null);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<Blob[]>([]);
   const finalTextRef = useRef("");
-  // Tracks whether the user actually wants the mic on right now, separate
-  // from the engine's own "listening" state — lets onend tell the
-  // difference between "user tapped stop" and "the browser silently ended
-  // the session on its own" (which Chrome does periodically even in
-  // continuous mode, roughly every 60s).
-  const shouldBeListeningRef = useRef(false);
-  // Final text already counted from the *current* internal engine segment.
-  // When the engine restarts that segment behind the scenes, results reset
-  // to a shorter list starting over — without tracking this we'd re-append
-  // already-committed text and produce duplicated/garbled phrases.
-  const segmentFinalTextRef = useRef("");
 
   useEffect(() => {
-    const Ctor =
-      typeof window !== "undefined" ? window.SpeechRecognition || window.webkitSpeechRecognition : undefined;
-    if (!Ctor) {
-      queueMicrotask(() => setState("unsupported"));
-      return;
-    }
-    const recognition = new Ctor();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = "en-US";
-
-    recognition.onresult = (event) => {
-      // Recompute the full final/interim text from *all* current results
-      // each time, rather than trusting resultIndex to only point at new
-      // ones — the engine's internal segment can reset mid-session (see
-      // segmentFinalTextRef comment above), which makes resultIndex point
-      // at stale positions and would otherwise re-append already-seen text.
-      let finalInSegment = "";
-      let interim = "";
-      for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i];
-        const text = result[0]?.transcript ?? "";
-        if (result.isFinal) {
-          finalInSegment = `${finalInSegment} ${text}`.trim();
-        } else {
-          interim += text;
-        }
-      }
-
-      // Segment reset detected (this event's finalized text is shorter
-      // than what we'd already counted) — start diffing from scratch
-      // against this new segment instead of the old one.
-      if (finalInSegment.length < segmentFinalTextRef.current.length) {
-        segmentFinalTextRef.current = "";
-      }
-
-      if (finalInSegment.length > segmentFinalTextRef.current.length) {
-        const newText = finalInSegment.slice(segmentFinalTextRef.current.length).trim();
-        if (newText) {
-          finalTextRef.current = `${finalTextRef.current} ${newText}`.trim();
-          setFinalText(finalTextRef.current);
-        }
-        segmentFinalTextRef.current = finalInSegment;
-      }
-
-      setInterimText(interim);
-    };
-
-    recognition.onerror = (event) => {
-      if (event.error === "no-speech" || event.error === "aborted") return;
-      const fatal = event.error === "not-allowed" || event.error === "service-not-allowed";
-      // Permission errors won't fix themselves by retrying — don't let
-      // onend's auto-restart (below) keep hammering start() on a mic the
-      // user was never granted.
-      if (fatal) shouldBeListeningRef.current = false;
-      setError(fatal ? "Microphone access was denied." : "Speech recognition failed.");
-      setState("error");
-    };
-
-    recognition.onend = () => {
-      // The browser can end the recognition session on its own during a
-      // long continuous recording without us ever calling stop() — if the
-      // user hasn't asked to stop, restart immediately so it feels like one
-      // continuous recording instead of the mic silently going dead.
-      if (shouldBeListeningRef.current) {
-        segmentFinalTextRef.current = "";
-        try {
-          recognition.start();
-          return;
-        } catch {
-          // If the immediate restart itself throws, fall through to idle
-          // below rather than leaving the UI stuck showing "Listening…".
-        }
-      }
-      setState((s) => (s === "listening" ? "idle" : s));
-    };
-
-    recognitionRef.current = recognition;
+    if (!isSupported()) queueMicrotask(() => setState("unsupported"));
   }, []);
 
-  const start = useCallback(() => {
+  const releaseStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
+  const transcribeChunks = useCallback(async (mimeType: string) => {
+    const chunks = chunksRef.current;
+    chunksRef.current = [];
+    const blob = new Blob(chunks, { type: mimeType || "audio/webm" });
+    // A couple of KB is essentially silence/a mis-tap, not worth a round
+    // trip to the transcription API.
+    if (blob.size < 2000) {
+      setState("idle");
+      return;
+    }
+    setState("transcribing");
+    try {
+      const formData = new FormData();
+      formData.append("audio", blob, "recording.webm");
+      const res = await fetch("/api/memories/transcribe", { method: "POST", body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || "Transcription failed");
+      const text = typeof data.text === "string" ? data.text.trim() : "";
+      if (text) {
+        finalTextRef.current = `${finalTextRef.current} ${text}`.trim();
+        setFinalText(finalTextRef.current);
+      }
+      setState("idle");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't transcribe that recording. Please try again.");
+      setState("error");
+    }
+  }, []);
+
+  const start = useCallback(async () => {
     setError(null);
-    if (!recognitionRef.current) {
+    if (!isSupported()) {
       setState("unsupported");
       return;
     }
-    shouldBeListeningRef.current = true;
-    segmentFinalTextRef.current = "";
     try {
-      recognitionRef.current.start();
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      chunksRef.current = [];
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm") ? "audio/webm" : "";
+      const recorder = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+      recorder.onstop = () => {
+        releaseStream();
+        transcribeChunks(recorder.mimeType);
+      };
+      recorderRef.current = recorder;
+      recorder.start();
       setState("listening");
-    } catch {
-      // start() throws if already started — ignore.
+    } catch (e) {
+      releaseStream();
+      const name = e instanceof DOMException ? e.name : "";
+      setError(
+        name === "NotAllowedError" || name === "SecurityError"
+          ? "Microphone access was denied."
+          : "Couldn't access the microphone. Please try again."
+      );
+      setState("error");
     }
-  }, []);
+  }, [releaseStream, transcribeChunks]);
 
   const stop = useCallback(() => {
-    shouldBeListeningRef.current = false;
-    recognitionRef.current?.stop();
-    setState("idle");
-  }, []);
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.stop(); // onstop above kicks off transcription and flips state
+    } else {
+      releaseStream();
+      setState("idle");
+    }
+  }, [releaseStream]);
 
   const reset = useCallback(() => {
     finalTextRef.current = "";
-    segmentFinalTextRef.current = "";
     setFinalText("");
-    setInterimText("");
     setError(null);
   }, []);
 
@@ -166,9 +129,10 @@ export function useSpeechRecognition() {
     state,
     supported: state !== "unsupported",
     listening: state === "listening",
+    transcribing: state === "transcribing",
     finalText,
-    interimText,
-    fullText: `${finalText} ${interimText}`.trim(),
+    interimText: "", // kept for compatibility; there's no live interim text anymore
+    fullText: finalText,
     error,
     start,
     stop,
