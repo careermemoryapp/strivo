@@ -67,15 +67,15 @@ function LoginForm() {
     // (which is what the Android app's Capacitor WebView is) — the
     // "Continue" button just renders disabled. So instead of navigating
     // this WebView to accounts.google.com, we hand the whole flow off to
-    // the phone's system browser (a real Chrome, which Google allows), and
-    // point its callbackUrl at /api/auth/mobile-bridge. That route hands a
+    // the phone's system browser (a real Chrome, which Google allows).
+    // /mobile-google-start fires the sign-in redirect itself the instant it
+    // loads there (so this still feels like one tap, not two), with its
+    // callbackUrl pointing at /api/auth/mobile-bridge. That route hands a
     // one-time token back to this app via a deep link, and the app trades
     // it for a real session cookie inside its own WebView. See
     // MainActivity.java + /api/auth/mobile-bridge + /api/auth/mobile-consume.
     if (isNativeApp()) {
-      const bridgeUrl = `${window.location.origin}/login?callbackUrl=${encodeURIComponent(
-        "/api/auth/mobile-bridge"
-      )}`;
+      const bridgeUrl = `${window.location.origin}/mobile-google-start`;
       try {
         await Browser.open({ url: bridgeUrl });
       } catch {

@@ -27,7 +27,7 @@ const TIPS = [
   { icon: CheckCircle2, title: "One thought", desc: "Focus on one idea or moment at a time." },
 ];
 
-const MAX_RECORD_SECONDS = 10 * 60;
+const MAX_RECORD_SECONDS = 5 * 60;
 const UPLOAD_ACCEPT = ".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt";
 
 function formatClock(totalSeconds: number): string {
@@ -62,7 +62,7 @@ export default function RecordPage() {
   const content = mode === "voice" ? speech.fullText : mode === "type" ? typedText : uploadText;
   const source: Source = mode === "voice" ? "voice" : mode === "type" ? "text" : "file";
 
-  // 10-minute cap on a single recording stretch — auto-stops and locks the
+  // 5-minute cap on a single recording stretch — auto-stops and locks the
   // button until a fresh recording is started, per product requirement.
   useEffect(() => {
     if (!speech.listening) return;
@@ -254,7 +254,7 @@ export default function RecordPage() {
               )}
               {hitLimit && !speech.listening && (
                 <div className="w-full mb-4">
-                  <ErrorBanner message="Reached the 10-minute limit for a single recording — recording stopped automatically. You can create the memory with what was captured, or start a new recording." />
+                  <ErrorBanner message="Reached the 5-minute limit for a single recording — recording stopped automatically. You can create the memory with what was captured, or start a new recording." />
                 </div>
               )}
 
@@ -278,10 +278,10 @@ export default function RecordPage() {
               </p>
               {speech.listening ? (
                 <p className={cn("mt-0.5 text-xs font-medium", nearLimit ? "text-red-600" : "text-ink-soft")}>
-                  {formatClock(remainingSeconds)} left of a 10-minute stretch
+                  {formatClock(remainingSeconds)} left of a 5-minute stretch
                 </p>
               ) : (
-                <p className="mt-0.5 text-xs text-ink-soft">Speak freely — up to 10 minutes at a stretch.</p>
+                <p className="mt-0.5 text-xs text-ink-soft">Speak freely — up to 5 minutes at a stretch.</p>
               )}
             </div>
           )}
