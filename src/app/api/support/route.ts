@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { getUserById } from "@/lib/repo/users";
 import { createSupportMessage } from "@/lib/repo/support";
+import { sendSupportEmail } from "@/lib/email";
 
 const schema = z.object({
   subject: z.string().trim().max(120).optional(),
@@ -22,11 +23,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
   }
 
-  // No support inbox email is configured yet — the message is persisted so
-  // it isn't lost, and can be delivered/reviewed once that's decided.
+  // Always persist first so the message is never lost even if the email
+  // send fails (e.g. SES not configured yet, or a transient AWS error).
   const saved = createSupportMessage({
     userId,
     email: user.email,
+    subject: parsed.data.subject,
+    message: parsed.data.message,
+  });
+
+  await sendSupportEmail({
+    fromUserEmail: user.email,
     subject: parsed.data.subject,
     message: parsed.data.message,
   });

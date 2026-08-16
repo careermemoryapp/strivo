@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@aws-sdk/client-ses": "^3.1111.0",
     "@capacitor/android": "^8.5.0",
     "@capacitor/browser": "^8.0.4",
     "@capacitor/cli": "^8.5.0",
