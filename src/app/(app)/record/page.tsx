@@ -373,7 +373,7 @@ export default function RecordPage() {
                 {extracting ? <Spinner className="border-white/40 border-t-white h-4 w-4" /> : <Upload size={16} />}
                 {extracting ? "Reading file…" : uploadedFileName ? "Choose a different file" : "Choose File"}
               </button>
-              <p className="mt-3 text-[11px] text-ink-faint">.pdf, .docx, .pptx, .xlsx, .csv, .txt — up to 15MB</p>
+              <p className="mt-3 text-[11px] text-ink-faint">.pdf, .docx, .pptx, .xlsx, .csv, .txt — up to 2MB</p>
             </div>
           )}
 

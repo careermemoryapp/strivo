@@ -5,7 +5,7 @@ import { requireUserId } from "@/lib/serverAuth";
 // APIs, so this route can't run on the edge runtime.
 export const runtime = "nodejs";
 
-const MAX_BYTES = 15 * 1024 * 1024; // 15MB — keep well under typical reverse-proxy upload limits
+const MAX_BYTES = 2 * 1024 * 1024; // 2MB cap
 const MAX_CHARS = 20000; // cap how much extracted text we feed the AI/embeddings
 
 const ENTITY_MAP: Record<string, string> = {
@@ -102,7 +102,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No file provided" }, { status: 400 });
   }
   if (file.size > MAX_BYTES) {
-    return NextResponse.json({ error: "That file is too large. Please upload something under 15MB." }, { status: 400 });
+    return NextResponse.json({ error: "That file is too large. Please upload something under 2MB." }, { status: 400 });
   }
 
   const name = file.name || "document";
