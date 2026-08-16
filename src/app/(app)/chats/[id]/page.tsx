@@ -55,11 +55,11 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
   // stop recording, not live while you talk. Only the resulting text is
   // ever saved or sent onward; the audio itself isn't stored.
   useEffect(() => {
-    if (speech.listening || speech.transcribing) {
+    if (speech.fullText) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- mirroring speech transcript into the input box
       setInput(speech.fullText);
     }
-  }, [speech.listening, speech.transcribing, speech.fullText]);
+  }, [speech.fullText]);
 
   function toggleMic() {
     if (speech.listening) {
