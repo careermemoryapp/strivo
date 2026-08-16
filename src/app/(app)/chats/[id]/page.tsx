@@ -222,6 +222,12 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
             <ErrorBanner message={sendError} onRetry={lastFailedContent ? () => send(lastFailedContent) : undefined} />
           </div>
         )}
+        {speech.transcribing && (
+          <div className="mb-2 flex items-center gap-2 rounded-input border border-border bg-surface px-3.5 py-2.5">
+            <Spinner className="h-4 w-4 border-brand-primary-soft border-t-brand-primary" />
+            <p className="text-sm font-medium text-ink-soft">Transcribing your recording…</p>
+          </div>
+        )}
         <form
           onSubmit={(e) => {
             e.preventDefault();
