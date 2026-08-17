@@ -57,13 +57,17 @@ export function chatCategoryIcon(category?: string | null) {
 }
 
 // Icons for the Home screen "What do you want to accomplish today?" grid.
+// Home is the only consumer of this map (see grep before changing it), and
+// Home now renders on a dark gradient background — so these are translucent
+// tints tuned for a dark card rather than the pale bg-*-50 swatches used
+// everywhere else in the (still light-themed) app.
 export const ACTION_ICON_DEFS: Record<string, IconDef> = {
-  target: { icon: Target, bg: "bg-indigo-50", text: "text-indigo-500" },
-  "file-text": { icon: FileText, bg: "bg-blue-50", text: "text-blue-500" },
-  "trending-up": { icon: TrendingUp, bg: "bg-emerald-50", text: "text-emerald-500" },
-  users: { icon: Users, bg: "bg-violet-50", text: "text-violet-500" },
-  briefcase: { icon: Briefcase, bg: "bg-orange-50", text: "text-orange-500" },
-  sparkles: { icon: Sparkles, bg: "bg-teal-50", text: "text-teal-500" },
-  award: { icon: Award, bg: "bg-amber-50", text: "text-amber-500" },
-  more: { icon: MoreHorizontal, bg: "bg-slate-100", text: "text-slate-500" },
+  target: { icon: Target, bg: "bg-indigo-400/20", text: "text-indigo-300" },
+  "file-text": { icon: FileText, bg: "bg-blue-400/20", text: "text-blue-300" },
+  "trending-up": { icon: TrendingUp, bg: "bg-emerald-400/20", text: "text-emerald-300" },
+  users: { icon: Users, bg: "bg-violet-400/20", text: "text-violet-300" },
+  briefcase: { icon: Briefcase, bg: "bg-orange-400/20", text: "text-orange-300" },
+  sparkles: { icon: Sparkles, bg: "bg-teal-400/20", text: "text-teal-300" },
+  award: { icon: Award, bg: "bg-amber-400/20", text: "text-amber-300" },
+  more: { icon: MoreHorizontal, bg: "bg-white/10", text: "text-white/60" },
 };
