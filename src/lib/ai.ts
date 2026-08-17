@@ -102,6 +102,22 @@ export async function embedText(text: string): Promise<number[] | null> {
 // on mixed-language (e.g. Hindi/English) speech. Returns null on any
 // failure so the caller can surface a clear "try again" error rather than
 // silently losing the recording.
+//
+// No `language` parameter is set on purpose — Whisper auto-detects the
+// spoken language on its own across ~100 languages, so hard-coding one
+// would make transcription worse for everyone who isn't speaking that
+// language. What auto-detection genuinely struggles with is short or
+// code-switched clips (a Hindi sentence with a few English words mixed
+// in, very common in everyday speech) — with too little audio to be
+// confident, it can lock onto the wrong language and transcribe the whole
+// thing as something else entirely. The `prompt` field below is a
+// same-language sample of exactly that kind of speech; Whisper treats it
+// as "the kind of audio you're about to hear" and uses it purely as a
+// steering hint, not a restriction — English-only or any other-language
+// recordings are completely unaffected and still auto-detect normally.
+const TRANSCRIBE_PROMPT =
+  "यह एक व्यक्तिगत वॉयस नोट है। This is a personal voice memo, sometimes in Hindi, sometimes in English, sometimes both mixed together.";
+
 export async function transcribeAudio(file: File): Promise<string | null> {
   const openai = getClient();
   if (!openai) return null;
@@ -109,6 +125,7 @@ export async function transcribeAudio(file: File): Promise<string | null> {
     const result = await openai.audio.transcriptions.create({
       file,
       model: "whisper-1",
+      prompt: TRANSCRIBE_PROMPT,
     });
     return (result.text ?? "").trim();
   } catch (err) {
