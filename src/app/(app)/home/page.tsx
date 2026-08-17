@@ -2,14 +2,14 @@
 
 import { useEffect, useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Sparkles, ArrowUp } from "lucide-react";
+import { ChevronRight, Sparkles, ArrowUp, MoreHorizontal } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { HOME_SUBTITLE, QUICK_ACTIONS } from "@/lib/config";
-import { timeOfDayGreeting, cn } from "@/lib/utils";
+import { timeOfDayGreeting } from "@/lib/utils";
 import { ACTION_ICON_DEFS, chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 
@@ -92,19 +92,12 @@ export default function HomePage() {
     startChat({ id: "hero", chatTitle: title, category: guessCategory(trimmed), prompt: trimmed });
   }
 
-  // Home is dark end to end (loading/error states included) so switching
-  // between them never flashes back to the light theme mid-load.
+  // The dark gradient itself now lives on the shared (app) layout wrapper
+  // (see layout.tsx) so it covers the full viewport width and the strip
+  // behind the bottom nav, not just this page's centered content column.
+  // This helper just adds the decorative floating blobs on top of it.
   const darkShell = (content: React.ReactNode) => (
-    <div
-      className="relative min-h-screen overflow-hidden"
-      style={{
-        background:
-          "radial-gradient(circle at 12% 6%, rgba(190,120,255,0.35), transparent 38%)," +
-          "radial-gradient(circle at 92% 16%, rgba(79,110,247,0.32), transparent 42%)," +
-          "radial-gradient(circle at 50% 100%, rgba(120,60,220,0.25), transparent 50%)," +
-          "linear-gradient(170deg,#1a0f3d 0%,#231259 30%,#1c1050 55%,#120b38 78%,#0a0620 100%)",
-      }}
-    >
+    <div className="relative min-h-screen overflow-hidden">
       <div
         className="pointer-events-none absolute -top-10 -right-16 h-56 w-56 rounded-full bg-brand-secondary/25 blur-3xl animate-float-blob"
         aria-hidden="true"
@@ -139,9 +132,9 @@ export default function HomePage() {
   return darkShell(
     <>
       <div className="flex items-center justify-between px-5 pt-6">
-        <div className="flex items-center gap-2">
-          <LogoMark size={28} />
-          <span className="text-[15px] font-semibold text-white">Strivo</span>
+        <div className="flex items-center gap-2.5">
+          <LogoMark size={40} />
+          <span className="text-[22px] font-bold tracking-tight text-white">Strivo</span>
         </div>
         <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
           <Avatar firstName={data.user?.firstName} lastName={data.user?.lastName} size={34} />
@@ -193,36 +186,84 @@ export default function HomePage() {
         </form>
       </div>
 
+      {/* One continuous panel for everything below the hero — quick actions,
+          Others, and recent chats — instead of each row being its own
+          separately-bordered/shadowed box. Only "Capture a memory" keeps
+          its own standout treatment further down, since that's meant to
+          draw the eye, not blend in. */}
       <div className="px-5 pt-6">
-        <h2 className="mb-3 text-[13px] font-medium text-white/85">What do you want to accomplish today?</h2>
-        <div className="grid grid-cols-2 gap-2.5">
-          {QUICK_ACTIONS.map((action, i) => {
-            const iconDef = ACTION_ICON_DEFS[action.icon];
-            const Icon = iconDef.icon;
-            const isOthers = action.id === "others";
-            return (
-              <button
-                key={action.id}
-                onClick={() => handleQuickAction(action)}
-                disabled={!!pendingAction}
-                style={{ animationDelay: `${i * 60}ms` }}
-                className={cn(
-                  "animate-fade-in-up flex flex-col items-start gap-2.5 rounded-[14px] border border-white/10 border-t-white/20 bg-white/[0.06] p-3.5 text-left transition-transform active:scale-[0.97] disabled:opacity-50",
-                  "shadow-[0_6px_16px_rgba(0,0,0,0.25)]",
-                  isOthers && "col-span-2 flex-row items-center bg-white/[0.05]"
-                )}
-              >
-                <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconDef.bg} ${iconDef.text}`}>
-                  {pendingAction === action.id ? <Spinner /> : <Icon size={18} />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-white">{action.title}</p>
-                  <p className="text-xs text-white/45">{action.description}</p>
-                </div>
-                {isOthers && <ChevronRight size={17} className="text-white/30 shrink-0" />}
-              </button>
-            );
-          })}
+        <div className="rounded-[18px] border border-white/10 bg-white/[0.05] overflow-hidden">
+          <div className="p-4">
+            <h2 className="mb-3 text-[13px] font-medium text-white/85">What do you want to accomplish today?</h2>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-4">
+              {QUICK_ACTIONS.filter((a) => a.id !== "others").map((action, i) => {
+                const iconDef = ACTION_ICON_DEFS[action.icon];
+                const Icon = iconDef.icon;
+                return (
+                  <button
+                    key={action.id}
+                    onClick={() => handleQuickAction(action)}
+                    disabled={!!pendingAction}
+                    style={{ animationDelay: `${i * 60}ms` }}
+                    className="animate-fade-in-up flex flex-col items-start gap-2 text-left transition-transform active:scale-[0.97] disabled:opacity-50"
+                  >
+                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconDef.bg} ${iconDef.text}`}>
+                      {pendingAction === action.id ? <Spinner /> : <Icon size={18} />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-white leading-tight">{action.title}</p>
+                      <p className="text-xs text-white/45">{action.description}</p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <button
+            onClick={() => handleQuickAction(QUICK_ACTIONS.find((a) => a.id === "others")!)}
+            disabled={!!pendingAction}
+            className="flex w-full items-center gap-3 border-t border-white/8 p-4 text-left transition-colors active:bg-white/[0.03] disabled:opacity-50"
+          >
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/60">
+              {pendingAction === "others" ? <Spinner /> : <MoreHorizontal size={18} />}
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-medium text-white">Others</p>
+              <p className="text-xs text-white/45">Anything else — general chat or advice</p>
+            </div>
+            <ChevronRight size={17} className="text-white/30 shrink-0" />
+          </button>
+
+          {data.recentChats.length > 0 && (
+            <div className="border-t border-white/8 p-4">
+              <div className="mb-3 flex items-center justify-between">
+                <h2 className="text-[13px] font-medium text-white/85">Continue where you left off</h2>
+                <button onClick={() => router.push("/chats")} className="flex items-center text-[12px] font-medium text-purple-200">
+                  View all <ChevronRight size={15} />
+                </button>
+              </div>
+              <div className="space-y-3">
+                {data.recentChats.map((chat) => {
+                  const Icon = chatCategoryIcon(chat.category);
+                  return (
+                    <button key={chat.id} onClick={() => router.push(`/chats/${chat.id}`)} className="flex w-full items-center gap-3 text-left">
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-300/20 text-purple-200">
+                        <Icon size={18} />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-white truncate text-sm">{chat.title}</p>
+                        <p className="text-xs text-white/45">
+                          Last active {formatDistanceToNowStrict(new Date(chat.updated_at), { addSuffix: true })}
+                        </p>
+                      </div>
+                      <ChevronRight size={17} className="text-white/30 shrink-0" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -248,43 +289,6 @@ export default function HomePage() {
           </div>
         </div>
       </div>
-
-      {data.recentChats.length > 0 && (
-        <div className="px-5 pt-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[13px] font-medium text-white/85">Continue where you left off</h2>
-            <button onClick={() => router.push("/chats")} className="flex items-center text-[13px] font-medium text-purple-200">
-              View all <ChevronRight size={16} />
-            </button>
-          </div>
-          <div className="space-y-2.5">
-            {data.recentChats.map((chat) => {
-              const Icon = chatCategoryIcon(chat.category);
-              return (
-                <button key={chat.id} onClick={() => router.push(`/chats/${chat.id}`)} className="block w-full text-left">
-                  <div className="flex items-center gap-3 rounded-[14px] border border-white/10 border-t-white/20 bg-white/[0.06] p-3.5 shadow-[0_6px_16px_rgba(0,0,0,0.25)]">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-300/20 text-purple-200">
-                      <Icon size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-white truncate">{chat.title}</p>
-                      <p className="text-xs text-white/45">
-                        Last active {formatDistanceToNowStrict(new Date(chat.updated_at), { addSuffix: true })}
-                      </p>
-                      {chat.memory_count > 0 && (
-                        <span className="mt-1.5 inline-block rounded-pill bg-purple-300/15 px-2 py-0.5 text-[11px] font-medium text-purple-200">
-                          {chat.memory_count} {chat.memory_count === 1 ? "memory" : "memories"} available
-                        </span>
-                      )}
-                    </div>
-                    <ChevronRight size={17} className="text-white/30 shrink-0" />
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       <div className="pb-6" />
     </>
