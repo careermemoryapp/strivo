@@ -223,7 +223,7 @@ export default function HomePage() {
           <button
             onClick={() => handleQuickAction(QUICK_ACTIONS.find((a) => a.id === "others")!)}
             disabled={!!pendingAction}
-            className="flex w-full items-center gap-3 border-t border-white/10 p-4 text-left transition-colors active:bg-white/[0.03] disabled:opacity-50"
+            className="flex w-full items-center gap-3 p-4 pt-0 text-left transition-colors active:bg-white/[0.03] disabled:opacity-50"
           >
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/60">
               {pendingAction === "others" ? <Spinner /> : <MoreHorizontal size={18} />}
