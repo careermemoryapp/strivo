@@ -40,6 +40,19 @@ function tokenize(text: string): string[] {
     .filter((w) => w.length > 2 && !STOPWORDS.has(w));
 }
 
+// Is this text predominantly Latin-script (English, Spanish, etc.) as opposed
+// to another script (Devanagari/Hindi, Arabic, etc.)? Used to detect when a
+// query and a memory are in different languages/scripts, since in that case
+// a literal keyword-overlap check (see keywordScore) is structurally
+// impossible — the same word never shares characters across scripts — so it
+// can't be used as a relevance signal there the way it can within one script.
+function isLatinScript(text: string): boolean {
+  const letters = text.match(/\p{L}/gu) ?? [];
+  if (letters.length === 0) return true; // no letters at all: don't flag as non-Latin
+  const nonLatin = letters.filter((ch) => !/\p{Script=Latin}/u.test(ch)).length;
+  return nonLatin / letters.length < 0.3; // mostly-Latin counts as Latin
+}
+
 function keywordScore(queryTokens: string[], memory: Memory): number {
   const haystack = `${memory.title} ${memory.summary ?? ""} ${memory.transcript} ${memory.tags ?? ""}`.toLowerCase();
   let score = 0;
@@ -101,7 +114,23 @@ export async function retrieveRelevantMemories(
         // strong semantic match (>0.45) is trusted on its own. If nothing
         // clears this bar, we fall through to keyword search below rather
         // than showing weakly- or spuriously-related memories.
-        .filter((s) => s.score > 0.45 || (s.score > 0.3 && s.keywordHits > 0))
+        //
+        // Exception: if the memory and the query are in different scripts
+        // (e.g. a Hindi memory, an English question), a literal keyword
+        // match can never happen no matter how relevant the memory actually
+        // is — the words don't share characters. Requiring it there doesn't
+        // protect quality, it just blocks every cross-language match
+        // indiscriminately. So for cross-script pairs we skip the keyword
+        // requirement but raise the bar instead (0.4 vs 0.3), trading the
+        // (impossible) keyword corroboration for a stricter semantic one.
+        .filter((s) => {
+          const memoryText = `${s.memory.title} ${s.memory.summary ?? ""} ${s.memory.transcript}`;
+          const sameScript = isLatinScript(query) === isLatinScript(memoryText);
+          if (sameScript) {
+            return s.score > 0.45 || (s.score > 0.3 && s.keywordHits > 0);
+          }
+          return s.score > 0.4;
+        })
         .sort((a, b) => b.score - a.score)
         .slice(0, topK);
       if (scored.length > 0) {
