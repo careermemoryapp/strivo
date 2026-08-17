@@ -26,7 +26,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={cn("flex min-h-screen flex-col", !dark && "bg-bg")}
-      style={dark ? { background: HOME_BG, backgroundAttachment: "fixed" } : undefined}
+      style={dark ? { background: HOME_BG, backgroundRepeat: "no-repeat", backgroundSize: "100% 100%" } : undefined}
     >
       <main className="mx-auto w-full max-w-md flex-1 pb-20">{children}</main>
       <BottomNav />
