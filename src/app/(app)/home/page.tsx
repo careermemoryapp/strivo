@@ -263,32 +263,30 @@ export default function HomePage() {
 
       {data.recentChats.length > 0 && (
         <div className="px-5 pt-4">
-          <div className="rounded-[18px] border border-white/10 bg-white/[0.05] p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-[13px] font-medium text-white/85">Continue where you left off</h2>
-              <button onClick={() => router.push("/chats")} className="flex items-center text-[12px] font-medium text-purple-200">
-                View all <ChevronRight size={15} />
-              </button>
-            </div>
-            <div className="space-y-3">
-              {data.recentChats.map((chat) => {
-                const Icon = chatCategoryIcon(chat.category);
-                return (
-                  <button key={chat.id} onClick={() => router.push(`/chats/${chat.id}`)} className="flex w-full items-center gap-3 text-left">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-300/20 text-purple-200">
-                      <Icon size={18} />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-white truncate text-sm">{chat.title}</p>
-                      <p className="text-xs text-white/45">
-                        Last active {formatDistanceToNowStrict(new Date(chat.updated_at), { addSuffix: true })}
-                      </p>
-                    </div>
-                    <ChevronRight size={17} className="text-white/30 shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-[13px] font-medium text-white/85">Continue where you left off</h2>
+            <button onClick={() => router.push("/chats")} className="flex items-center text-[12px] font-medium text-purple-200">
+              View all <ChevronRight size={15} />
+            </button>
+          </div>
+          <div className="space-y-3">
+            {data.recentChats.map((chat) => {
+              const Icon = chatCategoryIcon(chat.category);
+              return (
+                <button key={chat.id} onClick={() => router.push(`/chats/${chat.id}`)} className="flex w-full items-center gap-3 text-left">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-300/20 text-purple-200">
+                    <Icon size={18} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-white truncate text-sm">{chat.title}</p>
+                    <p className="text-xs text-white/45">
+                      Last active {formatDistanceToNowStrict(new Date(chat.updated_at), { addSuffix: true })}
+                    </p>
+                  </div>
+                  <ChevronRight size={17} className="text-white/30 shrink-0" />
+                </button>
+              );
+            })}
           </div>
         </div>
       )}
