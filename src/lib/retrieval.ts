@@ -28,9 +28,14 @@ const STOPWORDS = new Set([
 ]);
 
 function tokenize(text: string): string[] {
+  // \p{L}/\p{N} (Unicode letter/number) instead of a plain a-z0-9 range —
+  // the old ASCII-only version silently stripped non-Latin scripts (Hindi
+  // Devanagari, etc.) down to nothing, so keyword matching (and the
+  // keyword-overlap gate on medium-confidence semantic matches below) never
+  // had anything to match on for non-English memories/questions.
   return text
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
     .split(/\s+/)
     .filter((w) => w.length > 2 && !STOPWORDS.has(w));
 }
