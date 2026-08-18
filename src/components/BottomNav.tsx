@@ -12,22 +12,27 @@ const ITEMS = [
   { href: "/record", label: "Record", icon: Mic },
 ];
 
+// Same dark tone as Home's header card (see DARK in home/page.tsx) — kept
+// as a plain solid color (no opacity/backdrop-blur) on purpose. An earlier
+// version used a translucent dark background that depended on whatever was
+// behind it, which caused real rendering bugs when that background didn't
+// paint the way the code expected. A flat opaque color can't have that
+// problem, regardless of what's on the page above it.
+const DARK = "#26213c";
+
 export default function BottomNav() {
   const pathname = usePathname();
-  // Home is the first screen re-skinned with a dark gradient background
-  // (the rest of the app is still light for now — a deliberate staged
-  // rollout). The nav is a single shared fixed component across every
-  // (app) route, so it needs to switch its own palette based on which
-  // screen is behind it rather than picking one look for every page.
+  // Home is the first screen re-skinned with a dark header (the rest of
+  // the app is still light for now — a deliberate staged rollout). The nav
+  // is a single shared fixed component across every (app) route, so it
+  // needs to switch its own palette based on which screen is behind it
+  // rather than picking one look for every page.
   const dark = pathname === "/home";
 
   return (
     <nav
-      className={cn(
-        "fixed bottom-0 left-0 right-0 z-40 backdrop-blur border-t",
-        dark ? "bg-[#0a0620]/70 border-white/10" : "bg-surface/95 border-border"
-      )}
-      style={{ boxShadow: dark ? "none" : "var(--shadow-nav)" }}
+      className={cn("fixed bottom-0 left-0 right-0 z-40 border-t", dark ? "border-white/10" : "bg-surface/95 border-border")}
+      style={{ background: dark ? DARK : undefined, boxShadow: dark ? "none" : "var(--shadow-nav)" }}
     >
       <div className="mx-auto max-w-md px-2 pb-[env(safe-area-inset-bottom)]">
         <ul className="flex items-stretch justify-between">

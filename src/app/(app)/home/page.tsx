@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Sparkles, ArrowUp, MoreHorizontal } from "lucide-react";
+import { ChevronRight, Sparkles, ArrowUp, Mic } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
@@ -38,6 +38,13 @@ type StartChatArgs = {
   category: string;
   prompt: string;
 };
+
+// Home's own palette — deliberately not the shared theme tokens, since only
+// Home has this dark-header/soothing-body treatment for now (staged
+// rollout; the rest of the app is still the standard light theme). Kept in
+// one place so the header, hero, and bottom nav (see BottomNav.tsx) can be
+// kept in sync by eye.
+const DARK = "#26213c";
 
 export default function HomePage() {
   const router = useRouter();
@@ -92,65 +99,97 @@ export default function HomePage() {
     startChat({ id: "hero", chatTitle: title, category: guessCategory(trimmed), prompt: trimmed });
   }
 
-  // The dark gradient itself now lives on the shared (app) layout wrapper
-  // (see layout.tsx) so it covers the full viewport width and the strip
-  // behind the bottom nav, not just this page's centered content column.
-  // This helper just adds the decorative floating blobs on top of it.
-  const darkShell = (content: React.ReactNode) => (
-    <div className="relative min-h-screen overflow-hidden">
+  // The dark header is now a bounded card at the top of the page (not a
+  // full-page background), so it renders correctly regardless of how tall
+  // the rest of the content is — no more of the earlier full-page
+  // background bugs. Shown even during loading/error so the screen doesn't
+  // flash unstyled before data arrives.
+  const header = (
+    <div className="relative overflow-hidden rounded-b-[28px] px-5 pb-7 pt-6" style={{ background: DARK }}>
       <div
-        className="pointer-events-none absolute -top-10 -right-16 h-56 w-56 rounded-full bg-brand-secondary/25 blur-3xl animate-float-blob"
+        className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-fuchsia-500/25 blur-3xl"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute top-40 -left-20 h-48 w-48 rounded-full bg-fuchsia-500/20 blur-3xl animate-float-blob"
-        style={{ animationDelay: "-4s" }}
+        className="pointer-events-none absolute -left-12 top-2 h-32 w-32 rounded-full bg-brand-secondary/20 blur-3xl"
         aria-hidden="true"
       />
-      <div className="relative">{content}</div>
+      <div className="relative flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          <LogoMark size={32} />
+          <span className="text-[17px] font-bold tracking-tight text-white">Strivo</span>
+        </div>
+        <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
+          <Avatar firstName={data?.user?.firstName} lastName={data?.user?.lastName} size={32} />
+        </button>
+      </div>
+
+      {data && (
+        <>
+          <h1 className="relative mt-5 text-[23px] font-bold text-white">
+            {timeOfDayGreeting()},{" "}
+            <span className="bg-gradient-to-r from-purple-300 to-blue-300 bg-clip-text text-transparent">
+              {data.user?.firstName || "there"}
+            </span>{" "}
+            👋
+          </h1>
+          <p className="relative mt-1 text-[12.5px] text-white/55">{HOME_SUBTITLE}</p>
+
+          <form
+            onSubmit={handleHeroSubmit}
+            className="relative mt-4 rounded-[15px] p-[1.5px]"
+            style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa,#c084fc)" }}
+          >
+            <div className="flex items-center gap-2 rounded-[13.5px] bg-[#1c1830] px-3.5 py-3">
+              <Sparkles size={16} className="shrink-0 text-purple-200" />
+              <input
+                value={heroInput}
+                onChange={(e) => setHeroInput(e.target.value)}
+                placeholder="Ask anything — career advice, prep, or just talk…"
+                disabled={!!pendingAction}
+                className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/40 outline-none disabled:opacity-60"
+              />
+              <button
+                type="submit"
+                disabled={!heroInput.trim() || !!pendingAction}
+                aria-label="Start chat"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-30"
+                style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+              >
+                {pendingAction === "hero" ? <Spinner /> : <ArrowUp size={15} />}
+              </button>
+            </div>
+          </form>
+        </>
+      )}
     </div>
   );
 
   if (error && !data) {
-    return darkShell(
-      <div className="px-5 pt-10">
-        <ErrorBanner message={error} onRetry={load} />
+    return (
+      <div className="pb-6">
+        {header}
+        <div className="px-5 pt-6">
+          <ErrorBanner message={error} onRetry={load} />
+        </div>
       </div>
     );
   }
 
   if (!data) {
-    return darkShell(
-      <div className="flex items-center justify-center py-24">
-        <Spinner />
+    return (
+      <div className="pb-6">
+        {header}
+        <div className="flex items-center justify-center py-24">
+          <Spinner />
+        </div>
       </div>
     );
   }
 
-  const firstName = data.user?.firstName || "there";
-
-  return darkShell(
-    <>
-      <div className="flex items-center justify-between px-5 pt-6">
-        <div className="flex items-center gap-2.5">
-          <LogoMark size={40} />
-          <span className="text-[22px] font-bold tracking-tight text-white">Strivo</span>
-        </div>
-        <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-          <Avatar firstName={data.user?.firstName} lastName={data.user?.lastName} size={34} />
-        </button>
-      </div>
-
-      <div className="px-5 pt-5">
-        <h1 className="text-[22px] font-semibold text-white">
-          {timeOfDayGreeting()},{" "}
-          <span className="bg-gradient-to-r from-purple-200 to-blue-200 bg-clip-text text-transparent">
-            {firstName}
-          </span>{" "}
-          👋
-        </h1>
-        <p className="mt-1 text-[13px] text-white/50">{HOME_SUBTITLE}</p>
-      </div>
+  return (
+    <div className="pb-6">
+      {header}
 
       {error && (
         <div className="px-5 pt-4">
@@ -158,115 +197,65 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Hero "ask anything" bar — gradient-bordered pill on the dark shell */}
+      {/* Calm invitation to record — the emotional centerpiece of the light
+          body, styled as a gentle prompt rather than a loud banner. */}
       <div className="px-5 pt-5">
-        <form
-          onSubmit={handleHeroSubmit}
-          className="rounded-[16px] p-[1px]"
-          style={{ background: "linear-gradient(135deg,#4f6ef7,#c65bff,#4f6ef7)" }}
-        >
-          <div className="flex items-center gap-2 rounded-[15px] bg-[#1a1140] px-4 py-3">
-            <Sparkles size={17} className="shrink-0 text-purple-200" />
-            <input
-              value={heroInput}
-              onChange={(e) => setHeroInput(e.target.value)}
-              placeholder="Ask anything — career advice, prep, or just talk…"
-              disabled={!!pendingAction}
-              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/40 outline-none disabled:opacity-60"
-            />
-            <button
-              type="submit"
-              disabled={!heroInput.trim() || !!pendingAction}
-              aria-label="Start chat"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-white disabled:opacity-30"
-            >
-              {pendingAction === "hero" ? <Spinner /> : <ArrowUp size={16} />}
-            </button>
-          </div>
-        </form>
-      </div>
-
-      {/* One continuous panel for everything below the hero — quick actions,
-          Others, and recent chats — instead of each row being its own
-          separately-bordered/shadowed box. Only "Capture a memory" keeps
-          its own standout treatment further down, since that's meant to
-          draw the eye, not blend in. */}
-      <div className="px-5 pt-6">
-        <div className="rounded-[18px] border border-white/10 bg-white/[0.05] overflow-hidden">
-          <div className="p-4">
-            <h2 className="mb-3 text-[13px] font-medium text-white/85">What do you want to accomplish today?</h2>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-4">
-              {QUICK_ACTIONS.filter((a) => a.id !== "others").map((action, i) => {
-                const iconDef = ACTION_ICON_DEFS[action.icon];
-                const Icon = iconDef.icon;
-                return (
-                  <button
-                    key={action.id}
-                    onClick={() => handleQuickAction(action)}
-                    disabled={!!pendingAction}
-                    style={{ animationDelay: `${i * 60}ms` }}
-                    className="animate-fade-in-up flex flex-col items-start gap-2 text-left transition-transform active:scale-[0.97] disabled:opacity-50"
-                  >
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${iconDef.bg} ${iconDef.text}`}>
-                      {pendingAction === action.id ? <Spinner /> : <Icon size={18} />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-white leading-tight">{action.title}</p>
-                      <p className="text-xs text-white/45">{action.description}</p>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          <button
-            onClick={() => handleQuickAction(QUICK_ACTIONS.find((a) => a.id === "others")!)}
-            disabled={!!pendingAction}
-            className="flex w-full items-center gap-3 p-4 pt-0 text-left transition-colors active:bg-white/[0.03] disabled:opacity-50"
+        <div className="rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-5 text-center">
+          <div
+            className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
+            style={{ boxShadow: "0 6px 16px rgba(139,92,246,0.18)" }}
           >
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/10 text-white/60">
-              {pendingAction === "others" ? <Spinner /> : <MoreHorizontal size={18} />}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-sm font-medium text-white">Others</p>
-              <p className="text-xs text-white/45">Anything else — general chat or advice</p>
-            </div>
-            <ChevronRight size={17} className="text-white/30 shrink-0" />
+            <Mic size={19} />
+          </div>
+          <p className="text-sm font-semibold text-[#3c3650]">What&apos;s on your mind today?</p>
+          <p className="mt-0.5 text-[11px] text-[#8a82a8]">A minute of speaking is worth remembering.</p>
+          <button
+            onClick={() => router.push("/record")}
+            className="mt-3.5 rounded-pill px-5 py-2.5 text-xs font-semibold text-white"
+            style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+          >
+            Start recording
           </button>
         </div>
       </div>
 
-      {/* Capture a memory — sits above "continue where you left off" */}
-      <div className="px-5 pt-4">
-        <div
-          className="rounded-[15px] p-[1px] shadow-[0_8px_20px_rgba(120,60,220,0.35)]"
-          style={{ background: "linear-gradient(135deg,#4f6ef7,#c65bff)" }}
-        >
-          <div className="flex items-center gap-3 rounded-[14px] bg-gradient-to-br from-[#2c1a6b] to-[#3a1f7a] p-3.5">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-amber-300/20 text-amber-200">
-              <MicIcon />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-white">Capture a memory</p>
-              <p className="text-xs text-white/60">Speak or type to save what matters.</p>
-            </div>
-            <button
-              onClick={() => router.push("/record")}
-              className="flex shrink-0 items-center gap-1 rounded-pill bg-gradient-to-br from-amber-300 to-amber-500 px-4 py-2.5 text-sm font-semibold text-amber-950"
-            >
-              Record <ChevronRight size={15} />
-            </button>
-          </div>
+      {/* Quick actions — one restrained accent color throughout (not a
+          rainbow tint per category) and a plain vertical list rather than a
+          crowded grid. */}
+      <div className="px-5 pt-6">
+        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+          Or accomplish today
+        </p>
+        <div>
+          {QUICK_ACTIONS.map((action) => {
+            const Icon = ACTION_ICON_DEFS[action.icon].icon;
+            return (
+              <button
+                key={action.id}
+                onClick={() => handleQuickAction(action)}
+                disabled={!!pendingAction}
+                className="flex w-full items-center gap-3 border-t border-[#f0ecf7] py-2.5 text-left transition-colors last:border-b active:bg-[#faf8fd] disabled:opacity-50"
+              >
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-[#f2effa] text-[#8b5cf6]">
+                  {pendingAction === action.id ? <Spinner /> : <Icon size={17} />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-ink">{action.title}</p>
+                  <p className="text-[11px] text-ink-faint">{action.description}</p>
+                </div>
+                <ChevronRight size={15} className="shrink-0 text-[#cec7dd]" />
+              </button>
+            );
+          })}
         </div>
       </div>
 
       {data.recentChats.length > 0 && (
-        <div className="px-5 pt-4">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-[13px] font-medium text-white/85">Continue where you left off</h2>
-            <button onClick={() => router.push("/chats")} className="flex items-center text-[12px] font-medium text-purple-200">
-              View all <ChevronRight size={15} />
+        <div className="px-5 pt-5">
+          <div className="mb-2.5 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Continue</p>
+            <button onClick={() => router.push("/chats")} className="text-[11px] font-semibold text-[#8b5cf6]">
+              View all
             </button>
           </div>
           <div className="space-y-3">
@@ -274,35 +263,22 @@ export default function HomePage() {
               const Icon = chatCategoryIcon(chat.category);
               return (
                 <button key={chat.id} onClick={() => router.push(`/chats/${chat.id}`)} className="flex w-full items-center gap-3 text-left">
-                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-purple-300/20 text-purple-200">
-                    <Icon size={18} />
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#f2effa] text-[#8b5cf6]">
+                    <Icon size={16} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-medium text-white truncate text-sm">{chat.title}</p>
-                    <p className="text-xs text-white/45">
+                    <p className="truncate text-[12.5px] font-medium text-ink">{chat.title}</p>
+                    <p className="text-[11px] text-ink-faint">
                       Last active {formatDistanceToNowStrict(new Date(chat.updated_at), { addSuffix: true })}
                     </p>
                   </div>
-                  <ChevronRight size={17} className="text-white/30 shrink-0" />
+                  <ChevronRight size={15} className="shrink-0 text-[#cec7dd]" />
                 </button>
               );
             })}
           </div>
         </div>
       )}
-
-      <div className="pb-6" />
-    </>
-  );
-}
-
-function MicIcon() {
-  return (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3Z" />
-      <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-      <line x1="12" y1="19" x2="12" y2="23" />
-      <line x1="8" y1="23" x2="16" y2="23" />
-    </svg>
+    </div>
   );
 }
