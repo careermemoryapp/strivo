@@ -105,7 +105,10 @@ export default function HomePage() {
   // background bugs. Shown even during loading/error so the screen doesn't
   // flash unstyled before data arrives.
   const header = (
-    <div className="relative overflow-hidden rounded-b-[28px] px-5 pb-7 pt-6" style={{ background: DARK }}>
+    // Fully square now — no rounding on any corner. Kept coming back as
+    // "still rounded" through a couple of fixes aimed at the soft glow
+    // blobs; removing the border-radius entirely settles it either way.
+    <div className="relative overflow-hidden px-5 pb-7 pt-6" style={{ background: DARK }}>
       {/* Glow blobs sit well inside the card now, not touching the top edge
           or corners — at the corners they were softening/blurring the top
           edge enough to read as rounded even though the box itself has
@@ -256,7 +259,13 @@ export default function HomePage() {
 
       {data.recentChats.length > 0 && (
         <div className="px-5 pt-5">
-          <div className="mb-4 border-t border-[#f0ecf7]" />
+          {/* A colorful accent bar instead of a plain gray line — ties this
+              section back to the header/CTA gradient instead of just being
+              a generic hairline divider. */}
+          <div
+            className="mb-4 h-[3px] w-14 rounded-full"
+            style={{ background: "linear-gradient(90deg,#a78bfa,#60a5fa)" }}
+          />
           <div className="mb-2.5 flex items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Continue</p>
             <button onClick={() => router.push("/chats")} className="text-[11px] font-semibold text-[#8b5cf6]">
