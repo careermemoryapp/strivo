@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Sparkles, ArrowUp, Mic } from "lucide-react";
+import { ChevronRight, Sparkles, ArrowUp, Mic, Bell, X } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
@@ -18,6 +18,7 @@ type HomeData = {
   streak: number;
   memoryCount: number;
   recentChats: Chat[];
+  nudge: { id: string; title: string | null; message: string } | null;
 };
 
 // Light keyword match so a chat started from the "ask anything" box still
@@ -52,6 +53,7 @@ export default function HomePage() {
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
   const [heroInput, setHeroInput] = useState("");
+  const [nudgeDismissed, setNudgeDismissed] = useState(false);
 
   const load = useCallback(async () => {
     setError(null);
@@ -84,6 +86,15 @@ export default function HomePage() {
       setPendingAction(null);
       setError("Couldn't start that conversation. Please try again.");
     }
+  }
+
+  function dismissNudge(nudgeId: string) {
+    setNudgeDismissed(true);
+    fetch("/api/user/dismiss-nudge", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nudgeId }),
+    }).catch(() => {});
   }
 
   function handleQuickAction(action: (typeof QUICK_ACTIONS)[number]) {
@@ -201,6 +212,27 @@ export default function HomePage() {
       {error && (
         <div className="px-5 pt-4">
           <ErrorBanner message={error} onRetry={load} />
+        </div>
+      )}
+
+      {data.nudge && !nudgeDismissed && (
+        <div className="px-5 pt-5">
+          <div className="flex items-start gap-3 rounded-[14px] border border-[#ece5f5] bg-surface p-3.5">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f2effa] text-[#8b5cf6]">
+              <Bell size={15} />
+            </div>
+            <div className="min-w-0 flex-1">
+              {data.nudge.title && <p className="text-sm font-semibold text-ink">{data.nudge.title}</p>}
+              <p className="text-[12.5px] text-ink-soft">{data.nudge.message}</p>
+            </div>
+            <button
+              onClick={() => dismissNudge(data.nudge!.id)}
+              aria-label="Dismiss"
+              className="shrink-0 flex h-6 w-6 items-center justify-center rounded-full text-ink-faint hover:bg-bg"
+            >
+              <X size={14} />
+            </button>
+          </div>
         </div>
       )}
 

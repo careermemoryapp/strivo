@@ -9,6 +9,7 @@ export type User = {
   profile_image: string | null;
   subscription_status: string;
   trial_ends_at: string | null;
+  dismissed_nudge_id: string | null;
   created_at: string;
 };
 
@@ -115,4 +116,24 @@ export function updateUserPassword(id: string, passwordHash: string) {
 export function deleteUser(id: string) {
   const db = getDb();
   db.prepare(`DELETE FROM users WHERE id = ?`).run(id);
+}
+
+// Records that this user has seen & dismissed the given nudge, so it won't
+// show again on Home even after the admin's active nudge changes to
+// something newer (a fresh nudge id means it wasn't this one, so it'll
+// show again — that's intentional).
+export function setDismissedNudge(id: string, nudgeId: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET dismissed_nudge_id = ? WHERE id = ?`).run(nudgeId, id);
+}
+
+// Manual override for the admin panel — lets the founder grant or revoke
+// "active" (paid) status by hand until real Google Play Billing is wired
+// up (see TRIAL_MONTHS/pricing comments above). Only ever sets 'trial' or
+// 'active': "expired" is always computed from trial_ends_at in
+// getSubscriptionInfo, never stored, so it's not a settable value here.
+export function setUserSubscriptionStatus(id: string, status: "trial" | "active") {
+  const db = getDb();
+  db.prepare(`UPDATE users SET subscription_status = ? WHERE id = ?`).run(status, id);
+  return getUserById(id);
 }

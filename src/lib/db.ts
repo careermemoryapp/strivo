@@ -123,6 +123,19 @@ function migrate(db: DatabaseSync) {
       used INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
+
+    -- Broadcast "nudge" messages set from the admin panel to encourage
+    -- people to come back and record a memory. Only one is ever "active"
+    -- at a time (see createNudge in lib/repo/nudges.ts, which deactivates
+    -- any previous row) — kept as a table instead of a single row so past
+    -- nudges stay around as history.
+    CREATE TABLE IF NOT EXISTS nudges (
+      id TEXT PRIMARY KEY,
+      title TEXT,
+      message TEXT NOT NULL,
+      active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---
@@ -131,6 +144,12 @@ function migrate(db: DatabaseSync) {
   const userColumns = (db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name);
   if (!userColumns.includes("trial_ends_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at TEXT;`);
+  }
+  // Tracks the last nudge (see the `nudges` table) each user has already
+  // seen and dismissed on Home, so a broadcast message doesn't reappear
+  // for them once acknowledged. Null means "hasn't dismissed anything yet".
+  if (!userColumns.includes("dismissed_nudge_id")) {
+    db.exec(`ALTER TABLE users ADD COLUMN dismissed_nudge_id TEXT;`);
   }
 
   // Backfill trial_ends_at for any existing users who don't have one yet
