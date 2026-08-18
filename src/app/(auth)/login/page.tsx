@@ -4,10 +4,10 @@ import { Suspense, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Browser } from "@capacitor/browser";
-import { Sparkles } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { LogoMark } from "@/components/Logo";
 import { APP_NAME } from "@/lib/config";
 
 // Minimal shape of the global Capacitor injects into every page loaded
@@ -103,8 +103,8 @@ function LoginForm() {
   return (
     <div>
       <div className="mb-8 flex flex-col items-center text-center">
-        <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-brand text-white">
-          <Sparkles size={22} />
+        <div className="mb-4" style={{ filter: "drop-shadow(0 8px 20px rgba(124,58,237,0.25))" }}>
+          <LogoMark size={76} />
         </div>
         <h1 className="text-2xl font-semibold text-ink">Welcome back</h1>
         <p className="mt-1 text-sm text-ink-soft">Log in to {APP_NAME}</p>
