@@ -106,12 +106,16 @@ export default function HomePage() {
   // flash unstyled before data arrives.
   const header = (
     <div className="relative overflow-hidden rounded-b-[28px] px-5 pb-7 pt-6" style={{ background: DARK }}>
+      {/* Glow blobs sit well inside the card now, not touching the top edge
+          or corners — at the corners they were softening/blurring the top
+          edge enough to read as rounded even though the box itself has
+          square top corners, which read as unintentional/messy. */}
       <div
-        className="pointer-events-none absolute -right-8 -top-12 h-44 w-44 rounded-full bg-fuchsia-500/25 blur-3xl"
+        className="pointer-events-none absolute right-4 top-16 h-40 w-40 rounded-full bg-fuchsia-500/20 blur-3xl"
         aria-hidden="true"
       />
       <div
-        className="pointer-events-none absolute -left-12 top-2 h-32 w-32 rounded-full bg-brand-secondary/20 blur-3xl"
+        className="pointer-events-none absolute left-2 top-24 h-28 w-28 rounded-full bg-brand-secondary/15 blur-3xl"
         aria-hidden="true"
       />
       <div className="relative flex items-center justify-between">
@@ -252,6 +256,7 @@ export default function HomePage() {
 
       {data.recentChats.length > 0 && (
         <div className="px-5 pt-5">
+          <div className="mb-4 border-t border-[#f0ecf7]" />
           <div className="mb-2.5 flex items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Continue</p>
             <button onClick={() => router.push("/chats")} className="text-[11px] font-semibold text-[#8b5cf6]">
