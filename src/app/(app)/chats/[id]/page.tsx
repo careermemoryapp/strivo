@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, use as usePromise } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, MoreVertical, ArrowUp, Sparkles, Trash2, Mic, Square } from "lucide-react";
+import { MoreVertical, ArrowUp, Sparkles, Trash2, Mic, Square } from "lucide-react";
 import { ChatBubble } from "@/components/ChatBubble";
-import { LogoMark } from "@/components/Logo";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
@@ -119,11 +119,11 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
 
   if (loadError) {
     return (
-      <div className="px-5 pt-6">
-        <button onClick={() => router.back()} className="mb-4 flex items-center text-ink-soft text-sm">
-          <ChevronLeft size={18} /> Back
-        </button>
-        <ErrorBanner message={loadError} onRetry={load} />
+      <div>
+        <DarkHeader back inlineTitle="Chat" />
+        <div className="px-5 pt-4">
+          <ErrorBanner message={loadError} onRetry={load} />
+        </div>
       </div>
     );
   }
@@ -138,59 +138,62 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
 
   return (
     <div className="flex flex-col min-h-[calc(100vh-6rem)]">
-      <div className="sticky top-0 z-20 bg-bg/95 backdrop-blur px-5 pt-6 pb-3">
-        <div className="flex items-start justify-between gap-2">
-          <div className="flex items-center gap-1 min-w-0">
-            <button onClick={() => router.push("/chats")} aria-label="Back" className="-ml-1 mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full hover:bg-white text-ink">
-              <ChevronLeft size={22} />
-            </button>
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface border border-border">
-              <LogoMark size={17} />
-            </div>
-            <div className="min-w-0 ml-1">
-              <h1 className="text-lg font-semibold text-ink truncate">{chat.title}</h1>
-              <p className="text-xs text-ink-soft">Powered by your experiences</p>
-            </div>
-          </div>
-          <div className="relative shrink-0">
-            <button onClick={() => setMenuOpen((v) => !v)} aria-label="Menu" className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-white text-ink">
-              <MoreVertical size={20} />
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-10 z-10 w-44 rounded-card border border-border bg-surface p-1" style={{ boxShadow: "var(--shadow-card)" }}>
-                <button
-                  onClick={() => router.push(`/chats/${id}/memories`)}
-                  className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-ink hover:bg-bg"
+      <div className="sticky top-0 z-20">
+        <DarkHeader
+          back
+          logoMark
+          inlineTitle={chat.title}
+          inlineSubtitle="Powered by your experiences"
+          right={
+            <div className="relative shrink-0">
+              <button
+                onClick={() => setMenuOpen((v) => !v)}
+                aria-label="Menu"
+                className="flex h-8 w-8 items-center justify-center rounded-full text-white/85 active:bg-white/10"
+              >
+                <MoreVertical size={19} />
+              </button>
+              {menuOpen && (
+                <div
+                  className="absolute right-0 top-9 z-10 w-44 rounded-card border border-border bg-surface p-1"
+                  style={{ boxShadow: "var(--shadow-card)" }}
                 >
-                  <Sparkles size={15} /> View memories
-                </button>
-                <button
-                  onClick={handleDeleteChat}
-                  className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 size={15} /> Delete chat
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <button
-          onClick={() => router.push(`/chats/${id}/memories`)}
-          className="mt-3 flex w-full items-center gap-3 rounded-card border border-border bg-surface p-3 text-left"
-          style={{ boxShadow: "var(--shadow-card)" }}
+                  <button
+                    onClick={() => router.push(`/chats/${id}/memories`)}
+                    className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-ink hover:bg-bg"
+                  >
+                    <Sparkles size={15} /> View memories
+                  </button>
+                  <button
+                    onClick={handleDeleteChat}
+                    className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <Trash2 size={15} /> Delete chat
+                  </button>
+                </div>
+              )}
+            </div>
+          }
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-white">
-            <Sparkles size={16} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium text-ink">
-              I found {chat.memory_count} relevant {chat.memory_count === 1 ? "memory" : "memories"}.
-            </p>
-            <p className="text-xs text-ink-soft">I&apos;ll use your real experiences to give you personalized answers.</p>
-          </div>
-          <span className="shrink-0 text-xs font-semibold text-brand-primary">View</span>
-        </button>
+          <button
+            onClick={() => router.push(`/chats/${id}/memories`)}
+            className="relative mt-4 flex w-full items-center gap-3 rounded-[13px] border border-white/10 bg-white/8 p-3 text-left"
+          >
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+            >
+              <Sparkles size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-white">
+                I found {chat.memory_count} relevant {chat.memory_count === 1 ? "memory" : "memories"}.
+              </p>
+              <p className="text-xs text-white/55">I&apos;ll use your real experiences to give you personalized answers.</p>
+            </div>
+            <span className="shrink-0 text-xs font-semibold text-white">View</span>
+          </button>
+        </DarkHeader>
       </div>
 
       <div className="flex-1 px-5 py-4 space-y-4">
@@ -233,8 +236,8 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
             e.preventDefault();
             send(input);
           }}
-          className="flex items-end gap-2 rounded-card border border-border bg-surface p-2"
-          style={{ boxShadow: "var(--shadow-card)" }}
+          className="flex items-end gap-2 rounded-[16px] border border-[#ece5f5] bg-surface p-2"
+          style={{ boxShadow: "0 8px 20px rgba(60,50,90,0.1)" }}
         >
           {speech.supported && (
             <button
@@ -243,7 +246,7 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
               disabled={speech.transcribing}
               aria-label={speech.listening ? "Stop voice input" : "Speak instead of typing"}
               className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition disabled:opacity-50 ${
-                speech.listening ? "bg-red-500 text-white animate-pulse" : "bg-brand-primary-soft text-brand-primary"
+                speech.listening ? "bg-red-500 text-white animate-pulse" : "bg-[#f2effa] text-[#8b5cf6]"
               }`}
             >
               {speech.transcribing ? (
@@ -274,7 +277,8 @@ export default function ChatDetailPage({ params }: { params: Promise<{ id: strin
             type="submit"
             disabled={!input.trim() || sending || speech.transcribing}
             aria-label="Send"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-white disabled:opacity-40"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white disabled:opacity-40"
+            style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
           >
             <ArrowUp size={19} />
           </button>

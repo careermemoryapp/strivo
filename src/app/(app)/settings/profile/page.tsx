@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PageHeader } from "@/components/PageHeader";
+import { DarkHeader } from "@/components/DarkHeader";
 import { TextField } from "@/components/TextField";
 import { Button } from "@/components/Button";
 import { Avatar } from "@/components/Avatar";
@@ -65,9 +65,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <div>
-      <PageHeader title="Profile" back />
-      <div className="px-5">
+    <div className="pb-8">
+      <DarkHeader back inlineTitle="Profile" />
+      <div className="px-5 pt-5">
         {error && <ErrorBanner message={error} />}
         {user && (
           <>

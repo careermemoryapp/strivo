@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { CheckCircle2, Mail } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Card } from "@/components/Card";
 import { TextField } from "@/components/TextField";
 import { Button } from "@/components/Button";
@@ -42,12 +42,12 @@ export default function HelpSupportPage() {
   }
 
   return (
-    <div>
-      <PageHeader title="Help & Support" subtitle="Let us know what's going on — we'll get back to you." back />
+    <div className="pb-8">
+      <DarkHeader back inlineTitle="Help & Support" inlineSubtitle="We'll get back to you by email" />
 
-      <div className="px-5 space-y-4 pb-8">
+      <div className="px-5 pt-5 space-y-4">
         {sent ? (
-          <Card className="flex flex-col items-center text-center py-8">
+          <Card className="flex flex-col items-center text-center py-8 border-[#f0ecf7]">
             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-green-50 text-green-600">
               <CheckCircle2 size={24} />
             </div>
@@ -60,7 +60,7 @@ export default function HelpSupportPage() {
             </Button>
           </Card>
         ) : (
-          <Card>
+          <Card className="border-[#f0ecf7]">
             {error && (
               <div className="mb-4">
                 <ErrorBanner message={error} />
@@ -81,7 +81,7 @@ export default function HelpSupportPage() {
                   rows={6}
                   required
                   placeholder="Tell us what's going on, what you expected, and any details that would help."
-                  className="w-full rounded-input border border-border bg-surface p-3.5 text-ink placeholder:text-ink-faint outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-soft resize-none"
+                  className="w-full rounded-input border border-border bg-surface p-3.5 text-ink placeholder:text-ink-faint outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20 resize-none"
                 />
               </div>
               <Button type="submit" className="w-full" loading={sending}>

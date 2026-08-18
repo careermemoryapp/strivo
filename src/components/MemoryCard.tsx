@@ -18,7 +18,7 @@ export function MemoryCard({
   menu?: boolean;
   onChanged?: () => void;
 }) {
-  const { icon: Icon, bg, text } = memoryCategoryDef(memory.category);
+  const { icon: Icon } = memoryCategoryDef(memory.category);
   const tags = safeJsonParse<string[]>(memory.tags, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -54,7 +54,7 @@ export function MemoryCard({
       <Link href={`/memories/${memory.id}`} className="block" onClick={() => menuOpen && setMenuOpen(false)}>
         <Card className="hover:border-brand-primary/40 transition-colors">
           <div className="flex gap-3">
-            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg} ${text}`}>
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f2effa] text-[#8b5cf6]">
               <Icon size={19} />
             </div>
             <div className="min-w-0 flex-1">

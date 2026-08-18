@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useMemo, use as usePromise } from "react";
 import { Search, Sparkles, Lock, Info, X } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import { DarkHeader } from "@/components/DarkHeader";
 import { MemoryCard } from "@/components/MemoryCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Spinner } from "@/components/Spinner";
@@ -63,10 +63,10 @@ export default function RelevantMemoriesPage({ params }: { params: Promise<{ id:
   }, [memories, activeCategory, search]);
 
   return (
-    <div>
-      <PageHeader title="Relevant Memories" subtitle={chat ? `For ${chat.title}` : undefined} back />
+    <div className="pb-6">
+      <DarkHeader back inlineTitle="Relevant Memories" inlineSubtitle={chat ? `For ${chat.title}` : undefined} />
 
-      <div className="px-5">
+      <div className="px-5 pt-5">
         {error && <ErrorBanner message={error} onRetry={load} />}
 
         {!memories && !error && (
@@ -77,11 +77,11 @@ export default function RelevantMemoriesPage({ params }: { params: Promise<{ id:
 
         {memories && (
           <>
-            <div
-              className="mb-4 flex items-start gap-3 rounded-card border border-border bg-surface p-3.5"
-              style={{ boxShadow: "var(--shadow-card)" }}
-            >
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-brand text-white">
+            <div className="mb-4 flex items-start gap-3 rounded-[14px] border border-[#f0ecf7] bg-surface p-3.5">
+              <div
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-white"
+                style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+              >
                 <Sparkles size={16} />
               </div>
               <div className="flex-1">
@@ -94,7 +94,7 @@ export default function RelevantMemoriesPage({ params }: { params: Promise<{ id:
               </div>
               <button
                 onClick={() => setShowInfo(true)}
-                className="shrink-0 flex items-center gap-1 text-xs font-semibold text-brand-primary"
+                className="shrink-0 flex items-center gap-1 text-xs font-semibold text-[#8b5cf6]"
               >
                 Learn how <Info size={13} />
               </button>

@@ -7,8 +7,7 @@ import {
   MoreVertical, Trash2, Pencil, FileText, Sparkles, Mic, Type, CheckCircle2, Paperclip,
   ThumbsUp, ThumbsDown, Share2, Copy,
 } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
-import { LogoWithWordmark } from "@/components/Logo";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -128,8 +127,8 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
   if (error) {
     return (
       <div>
-        <PageHeader title={<LogoWithWordmark size={36} />} back />
-        <div className="px-5">
+        <DarkHeader back wordmark />
+        <div className="px-5 pt-4">
           <ErrorBanner message={error} />
         </div>
       </div>
@@ -144,27 +143,27 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
     );
   }
 
-  const { icon: Icon, text, from } = memoryCategoryDef(memory.category);
+  const { icon: Icon } = memoryCategoryDef(memory.category);
   const keyPoints = safeJsonParse<string[]>(memory.key_points, []);
   const wordCount = memory.transcript.trim().split(/\s+/).filter(Boolean).length;
 
   return (
-    <div>
-      <PageHeader
-        title={<LogoWithWordmark size={36} />}
+    <div className="pb-6">
+      <DarkHeader
         back
+        wordmark
         right={
           <div className="relative">
             <button
               onClick={() => setMenuOpen((v) => !v)}
               aria-label="Menu"
-              className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-bg text-ink"
+              className="flex h-8 w-8 items-center justify-center rounded-full text-white/85 active:bg-white/10"
             >
-              <MoreVertical size={20} />
+              <MoreVertical size={19} />
             </button>
             {menuOpen && (
               <div
-                className="absolute right-0 top-10 z-10 w-40 rounded-card border border-border bg-surface p-1"
+                className="absolute right-0 top-9 z-10 w-40 rounded-card border border-border bg-surface p-1"
                 style={{ boxShadow: "var(--shadow-card)" }}
               >
                 <button
@@ -180,30 +179,27 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
         }
       />
 
-      <div className="px-5 space-y-4">
-        <div
-          className={`rounded-card p-5 bg-gradient-to-br ${from} to-surface`}
-          style={{ boxShadow: "var(--shadow-card)" }}
-        >
+      <div className="px-5 pt-5 space-y-4">
+        <div className="rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-5">
           <div className="flex items-center gap-3.5">
             <div
-              className={`flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface ${text}`}
-              style={{ boxShadow: "0 2px 6px rgba(15,23,42,0.1)" }}
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-surface text-[#8b5cf6]"
+              style={{ boxShadow: "0 3px 8px rgba(60,50,90,0.1)" }}
             >
               <Icon size={24} />
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-xl font-bold text-ink leading-tight">{memory.title}</h1>
+              <h1 className="text-xl font-bold text-[#3c3650] leading-tight">{memory.title}</h1>
               <div className="mt-2 flex items-center gap-2 flex-wrap text-xs">
                 {memory.category && (
-                  <span className={`rounded-pill bg-surface px-2.5 py-1 text-[11px] font-semibold ${text}`}>
+                  <span className="rounded-pill bg-surface px-2.5 py-1 text-[11px] font-semibold text-[#8b5cf6]">
                     {memory.category}
                   </span>
                 )}
-                <span className="text-ink-soft">•</span>
-                <span className="text-ink-soft">{format(new Date(memory.created_at), "MMM d, yyyy, h:mm a")}</span>
-                <span className="text-ink-soft">•</span>
-                <span className="flex items-center gap-1 text-ink-soft">
+                <span className="text-[#a29ab9]">•</span>
+                <span className="text-[#a29ab9]">{format(new Date(memory.created_at), "MMM d, yyyy, h:mm a")}</span>
+                <span className="text-[#a29ab9]">•</span>
+                <span className="flex items-center gap-1 text-[#a29ab9]">
                   {memory.source === "voice" ? <Mic size={12} /> : memory.source === "file" ? <Paperclip size={12} /> : <Type size={12} />}
                   {memory.source === "voice" ? "Voice" : memory.source === "file" ? "Document" : "Text"}
                 </span>
@@ -212,14 +208,14 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
           </div>
         </div>
 
-        <div className="flex gap-1 rounded-pill bg-bg border border-border p-1">
+        <div className="flex gap-1 rounded-pill bg-[#f2effa] p-1">
           <button
             onClick={() => setTab("Transcript")}
             className={cn(
               "flex flex-1 items-center justify-center gap-1.5 rounded-pill py-2 text-sm font-medium",
-              tab === "Transcript" ? "bg-surface text-brand-primary" : "text-ink-soft"
+              tab === "Transcript" ? "bg-surface text-[#8b5cf6]" : "text-[#a29ab9]"
             )}
-            style={tab === "Transcript" ? { boxShadow: "var(--shadow-card)" } : undefined}
+            style={tab === "Transcript" ? { boxShadow: "0 2px 6px rgba(60,50,90,0.08)" } : undefined}
           >
             <FileText size={15} /> Transcript
           </button>
@@ -227,22 +223,22 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
             onClick={() => setTab("Summary")}
             className={cn(
               "flex flex-1 items-center justify-center gap-1.5 rounded-pill py-2 text-sm font-medium",
-              tab === "Summary" ? "bg-surface text-brand-primary" : "text-ink-soft"
+              tab === "Summary" ? "bg-surface text-[#8b5cf6]" : "text-[#a29ab9]"
             )}
-            style={tab === "Summary" ? { boxShadow: "var(--shadow-card)" } : undefined}
+            style={tab === "Summary" ? { boxShadow: "0 2px 6px rgba(60,50,90,0.08)" } : undefined}
           >
             <Sparkles size={15} /> Summary (AI)
           </button>
         </div>
 
         {tab === "Transcript" ? (
-          <div className="rounded-card border border-border bg-surface p-4">
+          <div className="rounded-[14px] border border-[#f0ecf7] bg-surface p-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-ink">Transcript</h3>
               {!editing && (
                 <button
                   onClick={startEdit}
-                  className="flex items-center gap-1 rounded-pill border border-border px-3 py-1.5 text-xs font-medium text-brand-primary"
+                  className="flex items-center gap-1 rounded-pill border border-[#ece5f5] px-3 py-1.5 text-xs font-medium text-[#8b5cf6]"
                 >
                   <Pencil size={13} /> Edit
                 </button>
@@ -255,7 +251,7 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
                   value={editText}
                   onChange={(e) => setEditText(e.target.value)}
                   rows={10}
-                  className="w-full rounded-input border border-border bg-bg p-3 text-[15px] text-ink outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-soft resize-none"
+                  className="w-full rounded-input border border-border bg-bg p-3 text-[15px] text-ink outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20 resize-none"
                 />
                 <div className="flex gap-2">
                   <Button variant="ghost" className="flex-1" onClick={() => setEditing(false)}>
@@ -271,7 +267,7 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
                 <p className="mt-3 text-[15px] leading-relaxed text-ink whitespace-pre-wrap select-text">
                   {memory.transcript}
                 </p>
-                <div className="mt-4 flex items-center justify-between border-t border-border pt-3 text-xs text-ink-faint">
+                <div className="mt-4 flex items-center justify-between border-t border-[#f0ecf7] pt-3 text-xs text-ink-faint">
                   <span className="flex items-center gap-1">
                     <Sparkles size={12} />
                     {memory.source === "voice"
@@ -286,15 +282,15 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
             )}
           </div>
         ) : (
-          <div className="rounded-card border border-border bg-brand-primary-soft/40 p-4">
+          <div className="rounded-[14px] border border-[#ece5f5] bg-[#f2effa]/60 p-4">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface text-brand-primary">
+                <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface text-[#8b5cf6]">
                   <Sparkles size={16} />
                 </div>
                 <h3 className="font-semibold text-ink">AI Summary</h3>
               </div>
-              <span className="rounded-pill bg-surface px-2.5 py-1 text-[11px] font-medium text-brand-primary">
+              <span className="rounded-pill bg-surface px-2.5 py-1 text-[11px] font-medium text-[#8b5cf6]">
                 AI Generated
               </span>
             </div>
@@ -306,13 +302,13 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
                   <ul className="mt-3 space-y-2">
                     {keyPoints.map((point, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-ink">
-                        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-brand-primary" />
+                        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#8b5cf6]" />
                         <span>{point}</span>
                       </li>
                     ))}
                   </ul>
                 )}
-                <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+                <div className="mt-4 flex items-center justify-between border-t border-[#ece5f5] pt-3">
                   <span className="text-sm text-ink-soft">Was this summary helpful?</span>
                   <div className="flex gap-2">
                     <button
@@ -320,8 +316,8 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
                       className={cn(
                         "flex items-center gap-1 rounded-pill border px-3 py-1.5 text-xs font-medium",
                         memory.summary_feedback === "yes"
-                          ? "border-brand-primary bg-brand-primary text-white"
-                          : "border-border text-ink-soft"
+                          ? "border-[#8b5cf6] bg-[#8b5cf6] text-white"
+                          : "border-[#ece5f5] text-ink-soft"
                       )}
                     >
                       <ThumbsUp size={13} /> Yes
@@ -332,7 +328,7 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
                         "flex items-center gap-1 rounded-pill border px-3 py-1.5 text-xs font-medium",
                         memory.summary_feedback === "no"
                           ? "border-red-300 bg-red-50 text-red-600"
-                          : "border-border text-ink-soft"
+                          : "border-[#ece5f5] text-ink-soft"
                       )}
                     >
                       <ThumbsDown size={13} /> No
@@ -350,10 +346,10 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2 pb-8">
+        <div className="grid grid-cols-3 gap-2">
           <button
             onClick={handleShare}
-            className="flex flex-col items-center gap-1 rounded-card border border-border bg-surface py-3 text-brand-primary"
+            className="flex flex-col items-center gap-1 rounded-[14px] border border-[#f0ecf7] bg-surface py-3 text-[#8b5cf6]"
           >
             <Share2 size={17} />
             <span className="text-xs font-medium">Share</span>
@@ -361,7 +357,7 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
           <button
             onClick={handleDuplicate}
             disabled={duplicating}
-            className="flex flex-col items-center gap-1 rounded-card border border-border bg-surface py-3 text-brand-primary"
+            className="flex flex-col items-center gap-1 rounded-[14px] border border-[#f0ecf7] bg-surface py-3 text-[#8b5cf6]"
           >
             {duplicating ? <Spinner /> : <Copy size={17} />}
             <span className="text-xs font-medium">Duplicate</span>
@@ -369,7 +365,7 @@ export default function MemoryDetailPage({ params }: { params: Promise<{ id: str
           <button
             onClick={handleDelete}
             disabled={deleting}
-            className="flex flex-col items-center gap-1 rounded-card border border-border bg-surface py-3 text-red-600"
+            className="flex flex-col items-center gap-1 rounded-[14px] border border-[#f0ecf7] bg-surface py-3 text-red-600"
           >
             <Trash2 size={17} />
             <span className="text-xs font-medium">Delete</span>

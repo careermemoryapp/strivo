@@ -7,8 +7,7 @@ import {
   Target, Sparkles as SparklesIcon, CheckCircle2, Lock, ChevronRight,
   Upload, Paperclip,
 } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
-import { LogoWithWordmark } from "@/components/Logo";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
@@ -161,8 +160,8 @@ export default function RecordPage() {
 
   if (stage === "success") {
     return (
-      <div>
-        <PageHeader title="Memory Saved" />
+      <div className="pb-6">
+        <DarkHeader inlineTitle="Memory Saved" />
         <div className="px-5 pt-8 flex flex-col items-center text-center">
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-50 text-green-600">
             <Check size={30} />
@@ -175,9 +174,13 @@ export default function RecordPage() {
           </p>
           <div className="mt-8 w-full space-y-3">
             {savedMemoryId && (
-              <Button className="w-full" onClick={() => router.push(`/memories/${savedMemoryId}`)}>
+              <button
+                onClick={() => router.push(`/memories/${savedMemoryId}`)}
+                className="flex w-full items-center justify-center gap-2 rounded-pill py-3.5 text-sm font-semibold text-white"
+                style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+              >
                 View Memory <ArrowRight size={16} />
-              </Button>
+              </button>
             )}
             <Button variant="secondary" className="w-full" onClick={startOver}>
               <RotateCcw size={16} /> Capture Another
@@ -196,22 +199,21 @@ export default function RecordPage() {
   const createDisabled = speech.listening || speech.transcribing || extracting || saving || !content.trim();
 
   return (
-    <div>
-      <div className="flex items-center justify-between px-5 pt-6">
-        <LogoWithWordmark size={36} />
-        <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-          <Avatar firstName={user?.firstName} lastName={user?.lastName} size={34} />
-        </button>
-      </div>
-
-      <div className="px-5 pt-4">
-        <h1 className="text-2xl font-bold text-ink">Record Memory</h1>
-        <p className="mt-1 text-sm text-ink-soft">Capture your thoughts. Your AI will remember what matters.</p>
-      </div>
+    <div className="pb-6">
+      <DarkHeader
+        wordmark
+        avatarRight={
+          <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
+            <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
+          </button>
+        }
+        title="Record Memory"
+        subtitle="Capture your thoughts. Your AI will remember what matters."
+      />
 
       <div className="px-5 pt-5">
-        <div className="rounded-card bg-brand-primary-soft/40 border border-border p-6">
-          <div className="mb-5 flex gap-1 rounded-pill bg-surface border border-border p-1">
+        <div className="rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-6">
+          <div className="mb-5 flex gap-1 rounded-pill bg-[#f2effa] p-1">
             {(
               [
                 { id: "voice" as const, label: "Voice" },
@@ -225,8 +227,9 @@ export default function RecordPage() {
                 disabled={speech.listening || speech.transcribing}
                 className={cn(
                   "flex-1 rounded-pill py-2 text-xs font-semibold disabled:opacity-50",
-                  mode === tab.id ? "bg-brand-primary-soft text-brand-primary" : "text-ink-faint"
+                  mode === tab.id ? "bg-surface text-[#8b5cf6]" : "text-[#a29ab9]"
                 )}
+                style={mode === tab.id ? { boxShadow: "0 2px 6px rgba(60,50,90,0.08)" } : undefined}
               >
                 {tab.label}
               </button>
@@ -269,8 +272,8 @@ export default function RecordPage() {
                   onClick={toggleRecording}
                   disabled={!speech.supported || speech.transcribing}
                   aria-label={speech.listening ? "Stop recording" : "Tap to record"}
-                  className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-surface text-brand-primary disabled:opacity-40"
-                  style={{ boxShadow: "0 12px 32px rgba(124,58,237,0.25)" }}
+                  className="relative flex h-28 w-28 shrink-0 items-center justify-center rounded-full bg-surface text-[#8b5cf6] disabled:opacity-40"
+                  style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.25)" }}
                 >
                   {speech.listening && <span className="absolute inset-0 rounded-full animate-pulse-ring" />}
                   {speech.transcribing ? (
@@ -284,17 +287,17 @@ export default function RecordPage() {
                 <Waveform active={speech.listening} />
               </div>
 
-              <p className="mt-4 text-base font-semibold text-ink">
+              <p className="mt-4 text-base font-semibold text-[#3c3650]">
                 {speech.transcribing ? "Transcribing…" : speech.listening ? "Listening… tap to stop" : "Tap to Record"}
               </p>
               {speech.listening ? (
-                <p className={cn("mt-0.5 text-xs font-medium", nearLimit ? "text-red-600" : "text-ink-soft")}>
+                <p className={cn("mt-0.5 text-xs font-medium", nearLimit ? "text-red-600" : "text-[#8a82a8]")}>
                   {formatClock(remainingSeconds)} left of a 5-minute stretch
                 </p>
               ) : speech.transcribing ? (
-                <p className="mt-0.5 text-xs text-ink-soft">Turning your recording into text…</p>
+                <p className="mt-0.5 text-xs text-[#8a82a8]">Turning your recording into text…</p>
               ) : (
-                <p className="mt-0.5 text-xs text-ink-soft">Speak freely — up to 5 minutes at a stretch.</p>
+                <p className="mt-0.5 text-xs text-[#8a82a8]">Speak freely — up to 5 minutes at a stretch.</p>
               )}
 
               {/* Shows right where the user is already looking, instead of
@@ -302,15 +305,15 @@ export default function RecordPage() {
                   the recording is still being processed, and then shows
                   exactly what was captured before they hit Create Memory. */}
               {(content.trim() || speech.transcribing) && (
-                <div className="w-full mt-5 rounded-input border border-border bg-surface p-4 text-left">
+                <div className="w-full mt-5 rounded-[13px] border border-[#ece5f5] bg-surface p-4 text-left">
                   {speech.transcribing ? (
                     <div className="flex items-center gap-2">
                       <Spinner className="h-4 w-4 border-brand-primary-soft border-t-brand-primary" />
-                      <p className="text-sm font-medium text-ink-soft">Transcribing your recording…</p>
+                      <p className="text-sm font-medium text-[#8a82a8]">Transcribing your recording…</p>
                     </div>
                   ) : (
                     <>
-                      <p className="text-xs font-semibold text-ink-faint uppercase tracking-wide mb-1.5">Transcript</p>
+                      <p className="text-xs font-semibold text-[#a8a2bd] uppercase tracking-wide mb-1.5">Transcript</p>
                       <p className="text-sm text-ink whitespace-pre-wrap">{content}</p>
                     </>
                   )}
@@ -327,7 +330,7 @@ export default function RecordPage() {
                 rows={8}
                 autoFocus
                 placeholder="Type what you want to remember…"
-                className="w-full rounded-card border border-border bg-surface p-4 text-ink outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-soft resize-none"
+                className="w-full rounded-[13px] border border-[#ece5f5] bg-surface p-4 text-ink outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20 resize-none"
               />
             </div>
           )}
@@ -342,13 +345,13 @@ export default function RecordPage() {
                 onChange={handleFileChange}
               />
               <div
-                className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-brand-primary"
-                style={{ boxShadow: "0 12px 32px rgba(124,58,237,0.2)" }}
+                className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
+                style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.2)" }}
               >
                 <Paperclip size={26} />
               </div>
-              <p className="mt-4 text-base font-semibold text-ink">Upload a document</p>
-              <p className="mt-0.5 text-xs text-ink-soft max-w-xs">
+              <p className="mt-4 text-base font-semibold text-[#3c3650]">Upload a document</p>
+              <p className="mt-0.5 text-xs text-[#8a82a8] max-w-xs">
                 PDF, Word, PowerPoint, or Excel — we&apos;ll pull out the text and turn it into a memory.
               </p>
 
@@ -359,53 +362,58 @@ export default function RecordPage() {
               )}
 
               {uploadedFileName && uploadText && !uploadError && (
-                <div className="w-full mt-4 rounded-input border border-border bg-surface px-3.5 py-2.5 text-left">
+                <div className="w-full mt-4 rounded-[13px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-left">
                   <p className="text-xs font-medium text-ink truncate">{uploadedFileName}</p>
-                  <p className="text-[11px] text-ink-soft mt-0.5">Text extracted — ready to create the memory below.</p>
+                  <p className="text-[11px] text-[#8a82a8] mt-0.5">Text extracted — ready to create the memory below.</p>
                 </div>
               )}
 
               <button
                 onClick={() => fileInputRef.current?.click()}
                 disabled={extracting}
-                className="mt-5 flex items-center gap-2 rounded-pill bg-gradient-brand px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                className="mt-5 flex items-center gap-2 rounded-pill px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+                style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
               >
                 {extracting ? <Spinner className="border-white/40 border-t-white h-4 w-4" /> : <Upload size={16} />}
                 {extracting ? "Reading file…" : uploadedFileName ? "Choose a different file" : "Choose File"}
               </button>
-              <p className="mt-3 text-[11px] text-ink-faint">.pdf, .docx, .pptx, .xlsx, .csv, .txt — up to 2MB</p>
+              <p className="mt-3 text-[11px] text-[#a8a2bd]">.pdf, .docx, .pptx, .xlsx, .csv, .txt — up to 2MB</p>
             </div>
           )}
 
-          <Button className="w-full mt-5" onClick={createMemory} disabled={createDisabled} loading={saving}>
+          <button
+            onClick={createMemory}
+            disabled={createDisabled}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-pill py-3.5 text-sm font-semibold text-white disabled:opacity-50"
+            style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+          >
+            {saving && <Spinner className="border-white/40 border-t-white h-4 w-4" />}
             Create Memory
-          </Button>
+          </button>
         </div>
       </div>
 
-      <div className="px-5 pt-5">
-        <div className="rounded-card border border-border bg-surface p-4">
-          <h3 className="font-semibold text-ink">Tips for better memories</h3>
-          <div className="mt-3 grid grid-cols-3 gap-3">
-            {TIPS.map((tip) => (
-              <div key={tip.title}>
-                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-primary-soft text-brand-primary">
-                  <tip.icon size={16} />
-                </div>
-                <p className="mt-2 text-xs font-semibold text-ink">{tip.title}</p>
-                <p className="text-[11px] text-ink-soft leading-snug">{tip.desc}</p>
+      <div className="px-5 pt-6">
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Tips for better memories</p>
+        <div className="grid grid-cols-3 gap-3">
+          {TIPS.map((tip) => (
+            <div key={tip.title}>
+              <div className="flex h-9 w-9 items-center justify-center rounded-[11px] bg-[#f2effa] text-[#8b5cf6]">
+                <tip.icon size={16} />
               </div>
-            ))}
-          </div>
+              <p className="mt-2 text-xs font-semibold text-ink">{tip.title}</p>
+              <p className="text-[11px] text-ink-faint leading-snug">{tip.desc}</p>
+            </div>
+          ))}
         </div>
       </div>
 
-      <button className="mx-5 mt-4 mb-6 flex items-center gap-3 rounded-card border border-border bg-brand-primary-soft/30 p-3.5 text-left">
-        <Lock size={18} className="text-brand-primary shrink-0" />
-        <span className="flex-1 text-xs text-ink-soft">
-          <span className="font-medium text-ink">Your memories are private and secure.</span> Only you and your AI can access them.
+      <button className="mx-5 mt-5 flex items-center gap-3 rounded-[14px] bg-[#f2effa] p-3.5 text-left">
+        <Lock size={18} className="text-[#8b5cf6] shrink-0" />
+        <span className="flex-1 text-xs text-[#7d7594]">
+          <span className="font-semibold text-ink">Your memories are private and secure.</span> Only you and your AI can access them.
         </span>
-        <ChevronRight size={16} className="text-ink-faint shrink-0" />
+        <ChevronRight size={16} className="text-[#cec7dd] shrink-0" />
       </button>
     </div>
   );
@@ -418,7 +426,7 @@ function Waveform({ active }: { active: boolean }) {
       {bars.map((h, i) => (
         <span
           key={i}
-          className={cn("w-1 rounded-full bg-brand-primary/30", active && "bg-brand-primary/60")}
+          className={cn("w-1 rounded-full bg-[#c9bdf0]", active && "bg-[#8b5cf6]/70")}
           style={{ height: h, animation: active ? `bar-pulse 0.9s ease-in-out ${i * 0.08}s infinite alternate` : undefined }}
         />
       ))}

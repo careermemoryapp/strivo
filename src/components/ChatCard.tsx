@@ -9,7 +9,7 @@ import { chatCategoryDef } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 
 export function ChatCard({ chat, onChanged }: { chat: Chat; onChanged?: () => void }) {
-  const { icon: Icon, bg, text } = chatCategoryDef(chat.category);
+  const { icon: Icon } = chatCategoryDef(chat.category);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -31,7 +31,7 @@ export function ChatCard({ chat, onChanged }: { chat: Chat; onChanged?: () => vo
       <Link href={`/chats/${chat.id}`} className="block" onClick={() => menuOpen && setMenuOpen(false)}>
         <Card className="hover:border-brand-primary/40 transition-colors">
           <div className="flex gap-3">
-            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${bg} ${text}`}>
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f2effa] text-[#8b5cf6]">
               <Icon size={20} />
             </div>
             <div className="min-w-0 flex-1">

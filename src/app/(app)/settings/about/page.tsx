@@ -1,5 +1,5 @@
 import { Brain, ShieldCheck, Sparkles, Target } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Card } from "@/components/Card";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME } from "@/lib/config";
@@ -29,10 +29,10 @@ const VALUES = [
 
 export default function AboutStrivoPage() {
   return (
-    <div>
-      <PageHeader title={`About ${APP_NAME}`} back />
+    <div className="pb-8">
+      <DarkHeader back inlineTitle={`About ${APP_NAME}`} />
 
-      <div className="px-5 space-y-5 pb-8">
+      <div className="px-5 pt-5 space-y-5">
         <div className="flex flex-col items-center text-center py-2">
           <LogoMark size={48} />
           <h1 className="mt-3 text-xl font-bold text-ink">{APP_NAME}</h1>
@@ -41,7 +41,7 @@ export default function AboutStrivoPage() {
           </p>
         </div>
 
-        <Card>
+        <Card className="border-[#f0ecf7]">
           <h2 className="font-semibold text-ink">Our vision</h2>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
             Nobody should have to start from a blank page when it&apos;s time to advocate for
@@ -50,7 +50,7 @@ export default function AboutStrivoPage() {
           </p>
         </Card>
 
-        <Card>
+        <Card className="border-[#f0ecf7]">
           <h2 className="font-semibold text-ink">Our mission</h2>
           <p className="mt-2 text-sm text-ink-soft leading-relaxed">
             Strivo gives you a private, AI-powered memory of your own career. Instead of
@@ -64,8 +64,8 @@ export default function AboutStrivoPage() {
           <h2 className="mb-2 px-1 font-semibold text-ink">What Strivo brings you</h2>
           <div className="space-y-2.5">
             {VALUES.map((v) => (
-              <Card key={v.title} className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand-primary-soft text-brand-primary">
+              <Card key={v.title} className="flex items-start gap-3 border-[#f0ecf7]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f2effa] text-[#8b5cf6]">
                   <v.icon size={18} />
                 </div>
                 <div className="min-w-0 flex-1">

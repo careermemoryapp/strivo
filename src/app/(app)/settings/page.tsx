@@ -7,9 +7,7 @@ import { format } from "date-fns";
 import {
   User, CreditCard, Download, Bell, Shield, Palette, HelpCircle, Info, LogOut, Trash2, ChevronRight, X, FileText,
 } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
-import { LogoWithWordmark } from "@/components/Logo";
-import { Card } from "@/components/Card";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
 import { Avatar } from "@/components/Avatar";
 import { APP_NAME } from "@/lib/config";
@@ -33,12 +31,12 @@ function Row({
       disabled={comingSoon}
       className="flex w-full items-center gap-3 px-4 py-3.5 text-left disabled:opacity-50"
     >
-      <span className={danger ? "text-red-600" : "text-ink-soft"}>{icon}</span>
+      <span className={danger ? "text-red-600" : "text-[#8b5cf6]"}>{icon}</span>
       <span className={`flex-1 text-sm font-medium ${danger ? "text-red-600" : "text-ink"}`}>{label}</span>
       {comingSoon ? (
         <span className="text-xs text-ink-faint">Coming soon</span>
       ) : (
-        <ChevronRight size={16} className="text-ink-faint" />
+        <ChevronRight size={16} className="text-[#cec7dd]" />
       )}
     </button>
   );
@@ -78,60 +76,57 @@ export default function SettingsPage() {
   }
 
   return (
-    <div>
-      <div className="flex items-center px-5 pt-6">
-        <LogoWithWordmark size={28} />
-      </div>
-      <PageHeader title="Settings" back />
-
-      <div className="px-5 space-y-6 pb-8">
+    <div className="pb-8">
+      <DarkHeader back inlineTitle="Settings">
         {profile && (
-          <Card className="flex items-center gap-3.5">
-            <Avatar firstName={profile.firstName} lastName={profile.lastName} size={52} />
+          <div className="relative mt-4 flex items-center gap-3.5 rounded-[14px] border border-white/10 bg-white/8 p-3.5">
+            <Avatar firstName={profile.firstName} lastName={profile.lastName} size={44} />
             <div className="min-w-0 flex-1">
-              <p className="font-semibold text-ink truncate">
+              <p className="font-semibold text-white truncate">
                 {profile.firstName} {profile.lastName}
               </p>
-              <p className="text-xs text-ink-soft truncate">{profile.email}</p>
-              <p className="mt-0.5 text-[11px] text-ink-faint">
+              <p className="text-xs text-white/55 truncate">{profile.email}</p>
+              <p className="mt-0.5 text-[11px] text-white/40">
                 Member since {format(new Date(profile.createdAt), "MMMM yyyy")}
               </p>
             </div>
-          </Card>
+          </div>
         )}
+      </DarkHeader>
 
+      <div className="px-5 pt-5 space-y-6">
         <div>
-          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">Account</h3>
-          <Card className="p-0 divide-y divide-border overflow-hidden">
+          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[#a8a2bd]">Account</h3>
+          <div className="rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
             <Row icon={<User size={18} />} label="Profile" onClick={() => router.push("/settings/profile")} />
             <Row icon={<CreditCard size={18} />} label="Subscription" onClick={() => router.push("/settings/subscription")} />
             <Row icon={<Download size={18} />} label="Export Data" comingSoon />
-          </Card>
+          </div>
         </div>
 
         <div>
-          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">Preferences</h3>
-          <Card className="p-0 divide-y divide-border overflow-hidden">
+          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[#a8a2bd]">Preferences</h3>
+          <div className="rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
             <Row icon={<Bell size={18} />} label="Notifications" comingSoon />
             <Row icon={<Palette size={18} />} label="Appearance" comingSoon />
-          </Card>
+          </div>
         </div>
 
         <div>
-          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-ink-faint">Support</h3>
-          <Card className="p-0 divide-y divide-border overflow-hidden">
+          <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[#a8a2bd]">Support</h3>
+          <div className="rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
             <Row icon={<HelpCircle size={18} />} label="Help & Support" onClick={() => router.push("/settings/help")} />
             <Row icon={<Info size={18} />} label={`About ${APP_NAME}`} onClick={() => router.push("/settings/about")} />
             <Row icon={<FileText size={18} />} label="Terms & Conditions" onClick={() => window.open("/terms", "_blank")} />
             <Row icon={<Shield size={18} />} label="Privacy Policy" onClick={() => window.open("/privacy", "_blank")} />
-          </Card>
+          </div>
         </div>
 
         <div>
-          <Card className="p-0 divide-y divide-border overflow-hidden">
+          <div className="rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
             <Row icon={<LogOut size={18} />} label="Log Out" onClick={() => signOut({ callbackUrl: "/login" })} />
             <Row icon={<Trash2 size={18} />} label="Delete Account" danger onClick={() => setConfirmDelete(true)} />
-          </Card>
+          </div>
         </div>
       </div>
 

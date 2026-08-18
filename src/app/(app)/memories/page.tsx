@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, ChevronDown, Brain } from "lucide-react";
-import { LogoWithWordmark } from "@/components/Logo";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { MemoryCard } from "@/components/MemoryCard";
@@ -45,34 +45,34 @@ export default function MemoriesPage() {
   const groups = memories ? groupMemoriesByTime(memories) : [];
 
   return (
-    <div>
-      <div className="flex items-center justify-between px-5 pt-6">
-        <LogoWithWordmark size={36} />
-        <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-          <Avatar firstName={user?.firstName} lastName={user?.lastName} size={34} />
-        </button>
-      </div>
+    <div className="pb-6">
+      <DarkHeader
+        wordmark
+        avatarRight={
+          <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
+            <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
+          </button>
+        }
+      >
+        <div className="relative mt-5">
+          <h1 className="text-[21px] font-bold text-white">All Memories</h1>
+          <p className="mt-1 text-[12px] text-white/55">Your experiences, insights and moments that matter.</p>
+        </div>
 
-      <div className="px-5 pt-5">
-        <h1 className="text-2xl font-bold text-ink">All Memories</h1>
-        <p className="mt-1 text-sm text-ink-soft">Your experiences, insights and moments that matter.</p>
-      </div>
-
-      <div className="px-5 pt-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <div className="relative flex-1">
-            <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+        <div className="relative mt-4 flex items-center gap-2">
+          <div className="flex flex-1 min-w-0 items-center gap-2 rounded-[13px] border border-white/10 bg-white/8 px-3.5 py-3">
+            <Search size={16} className="shrink-0 text-white/40" />
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search memories…"
-              className="w-full rounded-input border border-border bg-surface py-3 pl-10 pr-3 text-ink placeholder:text-ink-faint outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-soft"
+              className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/40 outline-none"
             />
           </div>
           <div className="relative shrink-0">
             <button
               onClick={() => setSortMenuOpen((v) => !v)}
-              className="flex items-center gap-1 rounded-input border border-border bg-surface px-3 py-3 text-sm font-medium text-ink-soft"
+              className="flex items-center gap-1 rounded-[13px] border border-white/10 bg-white/8 px-3 py-3 text-sm font-medium text-white/70"
             >
               {sort === "newest" ? "Newest" : "Oldest"}
               <ChevronDown size={15} />
@@ -98,9 +98,9 @@ export default function MemoriesPage() {
             )}
           </div>
         </div>
-      </div>
+      </DarkHeader>
 
-      <div className="px-5 pt-4">
+      <div className="px-5 pt-5">
         {error && <ErrorBanner message={error} onRetry={() => load(search, sort)} />}
 
         {!memories && !error && (
@@ -117,7 +117,7 @@ export default function MemoriesPage() {
           />
         )}
 
-        <div className="space-y-6 pb-4">
+        <div className="space-y-6">
           {groups.map((group) => (
             <div key={group.label}>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">{group.label}</h3>

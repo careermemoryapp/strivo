@@ -84,12 +84,13 @@ export function ChatBubble({
         )}
         <div
           className={cn(
-            "max-w-[80%] rounded-2xl rounded-tr-sm bg-brand-primary-soft px-4 py-2.5 text-ink whitespace-pre-wrap flex items-end gap-1.5",
+            "max-w-[80%] rounded-2xl rounded-tr-sm px-4 py-2.5 text-white whitespace-pre-wrap flex items-end gap-1.5",
             status === "pending" && "opacity-60"
           )}
+          style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
         >
           <span>{content}</span>
-          {status === "sent" && <CheckCheck size={14} className="mb-0.5 shrink-0 text-brand-primary" />}
+          {status === "sent" && <CheckCheck size={14} className="mb-0.5 shrink-0 text-white/80" />}
         </div>
       </div>
     );

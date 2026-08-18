@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { CheckCircle2, Sparkles, Clock, ShieldCheck } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Card } from "@/components/Card";
-import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { Tabs } from "@/components/Tabs";
@@ -44,10 +43,10 @@ export default function SubscriptionPage() {
   const activePriceLabel = sub ? (billing === "Monthly" ? sub.monthlyPriceLabel : sub.annualPriceLabel) : "";
 
   return (
-    <div>
-      <PageHeader title="Subscription" back />
+    <div className="pb-8">
+      <DarkHeader back inlineTitle="Subscription" />
 
-      <div className="px-5 space-y-5 pb-8">
+      <div className="px-5 pt-5 space-y-5">
         {error && <ErrorBanner message={error} />}
 
         {!sub && !error && (
@@ -58,7 +57,10 @@ export default function SubscriptionPage() {
 
         {sub && (
           <>
-            <Card className="bg-gradient-brand text-white border-0">
+            <div
+              className="rounded-[18px] p-5 text-white"
+              style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa,#c084fc)" }}
+            >
               <div className="flex items-center gap-2 text-sm font-medium text-white/90">
                 {sub.status === "active" ? <ShieldCheck size={16} /> : <Clock size={16} />}
                 {sub.status === "active" && "Strivo Plus — Active"}
@@ -86,9 +88,9 @@ export default function SubscriptionPage() {
                   Your {sub.trialMonths}-month free trial ended. Upgrade to keep using Strivo.
                 </p>
               )}
-            </Card>
+            </div>
 
-            <Card>
+            <Card className="border-[#f0ecf7]">
               <div className="flex items-center justify-between gap-3">
                 <p className="font-semibold text-ink">Strivo Plus</p>
                 <div className="w-40">
@@ -102,7 +104,7 @@ export default function SubscriptionPage() {
                 )}
                 <p className="text-2xl font-bold text-ink">{activePriceLabel}</p>
                 {billing === "Annually" && (
-                  <span className="rounded-pill bg-brand-primary/10 px-2 py-0.5 text-xs font-semibold text-brand-primary">
+                  <span className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-xs font-semibold text-[#8b5cf6]">
                     Save 50%
                   </span>
                 )}
@@ -115,16 +117,20 @@ export default function SubscriptionPage() {
               <div className="mt-4 space-y-2.5">
                 {PERKS.map((perk) => (
                   <div key={perk} className="flex items-start gap-2">
-                    <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-brand-primary" />
+                    <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#8b5cf6]" />
                     <p className="text-sm text-ink-soft">{perk}</p>
                   </div>
                 ))}
               </div>
 
               {sub.status !== "active" && (
-                <Button className="w-full mt-5" onClick={() => setShowComingSoon(true)}>
+                <button
+                  onClick={() => setShowComingSoon(true)}
+                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-pill py-3.5 text-sm font-semibold text-white"
+                  style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                >
                   <Sparkles size={16} /> Upgrade to Strivo Plus
-                </Button>
+                </button>
               )}
 
               {showComingSoon && (

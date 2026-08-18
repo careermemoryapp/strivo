@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { Search, Plus, X, MessageSquare } from "lucide-react";
-import { LogoWithWordmark } from "@/components/Logo";
+import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { ChatCard } from "@/components/ChatCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -68,54 +68,55 @@ export default function ChatsPage() {
   }
 
   return (
-    <div>
-      <div className="flex items-center justify-between px-5 pt-6">
-        <LogoWithWordmark size={36} />
-        <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-          <Avatar firstName={user?.firstName} lastName={user?.lastName} size={34} />
-        </button>
-      </div>
-
-      <div className="px-5 pt-5 flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-ink">Chats</h1>
-          <p className="mt-1 text-sm text-ink-soft">All your conversations with your AI.</p>
+    <div className="pb-6">
+      <DarkHeader
+        wordmark
+        avatarRight={
+          <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
+            <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
+          </button>
+        }
+      >
+        <div className="relative mt-5 flex items-start justify-between gap-3">
+          <div>
+            <h1 className="text-[21px] font-bold text-white">Chats</h1>
+            <p className="mt-1 text-[12px] text-white/55">All your conversations with your AI.</p>
+          </div>
+          <button
+            onClick={() => setShowNewChat(true)}
+            className="flex shrink-0 items-center gap-1 rounded-pill bg-white px-3.5 py-2.5 text-xs font-bold text-[#26213c]"
+          >
+            <Plus size={15} /> New Chat
+          </button>
         </div>
-        <button
-          onClick={() => setShowNewChat(true)}
-          className="flex shrink-0 items-center gap-1 rounded-pill bg-gradient-brand px-3.5 py-2.5 text-sm font-semibold text-white"
-        >
-          <Plus size={16} /> New Chat
-        </button>
-      </div>
 
-      <div className="px-5 pt-4 space-y-3">
-        <div className="relative">
-          <Search size={17} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-faint" />
+        <div className="relative mt-4 flex items-center gap-2 rounded-[13px] border border-white/10 bg-white/8 px-3.5 py-3">
+          <Search size={16} className="shrink-0 text-white/40" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search chats…"
-            className="w-full rounded-input border border-border bg-surface py-3 pl-10 pr-3 text-ink placeholder:text-ink-faint outline-none focus:border-brand-primary focus:ring-2 focus:ring-brand-primary-soft"
+            className="min-w-0 flex-1 bg-transparent text-sm text-white placeholder:text-white/40 outline-none"
           />
         </div>
-        <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+
+        <div className="relative mt-3 flex gap-2 overflow-x-auto scrollbar-none pb-0.5">
           {CHAT_CATEGORIES.map((c) => (
             <button
               key={c}
               onClick={() => setCategory(c)}
               className={cn(
-                "shrink-0 rounded-pill px-3.5 py-1.5 text-sm font-medium border",
-                category === c ? "bg-brand-primary text-white border-brand-primary" : "bg-surface text-ink-soft border-border"
+                "shrink-0 rounded-pill px-3.5 py-1.5 text-xs font-semibold",
+                category === c ? "bg-white text-[#26213c]" : "bg-white/8 text-white/60"
               )}
             >
               {c}
             </button>
           ))}
         </div>
-      </div>
+      </DarkHeader>
 
-      <div className="px-5 pt-4">
+      <div className="px-5 pt-5">
         {error && <ErrorBanner message={error} onRetry={() => load(search, category)} />}
 
         {!chats && !error && (
@@ -132,7 +133,7 @@ export default function ChatsPage() {
           />
         )}
 
-        <div className="space-y-2.5 pb-4">
+        <div className="space-y-2.5">
           {chats?.map((chat) => (
             <ChatCard key={chat.id} chat={chat} onChanged={() => load(search, category)} />
           ))}
@@ -150,7 +151,7 @@ export default function ChatsPage() {
             </div>
             <div className="space-y-2 max-h-[60vh] overflow-y-auto">
               {NEW_CHAT_TEMPLATES.map((t) => {
-                const { icon: Icon, bg, text } = chatCategoryDef(t.category);
+                const { icon: Icon } = chatCategoryDef(t.category);
                 return (
                   <button
                     key={t.title}
@@ -158,7 +159,7 @@ export default function ChatsPage() {
                     disabled={!!creating}
                     className="flex w-full items-center gap-3 rounded-card border border-border p-3.5 text-left hover:border-brand-primary/40"
                   >
-                    <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${bg} ${text}`}>
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f2effa] text-[#8b5cf6]">
                       <Icon size={18} />
                     </div>
                     <div className="flex-1 min-w-0">
