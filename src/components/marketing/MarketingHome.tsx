@@ -186,15 +186,54 @@ function DownloadButton({ className = "", big = false }: { className?: string; b
         href={PLAY_STORE_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className={`group inline-flex items-center gap-2.5 rounded-2xl bg-gradient-brand text-white font-semibold shadow-[0_8px_30px_rgba(124,58,237,0.35)] transition-shadow hover:shadow-[0_12px_40px_rgba(124,58,237,0.5)] active:scale-[0.98] ${
+        className={`group relative inline-flex items-center gap-2.5 rounded-2xl bg-gradient-brand text-white font-semibold shadow-[0_8px_30px_rgba(124,58,237,0.35)] transition-shadow hover:shadow-[0_12px_40px_rgba(124,58,237,0.5)] active:scale-[0.98] ${
           big ? "px-8 py-4 text-base" : "px-6 py-3.5 text-sm"
         } ${className}`}
       >
+        <span className="absolute inset-0 rounded-2xl animate-pulse-ring" aria-hidden />
         <Smartphone size={big ? 20 : 18} />
         Get {APP_NAME} on Google Play
         <ArrowRight size={big ? 18 : 16} className="transition-transform group-hover:translate-x-1" />
       </a>
     </Magnetic>
+  );
+}
+
+// A tiny looping "product demo" inside the hero — waveform bars pulse as
+// if listening, then a chat bubble fades in with the AI's reply. This
+// replaces a static mockup with something that actually shows what the
+// app does in five seconds, which sells the product far better than an
+// abstract phone silhouette.
+function VoiceDemo() {
+  const bars = [10, 22, 14, 28, 18, 24, 12, 20];
+  return (
+    <div className="relative mx-auto mt-16 w-72 rounded-3xl border border-white/15 bg-white/[0.06] p-5 text-left backdrop-blur-md">
+      <div className="mb-4 flex items-center gap-2">
+        <span className="h-2 w-2 rounded-full bg-brand-secondary animate-pulse" />
+        <span className="text-[11px] font-medium uppercase tracking-wide text-white/50">Listening</span>
+      </div>
+      <div className="flex h-14 items-end gap-1.5">
+        {bars.map((h, i) => (
+          <span
+            key={i}
+            className="w-2 rounded-full bg-gradient-brand"
+            style={{
+              height: `${h}px`,
+              animation: `bar-pulse 0.9s ease-in-out infinite alternate`,
+              animationDelay: `${i * 0.09}s`,
+            }}
+          />
+        ))}
+      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 1.4, duration: 0.5, repeat: Infinity, repeatDelay: 3.5, repeatType: "reverse" }}
+        className="mt-4 rounded-2xl rounded-bl-sm bg-white/10 px-3.5 py-2.5 text-xs text-white/90"
+      >
+        Got it — saved. I&apos;ll remember that for you.
+      </motion.div>
+    </div>
   );
 }
 
@@ -289,7 +328,7 @@ export function MarketingHome({
           >
             Now on Google Play
           </motion.div>
-          <motion.h1 variants={fadeUp} className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
+          <motion.h1 variants={fadeUp} className="text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
             Speak it once.{" "}
             <span
               className="animate-shimmer-text bg-clip-text text-transparent"
@@ -301,26 +340,18 @@ export function MarketingHome({
               {APP_NAME} never forgets.
             </span>
           </motion.h1>
-          <motion.p variants={fadeUp} className="mx-auto mt-5 max-w-md text-base text-white/70">
+          <motion.p variants={fadeUp} className="mx-auto mt-6 max-w-md text-lg text-white/70">
             {APP_TAGLINE}
           </motion.p>
-          <motion.div variants={fadeUp} className="mt-9 flex justify-center">
+          <motion.div variants={fadeUp} className="mt-10 flex flex-col items-center gap-3">
             <DownloadButton big />
+            <span className="text-xs text-white/50">Free for 2 months · no card needed · cancel anytime</span>
           </motion.div>
         </motion.div>
 
-        {/* Floating phone card */}
-        <motion.div
-          style={{ y: phoneY, transformStyle: "preserve-3d", perspective: "800px" }}
-          initial={{ opacity: 0, y: 40, rotateX: 8, rotateY: -10 }}
-          animate={{ opacity: 1, rotateX: 8, rotateY: -10 }}
-          transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
-          className="relative mx-auto mt-16 w-56 rounded-3xl border border-white/15 bg-white/[0.06] p-5 text-left backdrop-blur-md animate-float-blob"
-        >
-          <div className="mb-3 h-2 w-14 rounded-full bg-gradient-brand" />
-          <div className="mb-2 h-1.5 w-4/5 rounded-full bg-white/15" />
-          <div className="mb-2 h-1.5 w-3/5 rounded-full bg-white/15" />
-          <div className="h-1.5 w-2/5 rounded-full bg-white/15" />
+        {/* Live product demo */}
+        <motion.div style={{ y: phoneY }} initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }} className="relative">
+          <VoiceDemo />
         </motion.div>
       </section>
 
