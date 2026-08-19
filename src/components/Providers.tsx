@@ -1,20 +1,9 @@
 "use client";
-import { SessionProvider } from "next-auth/react";
+import { SessionProvider, useSession } from "next-auth/react";
 import { ReactNode, useEffect } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
-
-// Minimal shape of the global Capacitor injects into every page loaded
-// inside the native app's WebView. Absent entirely on a normal browser.
-type CapacitorGlobal = { isNativePlatform?: () => boolean };
-declare global {
-  interface Window {
-    Capacitor?: CapacitorGlobal;
-  }
-}
-
-function isNativeApp(): boolean {
-  return typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.());
-}
+import { isNativeApp } from "@/lib/nativePlatform";
+import { usePushRegistration } from "@/lib/usePushRegistration";
 
 // Android doesn't destroy/reload the app's WebView when it's backgrounded
 // (home button, app switcher) — it just freezes whatever was on screen and
@@ -36,7 +25,23 @@ function useReloadOnNativeResume() {
   }, []);
 }
 
+// Registers this device for push notifications once someone's actually
+// signed in (registering while logged out would have no user to attach the
+// device token to). Needs to live inside <SessionProvider> to read the
+// session, so it's a small child component rather than being called
+// directly in Providers below.
+function PushRegistration() {
+  const { status } = useSession();
+  usePushRegistration(status === "authenticated");
+  return null;
+}
+
 export default function Providers({ children }: { children: ReactNode }) {
   useReloadOnNativeResume();
-  return <SessionProvider>{children}</SessionProvider>;
+  return (
+    <SessionProvider>
+      <PushRegistration />
+      {children}
+    </SessionProvider>
+  );
 }

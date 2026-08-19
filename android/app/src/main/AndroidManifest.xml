@@ -43,11 +43,22 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- Icon/color FCM falls back to for notifications that don't
+             specify their own (all of ours, for now — see lib/push.ts). -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_icon"
+            android:resource="@mipmap/ic_launcher" />
     </application>
 
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Android 13+ requires this permission to be declared (and granted
+         at runtime — see usePushRegistration.ts) before any notification,
+         including FCM push, can be shown in the notification bar. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Voice-to-text recording (Web Speech API / getUserMedia in the web
          app) needs the mic. Capacitor's Bridge already has the runtime

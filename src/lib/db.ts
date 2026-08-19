@@ -136,6 +136,22 @@ function migrate(db: DatabaseSync) {
       active INTEGER NOT NULL DEFAULT 1,
       created_at TEXT NOT NULL
     );
+
+    -- Device tokens for real notification-bar push (via Firebase Cloud
+    -- Messaging — see lib/push.ts), registered by usePushRegistration.ts
+    -- the first time someone opens the native app signed in. The token
+    -- column is unique because FCM issues one per app-install-on-device,
+    -- and it can
+    -- get re-issued (app reinstall, data clear) — re-registering just
+    -- updates which user it's attached to instead of erroring.
+    CREATE TABLE IF NOT EXISTS push_tokens (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token TEXT NOT NULL UNIQUE,
+      platform TEXT NOT NULL DEFAULT 'android',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

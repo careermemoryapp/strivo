@@ -9,21 +9,7 @@ import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME } from "@/lib/config";
-
-// Minimal shape of the global Capacitor injects into every page loaded
-// inside the native app's WebView (including this remote strivo.ai page —
-// the bridge is attached to the WebView itself, not to locally-bundled
-// assets). Absent entirely on a normal desktop/mobile browser.
-type CapacitorGlobal = { isNativePlatform?: () => boolean };
-declare global {
-  interface Window {
-    Capacitor?: CapacitorGlobal;
-  }
-}
-
-function isNativeApp(): boolean {
-  return typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.());
-}
+import { isNativeApp } from "@/lib/nativePlatform";
 
 function GoogleIcon() {
   return (

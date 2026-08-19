@@ -1,0 +1,50 @@
+"use client";
+
+import { useEffect, useRef } from "react";
+import { PushNotifications } from "@capacitor/push-notifications";
+import { isNativeApp } from "@/lib/nativePlatform";
+
+// Registers this device's push token with the backend so admin nudges (see
+// /admin) can reach it as a real notification-bar alert, not just the
+// in-app Home banner. Only runs inside the native Android app — the web
+// build of this plugin doesn't support push, and a browser tab doesn't
+// need a device token — and only once someone is signed in, since a token
+// is useless without a user to attach it to (see PushRegistration in
+// Providers.tsx, which passes `enabled` from the session status).
+export function usePushRegistration(enabled: boolean) {
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (!enabled || !isNativeApp() || started.current) return;
+    started.current = true;
+
+    const regListener = PushNotifications.addListener("registration", (token) => {
+      fetch("/api/user/push-token", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: token.value, platform: "android" }),
+      }).catch(() => {});
+    });
+    const errListener = PushNotifications.addListener("registrationError", (err) => {
+      // Not fatal — this person just won't get notification-bar nudges
+      // until it succeeds on a later app open. The in-app Home banner
+      // (see the nudge fetch in home/page.tsx) still works regardless.
+      console.warn("Push registration failed:", err);
+    });
+
+    (async () => {
+      const perm = await PushNotifications.checkPermissions();
+      let receive = perm.receive;
+      if (receive === "prompt" || receive === "prompt-with-rationale") {
+        receive = (await PushNotifications.requestPermissions()).receive;
+      }
+      if (receive !== "granted") return;
+      await PushNotifications.register();
+    })();
+
+    return () => {
+      regListener.then((h) => h.remove());
+      errListener.then((h) => h.remove());
+    };
+  }, [enabled]);
+}
