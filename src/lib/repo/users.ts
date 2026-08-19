@@ -30,11 +30,11 @@ export type SubscriptionInfo = {
 // Billing (no Stripe/Razorpay) once payments go live, so these labels are
 // display-only until the Play Billing integration is wired up.
 export const TRIAL_MONTHS = 2;
-export const MONTHLY_PRICE_LABEL = "$5.99/month";
-export const ANNUAL_PRICE_LABEL = "$35.99/year";
+export const MONTHLY_PRICE_LABEL = "$6.99/month";
+export const ANNUAL_PRICE_LABEL = "$41.99/year";
 // What 12 months would cost at the monthly rate — shown struck through next
 // to the annual price so the "50% off" framing is self-evident.
-export const ANNUAL_LIST_PRICE_LABEL = "$71.88/year";
+export const ANNUAL_LIST_PRICE_LABEL = "$83.88/year";
 
 export function getSubscriptionInfo(user: Pick<User, "subscription_status" | "trial_ends_at">): SubscriptionInfo {
   const shared = {

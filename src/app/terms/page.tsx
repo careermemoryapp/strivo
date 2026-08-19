@@ -46,7 +46,7 @@ export default function TermsPage() {
               <li>New accounts get a free trial period, currently 2 months, starting from the
                 day you sign up.</li>
               <li>After your trial ends, continued access requires a paid subscription, currently
-                offered at $5.99/month or $35.99/year (billed annually, a 50% saving versus the
+                offered at $6.99/month or $41.99/year (billed annually, a 50% saving versus the
                 monthly rate).</li>
               <li>On Android, subscriptions are sold and billed exclusively through Google Play
                 Billing. We don&apos;t process or store your payment card details ourselves —
