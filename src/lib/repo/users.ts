@@ -11,6 +11,7 @@ export type User = {
   trial_ends_at: string | null;
   dismissed_nudge_id: string | null;
   app_version: string | null;
+  last_active_at: string | null;
   created_at: string;
 };
 
@@ -131,9 +132,12 @@ export function setDismissedNudge(id: string, nudgeId: string) {
 // Pinged once per native app open/resume (see useAppVersionPing.ts) so the
 // admin Users table can show which build every native user is actually
 // running, regardless of whether they've granted notification permission.
+// Also stamps last_active_at with "now" — this same ping is the best signal
+// we have for "when did this person last open the app," which powers the
+// nudge audience segments in repo/pushTokens.ts.
 export function setUserAppVersion(id: string, version: string) {
   const db = getDb();
-  db.prepare(`UPDATE users SET app_version = ? WHERE id = ?`).run(version, id);
+  db.prepare(`UPDATE users SET app_version = ?, last_active_at = ? WHERE id = ?`).run(version, nowIso(), id);
 }
 
 // Manual override for the admin panel — lets the founder grant or revoke

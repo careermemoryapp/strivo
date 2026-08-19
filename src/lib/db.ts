@@ -177,6 +177,14 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("app_version")) {
     db.exec(`ALTER TABLE users ADD COLUMN app_version TEXT;`);
   }
+  // Timestamp of the most recent app-version ping (see useAppVersionPing.ts,
+  // which fires on every native app open/resume) — the closest thing we
+  // have to "when did this person last open the app," used to build nudge
+  // audience segments (see repo/pushTokens.ts's segment queries) like
+  // "opened recently but not today" or "hasn't opened in a while."
+  if (!userColumns.includes("last_active_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN last_active_at TEXT;`);
+  }
 
   // English translation/paraphrase of the transcript, generated alongside
   // the rest of the AI metadata (see generateMemoryMetadata in lib/ai.ts)
@@ -201,6 +209,14 @@ function migrate(db: DatabaseSync) {
   );
   if (!pushTokenColumns.includes("app_version")) {
     db.exec(`ALTER TABLE push_tokens ADD COLUMN app_version TEXT;`);
+  }
+
+  // Which audience segment a nudge was sent to (see repo/pushTokens.ts) —
+  // 'all' for anyone sent before this existed. Shown in the admin panel's
+  // "Previously sent" history so it's clear who each past nudge targeted.
+  const nudgeColumns = (db.prepare(`PRAGMA table_info(nudges)`).all() as { name: string }[]).map((c) => c.name);
+  if (!nudgeColumns.includes("segment")) {
+    db.exec(`ALTER TABLE nudges ADD COLUMN segment TEXT NOT NULL DEFAULT 'all';`);
   }
 
   // Backfill trial_ends_at for any existing users who don't have one yet

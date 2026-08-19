@@ -9,8 +9,23 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/utils";
 import type { AdminMetrics, AdminUserRow } from "@/lib/repo/admin";
 import type { Nudge } from "@/lib/repo/nudges";
+import type { NudgeSegment } from "@/lib/repo/pushTokens";
 
 const DARK = "#26213c";
+
+const SEGMENT_OPTIONS: { value: NudgeSegment; label: string; hint: string }[] = [
+  { value: "all", label: "Everyone", hint: "Every registered device" },
+  {
+    value: "recent_missed_today",
+    label: "Missed today",
+    hint: "Opened in the last 3 days, but not yet today",
+  },
+  { value: "inactive", label: "Haven't opened in a while", hint: "No open in 7+ days (or never)" },
+];
+
+function segmentLabel(segment: NudgeSegment): string {
+  return SEGMENT_OPTIONS.find((s) => s.value === segment)?.label ?? "Everyone";
+}
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -133,6 +148,8 @@ export default function AdminDashboardPage() {
   const [recentNudges, setRecentNudges] = useState<Nudge[]>([]);
   const [nudgeTitle, setNudgeTitle] = useState("");
   const [nudgeMessage, setNudgeMessage] = useState("");
+  const [nudgeSegment, setNudgeSegment] = useState<NudgeSegment>("all");
+  const [audienceCounts, setAudienceCounts] = useState<Record<NudgeSegment, number> | null>(null);
   const [sendingNudge, setSendingNudge] = useState(false);
   const [userActionId, setUserActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -156,6 +173,7 @@ export default function AdminDashboardPage() {
     if (!res.ok) return;
     const data = await res.json();
     setRecentNudges(data.recent ?? []);
+    setAudienceCounts(data.audienceCounts ?? null);
   }, [handleUnauthorized]);
 
   const loadUsers = useCallback(
@@ -195,7 +213,7 @@ export default function AdminDashboardPage() {
       const res = await fetch("/api/admin/nudge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: nudgeTitle.trim(), message: nudgeMessage.trim() }),
+        body: JSON.stringify({ title: nudgeTitle.trim(), message: nudgeMessage.trim(), segment: nudgeSegment }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -204,6 +222,7 @@ export default function AdminDashboardPage() {
       }
       setNudgeTitle("");
       setNudgeMessage("");
+      setNudgeSegment("all");
       await loadNudge();
     } finally {
       setSendingNudge(false);
@@ -429,6 +448,36 @@ export default function AdminDashboardPage() {
                       className="w-full resize-none rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
                     />
                   </div>
+                  <div>
+                    <label className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                      Who gets this
+                    </label>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                      {SEGMENT_OPTIONS.map((opt) => {
+                        const selected = nudgeSegment === opt.value;
+                        const count = audienceCounts?.[opt.value];
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => setNudgeSegment(opt.value)}
+                            className={cn(
+                              "rounded-[12px] border p-2.5 text-left transition-colors",
+                              selected ? "border-[#a78bfa] bg-surface" : "border-[#ece5f5] bg-surface/60"
+                            )}
+                          >
+                            <p className={cn("text-[12.5px] font-semibold", selected ? "text-[#7c3aed]" : "text-ink")}>
+                              {opt.label}
+                            </p>
+                            <p className="mt-0.5 text-[10.5px] text-ink-faint">{opt.hint}</p>
+                            <p className="mt-1 text-[11px] font-medium text-[#8a82a8]">
+                              {count === undefined ? "…" : `${count} device${count === 1 ? "" : "s"}`}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                   <button
                     type="submit"
                     disabled={!nudgeTitle.trim() || !nudgeMessage.trim() || sendingNudge}
@@ -441,9 +490,9 @@ export default function AdminDashboardPage() {
                 </form>
               </div>
               <p className="mt-2 text-[11px] text-ink-faint">
-                Sends a real notification-bar push to every phone that&apos;s registered ({metrics.registeredDevices}{" "}
-                right now). Tapping it opens the Record page directly. Phones on an older app version (before
-                notifications were built in) won&apos;t receive anything.
+                Sends a real notification-bar push to whichever audience you pick above ({metrics.registeredDevices}{" "}
+                devices registered in total). Tapping it opens the Record page directly. Phones on an older app
+                version (before notifications were built in) won&apos;t receive anything regardless of audience.
               </p>
             </section>
 
@@ -555,7 +604,12 @@ export default function AdminDashboardPage() {
                       <div key={n.id} className="rounded-[12px] border border-[#f0ecf7] bg-surface p-3">
                         {n.title && <p className="text-sm font-medium text-ink">{n.title}</p>}
                         <p className="text-[12.5px] text-ink-soft">{n.message}</p>
-                        <p className="mt-1 text-[10.5px] text-ink-faint">{new Date(n.created_at).toLocaleString()}</p>
+                        <div className="mt-1 flex items-center gap-2">
+                          <span className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-[10px] font-semibold text-[#8b5cf6]">
+                            {segmentLabel(n.segment)}
+                          </span>
+                          <p className="text-[10.5px] text-ink-faint">{new Date(n.created_at).toLocaleString()}</p>
+                        </div>
                       </div>
                     ))}
                 </div>

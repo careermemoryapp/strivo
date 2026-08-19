@@ -48,6 +48,50 @@ export function listAllPushTokens(): string[] {
   return (db.prepare(`SELECT token FROM push_tokens`).all() as { token: string }[]).map((r) => r.token);
 }
 
+// Nudge audience segments, built on users.last_active_at (stamped on every
+// app-open ping — see setUserAppVersion in repo/users.ts). This is a best
+// effort, not a true "opens daily" detector — we don't track a full open
+// history, just the single most recent open — so "recently active" is used
+// as a proxy for "the kind of person who'd normally have opened today."
+export type NudgeSegment = "all" | "recent_missed_today" | "inactive";
+
+// SQLite fragment selecting push_tokens joined to users, e.g. so segment
+// filters can reference last_active_at. Reused by both the token list and
+// the count-only query below so they can never drift out of sync.
+function segmentWhere(segment: NudgeSegment): string {
+  switch (segment) {
+    case "recent_missed_today":
+      // Opened at least once in the last 3 days, but not yet today —
+      // someone who'd plausibly open today too, given the chance.
+      return `u.last_active_at IS NOT NULL
+              AND date(u.last_active_at) < date('now')
+              AND u.last_active_at >= datetime('now','-3 days')`;
+    case "inactive":
+      // Never pinged an open at all, or the last one was over a week ago.
+      return `(u.last_active_at IS NULL OR u.last_active_at < datetime('now','-7 days'))`;
+    case "all":
+    default:
+      return `1=1`;
+  }
+}
+
+export function listPushTokensForSegment(segment: NudgeSegment): string[] {
+  const db = getDb();
+  return (
+    db
+      .prepare(`SELECT pt.token FROM push_tokens pt JOIN users u ON u.id = pt.user_id WHERE ${segmentWhere(segment)}`)
+      .all() as { token: string }[]
+  ).map((r) => r.token);
+}
+
+export function countDevicesForSegment(segment: NudgeSegment): number {
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT COUNT(*) as c FROM push_tokens pt JOIN users u ON u.id = pt.user_id WHERE ${segmentWhere(segment)}`)
+    .get() as { c: number };
+  return row.c;
+}
+
 // Called when FCM reports a token as no longer valid (app uninstalled,
 // notifications revoked at the OS level, etc.) so it stops being sent to.
 export function deletePushTokens(tokens: string[]): void {
