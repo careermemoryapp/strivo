@@ -55,7 +55,12 @@ export async function sendPushToAllDevices(tokens: string[], input: { title?: st
       const res = await messaging.sendEachForMulticast({
         tokens: batch,
         notification: { title: input.title || APP_NAME, body: input.body },
-        android: { priority: "high" },
+        // The small status-bar icon (res/drawable/ic_notification.xml) is
+        // forced to a flat white silhouette by Android — this `color` is
+        // what gives it its little brand-purple circle background instead
+        // of the OS default gray, matching the gradient mark everywhere
+        // else in the app.
+        android: { priority: "high", notification: { color: "#7c3aed" } },
       });
       res.responses.forEach((r, idx) => {
         const code = r.error?.code;

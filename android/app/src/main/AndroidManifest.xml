@@ -44,11 +44,16 @@
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
 
-        <!-- Icon/color FCM falls back to for notifications that don't
-             specify their own (all of ours, for now — see lib/push.ts). -->
+        <!-- Icon FCM falls back to for notifications that don't specify
+             their own (all of ours, for now — see lib/push.ts). Points at
+             the simplified white silhouette in res/drawable/ic_notification.xml,
+             not the full-color app icon — Android flattens status-bar
+             icons to a plain white shape regardless, so using the launcher
+             icon there renders as an illegible white blob instead of the
+             actual logo. -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_icon"
-            android:resource="@mipmap/ic_launcher" />
+            android:resource="@drawable/ic_notification" />
     </application>
 
     <!-- Permissions -->
