@@ -146,18 +146,18 @@ function HomeScreenMock() {
         </div>
       </div>
       <div className="px-3 py-3.5" style={{ background: "#0a0a0f" }}>
-        <div className="rounded-[13px] border border-[#232030] bg-gradient-to-br from-[#1c1830] to-[#191625] p-3 text-center">
+        <div className="rounded-[13px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-3 text-center">
           <div className="mx-auto mb-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs text-[#8b5cf6]" style={{ boxShadow: "0 4px 10px rgba(139,92,246,0.2)" }}>●</div>
-          <p className="text-[10px] font-bold text-white">What&apos;s on your mind today?</p>
+          <p className="text-[10px] font-bold text-[#3c3650]">What&apos;s on your mind today?</p>
           <div className="mt-1.5 inline-block rounded-full px-3 py-1.5 text-[9px] font-bold text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
             Start recording
           </div>
         </div>
         <p className="mb-1 mt-3 text-[8px] font-bold tracking-wide text-[#a8a2bd]">OR ACCOMPLISH TODAY</p>
         {actions.map((a, i) => (
-          <div key={a.title} className={`flex items-center gap-2 py-2 ${i === 0 ? "border-t border-[#232030]" : "border-t border-[#232030]"} ${i === actions.length - 1 ? "border-b" : ""}`}>
-            <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-[#1c1830] text-[10px] text-[#a78bfa]">{a.icon}</div>
-            <p className="text-[9.5px] font-semibold text-white">{a.title}</p>
+          <div key={a.title} className={`flex items-center gap-2 py-2 ${i === 0 ? "border-t border-[#f0ecf7]" : "border-t border-[#f0ecf7]"} ${i === actions.length - 1 ? "border-b" : ""}`}>
+            <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-[#f2effa] text-[10px] text-[#8b5cf6]">{a.icon}</div>
+            <p className="text-[9.5px] font-semibold text-[#3c3650]">{a.title}</p>
           </div>
         ))}
       </div>
