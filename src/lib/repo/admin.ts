@@ -17,6 +17,12 @@ export type AdminMetrics = {
   totalMessages: number;
   avgMemoriesPerUser: number;
   activeUsers: { daily: number; weekly: number; monthly: number };
+  // How many devices have registered for real push notifications (see
+  // push_tokens / usePushRegistration.ts) — shown next to the nudge
+  // composer so it's obvious whether "send" actually reaches any phones
+  // yet, since that only happens once someone has the app build with
+  // notifications built in installed and open at least once.
+  registeredDevices: number;
 };
 
 function isoDaysAgo(days: number): string {
@@ -70,6 +76,7 @@ export function computeAdminMetrics(): AdminMetrics {
   const totalChats = count(`SELECT COUNT(*) as c FROM chats`);
   const totalMessages = count(`SELECT COUNT(*) as c FROM messages`);
   const avgMemoriesPerUser = totalUsers > 0 ? totalMemories / totalUsers : 0;
+  const registeredDevices = count(`SELECT COUNT(*) as c FROM push_tokens`);
 
   return {
     totalUsers,
@@ -87,6 +94,7 @@ export function computeAdminMetrics(): AdminMetrics {
       weekly: activeUsersSince(isoDaysAgo(7)),
       monthly: activeUsersSince(isoDaysAgo(30)),
     },
+    registeredDevices,
   };
 }
 

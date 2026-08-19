@@ -288,8 +288,10 @@ export default function AdminDashboardPage() {
                 </form>
               </div>
               <p className="mt-2 text-[11px] text-ink-faint">
-                Shows as a dismissible banner on Home. This is an in-app nudge, not a phone push notification —
-                people only see it the next time they open Strivo.
+                This one button does both: it shows as a dismissible banner on Home, and sends a real
+                notification-bar push to every phone that&apos;s registered ({metrics.registeredDevices} right now).
+                Push only reaches phones running the app version with notifications built in — anyone on an older
+                version will still see the in-app banner next time they open Strivo.
               </p>
             </section>
 
