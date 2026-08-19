@@ -38,7 +38,10 @@ const BATCH_SIZE = 500;
 // effort: if Firebase isn't configured yet, or a batch send throws, this
 // logs and returns rather than throwing — a failed push should never break
 // the admin's ability to set the in-app nudge (see /api/admin/nudge).
-export async function sendPushToAllDevices(tokens: string[], input: { title?: string; body: string }): Promise<void> {
+export async function sendPushToAllDevices(
+  tokens: string[],
+  input: { title?: string; body: string; route?: string }
+): Promise<void> {
   if (tokens.length === 0) return;
   const app = getFirebaseApp();
   if (!app) {
@@ -61,6 +64,14 @@ export async function sendPushToAllDevices(tokens: string[], input: { title?: st
         // of the OS default gray, matching the gradient mark everywhere
         // else in the app.
         android: { priority: "high", notification: { color: "#7c3aed" } },
+        // A plain data field, not part of the "notification" payload —
+        // read client-side by the pushNotificationActionPerformed listener
+        // (see usePushRegistration.ts) when the user taps the notification,
+        // so a recording nudge opens Record directly instead of just
+        // launching the app to Home. Optional so non-nudge pushes (if any
+        // get added later) can omit it and fall back to the default tap
+        // behavior (open the app).
+        ...(input.route ? { data: { route: input.route } } : {}),
       });
       res.responses.forEach((r, idx) => {
         const code = r.error?.code;

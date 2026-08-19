@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Send, X, Search, Sparkles } from "lucide-react";
+import { LogOut, Send, Search } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -31,12 +31,10 @@ export default function AdminDashboardPage() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [users, setUsers] = useState<AdminUserRow[] | null>(null);
   const [search, setSearch] = useState("");
-  const [activeNudge, setActiveNudge] = useState<Nudge | null>(null);
   const [recentNudges, setRecentNudges] = useState<Nudge[]>([]);
   const [nudgeTitle, setNudgeTitle] = useState("");
   const [nudgeMessage, setNudgeMessage] = useState("");
   const [sendingNudge, setSendingNudge] = useState(false);
-  const [clearingNudge, setClearingNudge] = useState(false);
   const [userActionId, setUserActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkedAuth, setCheckedAuth] = useState(false);
@@ -58,7 +56,6 @@ export default function AdminDashboardPage() {
     if (res.status === 401) return handleUnauthorized();
     if (!res.ok) return;
     const data = await res.json();
-    setActiveNudge(data.active);
     setRecentNudges(data.recent ?? []);
   }, [handleUnauthorized]);
 
@@ -110,16 +107,6 @@ export default function AdminDashboardPage() {
       await loadNudge();
     } finally {
       setSendingNudge(false);
-    }
-  }
-
-  async function handleClearNudge() {
-    setClearingNudge(true);
-    try {
-      await fetch("/api/admin/nudge", { method: "DELETE" });
-      await loadNudge();
-    } finally {
-      setClearingNudge(false);
     }
   }
 
@@ -235,47 +222,33 @@ export default function AdminDashboardPage() {
                 Nudge people to record
               </p>
               <div className="rounded-[16px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-4">
-                {activeNudge ? (
-                  <div className="mb-4 flex items-start gap-3 rounded-[13px] border border-[#ece5f5] bg-surface p-3.5">
-                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#f2effa] text-[#8b5cf6]">
-                      <Sparkles size={16} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-[#8b5cf6]">
-                        Live on everyone&apos;s Home right now
-                      </p>
-                      {activeNudge.title && <p className="mt-0.5 text-sm font-semibold text-ink">{activeNudge.title}</p>}
-                      <p className="text-[12.5px] text-ink-soft">{activeNudge.message}</p>
-                    </div>
-                    <button
-                      onClick={handleClearNudge}
-                      disabled={clearingNudge}
-                      aria-label="Clear nudge"
-                      className="shrink-0 flex h-7 w-7 items-center justify-center rounded-full text-ink-faint hover:bg-bg disabled:opacity-50"
-                    >
-                      {clearingNudge ? <Spinner className="h-3.5 w-3.5" /> : <X size={15} />}
-                    </button>
-                  </div>
-                ) : (
-                  <p className="mb-4 text-[12.5px] text-[#8a82a8]">Nothing live right now — send one below.</p>
-                )}
-
                 <form onSubmit={handleSendNudge} className="space-y-2.5">
-                  <input
-                    value={nudgeTitle}
-                    onChange={(e) => setNudgeTitle(e.target.value)}
-                    placeholder="Title (optional)"
-                    maxLength={60}
-                    className="w-full rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
-                  />
-                  <textarea
-                    value={nudgeMessage}
-                    onChange={(e) => setNudgeMessage(e.target.value)}
-                    placeholder="e.g. Haven't recorded in a while? Capture today's win in 60 seconds."
-                    maxLength={300}
-                    rows={2}
-                    className="w-full resize-none rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
-                  />
+                  <div>
+                    <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                      Headline — the bold line
+                    </label>
+                    <input
+                      value={nudgeTitle}
+                      onChange={(e) => setNudgeTitle(e.target.value)}
+                      placeholder="e.g. Haven't recorded in a while?"
+                      maxLength={60}
+                      className="w-full rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                    />
+                    <p className="mt-1 text-[10.5px] text-[#a29ab9]">Leave blank to just show &quot;Strivo&quot;.</p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                      Subline — the line underneath
+                    </label>
+                    <textarea
+                      value={nudgeMessage}
+                      onChange={(e) => setNudgeMessage(e.target.value)}
+                      placeholder="e.g. Capture today's win in 60 seconds."
+                      maxLength={300}
+                      rows={2}
+                      className="w-full resize-none rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                    />
+                  </div>
                   <button
                     type="submit"
                     disabled={!nudgeMessage.trim() || sendingNudge}
@@ -283,15 +256,14 @@ export default function AdminDashboardPage() {
                     style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
                   >
                     {sendingNudge ? <Spinner className="h-4 w-4 border-white/40 border-t-white" /> : <Send size={14} />}
-                    Send to everyone&apos;s Home
+                    Send push notification
                   </button>
                 </form>
               </div>
               <p className="mt-2 text-[11px] text-ink-faint">
-                This one button does both: it shows as a dismissible banner on Home, and sends a real
-                notification-bar push to every phone that&apos;s registered ({metrics.registeredDevices} right now).
-                Push only reaches phones running the app version with notifications built in — anyone on an older
-                version will still see the in-app banner next time they open Strivo.
+                Sends a real notification-bar push to every phone that&apos;s registered ({metrics.registeredDevices}{" "}
+                right now). Tapping it opens the Record page directly. Phones on an older app version (before
+                notifications were built in) won&apos;t receive anything.
               </p>
             </section>
 
@@ -382,15 +354,13 @@ export default function AdminDashboardPage() {
               </div>
             </section>
 
-            {recentNudges.length > 1 && (
+            {recentNudges.length > 0 && (
               <section className="mt-8">
                 <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
-                  Previous nudges
+                  Previously sent
                 </p>
                 <div className="space-y-2">
-                  {recentNudges
-                    .filter((n) => n.id !== activeNudge?.id)
-                    .map((n) => (
+                  {recentNudges.map((n) => (
                       <div key={n.id} className="rounded-[12px] border border-[#f0ecf7] bg-surface p-3">
                         {n.title && <p className="text-sm font-medium text-ink">{n.title}</p>}
                         <p className="text-[12.5px] text-ink-soft">{n.message}</p>
