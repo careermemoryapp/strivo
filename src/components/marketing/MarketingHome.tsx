@@ -122,7 +122,7 @@ function PhoneFrame({ children, width = 210 }: { children: React.ReactNode; widt
   return (
     <div
       className="overflow-hidden rounded-[32px] border-[7px] border-[#1c1c24]"
-      style={{ width, background: "#0a0a0f", boxShadow: "0 30px 70px rgba(124,58,237,0.25)" }}
+      style={{ width, background: "#0a0a0f", boxShadow: "0 16px 32px rgba(124,58,237,0.12)" }}
     >
       {children}
     </div>
