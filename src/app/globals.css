@@ -129,6 +129,17 @@ body {
   animation: splash-glow 2.2s ease-in-out infinite;
 }
 
+/* Marketing homepage hero headline — a soft light sweep across the
+   gradient text, looping slowly so it reads as premium/alive rather than
+   distracting. See src/components/marketing/MarketingHome.tsx. */
+@keyframes shimmer-text {
+  0% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+.animate-shimmer-text {
+  animation: shimmer-text 5s linear infinite;
+}
+
 @keyframes splash-dot {
   0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
   40% { opacity: 1; transform: translateY(-3px); }

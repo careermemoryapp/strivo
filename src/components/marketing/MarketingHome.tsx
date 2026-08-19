@@ -1,6 +1,14 @@
 "use client";
 
-import { motion, type Variants } from "framer-motion";
+import { useRef } from "react";
+import {
+  motion,
+  useMotionValue,
+  useSpring,
+  useScroll,
+  useTransform,
+  type Variants,
+} from "framer-motion";
 import {
   Mic,
   Brain,
@@ -17,6 +25,94 @@ import {
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME, APP_TAGLINE } from "@/lib/config";
+
+// Subtle film-grain texture (SVG turbulence), used at very low opacity over
+// dark sections so they don't read as flat digital gradients. Purely
+// decorative — aria-hidden, no layout impact.
+function Grain({ opacity = 0.05 }: { opacity?: number }) {
+  return (
+    <svg className="pointer-events-none absolute inset-0 h-full w-full" style={{ opacity }} aria-hidden>
+      <filter id="grain-filter">
+        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" />
+        <feColorMatrix type="saturate" values="0" />
+      </filter>
+      <rect width="100%" height="100%" filter="url(#grain-filter)" />
+    </svg>
+  );
+}
+
+// A button/card that visually "leans toward" the cursor as it approaches —
+// a small magnetic-pull effect. Spring-damped so it feels physical rather
+// than snapping. Resets to center on mouse leave.
+function Magnetic({ children, strength = 0.3 }: { children: React.ReactNode; strength?: number }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
+  const y = useMotionValue(0);
+  const springX = useSpring(x, { stiffness: 200, damping: 15, mass: 0.4 });
+  const springY = useSpring(y, { stiffness: 200, damping: 15, mass: 0.4 });
+
+  function handleMove(e: React.MouseEvent) {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    x.set((e.clientX - rect.left - rect.width / 2) * strength);
+    y.set((e.clientY - rect.top - rect.height / 2) * strength);
+  }
+  function handleLeave() {
+    x.set(0);
+    y.set(0);
+  }
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
+      style={{ x: springX, y: springY }}
+      className="inline-block"
+    >
+      {children}
+    </motion.div>
+  );
+}
+
+// 3D card tilt that tracks the cursor position (not just a fixed hover
+// angle) — the card leans away from wherever the pointer actually is,
+// spring-damped back to flat on leave. This is what gives the value-prop
+// and pricing cards their "premium, physical" feel.
+function TiltCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const rotateX = useMotionValue(0);
+  const rotateY = useMotionValue(0);
+  const springRX = useSpring(rotateX, { stiffness: 300, damping: 25 });
+  const springRY = useSpring(rotateY, { stiffness: 300, damping: 25 });
+
+  function handleMove(e: React.MouseEvent) {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    rotateY.set(px * 14);
+    rotateX.set(py * -14);
+  }
+  function handleLeave() {
+    rotateX.set(0);
+    rotateY.set(0);
+  }
+
+  return (
+    <motion.div
+      ref={ref}
+      onMouseMove={handleMove}
+      onMouseLeave={handleLeave}
+      style={{ rotateX: springRX, rotateY: springRY, transformStyle: "preserve-3d" }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
 
 // The public marketing homepage at strivo.ai — the ONLY thing a browser
 // visitor ever sees. The real app (voice recording, chat, memories) lives
@@ -38,18 +134,20 @@ const stagger: Variants = {
 
 function DownloadButton({ className = "", big = false }: { className?: string; big?: boolean }) {
   return (
-    <a
-      href={PLAY_STORE_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`group inline-flex items-center gap-2.5 rounded-2xl bg-gradient-brand text-white font-semibold shadow-[0_8px_30px_rgba(124,58,237,0.35)] transition-transform hover:-translate-y-0.5 active:scale-[0.98] ${
-        big ? "px-8 py-4 text-base" : "px-6 py-3.5 text-sm"
-      } ${className}`}
-    >
-      <Smartphone size={big ? 20 : 18} />
-      Get {APP_NAME} on Google Play
-      <ArrowRight size={big ? 18 : 16} className="transition-transform group-hover:translate-x-1" />
-    </a>
+    <Magnetic strength={0.25}>
+      <a
+        href={PLAY_STORE_URL}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`group inline-flex items-center gap-2.5 rounded-2xl bg-gradient-brand text-white font-semibold shadow-[0_8px_30px_rgba(124,58,237,0.35)] transition-shadow hover:shadow-[0_12px_40px_rgba(124,58,237,0.5)] active:scale-[0.98] ${
+          big ? "px-8 py-4 text-base" : "px-6 py-3.5 text-sm"
+        } ${className}`}
+      >
+        <Smartphone size={big ? 20 : 18} />
+        Get {APP_NAME} on Google Play
+        <ArrowRight size={big ? 18 : 16} className="transition-transform group-hover:translate-x-1" />
+      </a>
+    </Magnetic>
   );
 }
 
@@ -92,6 +190,13 @@ export function MarketingHome({
   annualPriceLabel: string;
   annualListPriceLabel: string;
 }) {
+  const heroRef = useRef<HTMLElement>(null);
+  const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
+  const orb1Y = useTransform(heroProgress, [0, 1], [0, -60]);
+  const orb2Y = useTransform(heroProgress, [0, 1], [0, 80]);
+  const phoneY = useTransform(heroProgress, [0, 1], [0, 120]);
+  const heroFade = useTransform(heroProgress, [0, 0.8], [1, 0]);
+
   return (
     <div className="min-h-screen bg-bg text-ink overflow-x-hidden">
       {/* Nav */}
@@ -114,20 +219,25 @@ export function MarketingHome({
 
       {/* Hero */}
       <section
+        ref={heroRef}
         className="relative overflow-hidden px-6 pb-24 pt-20 text-center text-white"
         style={{ background: "linear-gradient(155deg, #120a2e 0%, #1c0f45 30%, #241068 55%, #171246 78%, #0a0f2e 100%)" }}
       >
-        <span className="pointer-events-none absolute -left-24 top-[10%] h-72 w-72 rounded-full bg-brand-secondary/40 blur-3xl animate-float-blob" />
-        <span
+        <Grain opacity={0.04} />
+        <motion.span
+          style={{ y: orb1Y }}
+          className="pointer-events-none absolute -left-24 top-[10%] h-72 w-72 rounded-full bg-brand-secondary/40 blur-3xl animate-float-blob"
+        />
+        <motion.span
+          style={{ y: orb2Y }}
           className="pointer-events-none absolute -right-20 top-[45%] h-80 w-80 rounded-full bg-brand-primary/45 blur-3xl animate-float-blob"
-          style={{ animationDelay: "-3s" }}
         />
         <span
           className="pointer-events-none absolute left-[15%] bottom-[-10%] h-64 w-64 rounded-full bg-fuchsia-500/30 blur-3xl animate-float-blob"
           style={{ animationDelay: "-6s" }}
         />
 
-        <motion.div initial="hidden" animate="show" variants={stagger} className="relative mx-auto max-w-xl">
+        <motion.div style={{ opacity: heroFade }} initial="hidden" animate="show" variants={stagger} className="relative mx-auto max-w-xl">
           <motion.div
             variants={fadeUp}
             className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs font-medium text-white/80"
@@ -136,7 +246,13 @@ export function MarketingHome({
           </motion.div>
           <motion.h1 variants={fadeUp} className="text-4xl font-extrabold leading-tight tracking-tight sm:text-5xl">
             Speak it once.{" "}
-            <span className="bg-gradient-to-r from-[#8ea6ff] via-[#c4b5fd] to-[#f0abfc] bg-clip-text text-transparent">
+            <span
+              className="animate-shimmer-text bg-clip-text text-transparent"
+              style={{
+                backgroundImage: "linear-gradient(110deg, #8ea6ff 20%, #f0abfc 40%, #c4b5fd 60%, #8ea6ff 80%)",
+                backgroundSize: "200% auto",
+              }}
+            >
               {APP_NAME} never forgets.
             </span>
           </motion.h1>
@@ -150,11 +266,11 @@ export function MarketingHome({
 
         {/* Floating phone card */}
         <motion.div
+          style={{ y: phoneY, transformStyle: "preserve-3d", perspective: "800px" }}
           initial={{ opacity: 0, y: 40, rotateX: 8, rotateY: -10 }}
-          animate={{ opacity: 1, y: 0, rotateX: 8, rotateY: -10 }}
+          animate={{ opacity: 1, rotateX: 8, rotateY: -10 }}
           transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }}
           className="relative mx-auto mt-16 w-56 rounded-3xl border border-white/15 bg-white/[0.06] p-5 text-left backdrop-blur-md animate-float-blob"
-          style={{ transformStyle: "preserve-3d", perspective: "800px" }}
         >
           <div className="mb-3 h-2 w-14 rounded-full bg-gradient-brand" />
           <div className="mb-2 h-1.5 w-4/5 rounded-full bg-white/15" />
@@ -177,18 +293,14 @@ export function MarketingHome({
           className="grid grid-cols-2 gap-4 sm:grid-cols-4"
         >
           {VALUE_PROPS.map((v) => (
-            <motion.div
-              key={v.title}
-              variants={fadeUp}
-              whileHover={{ y: -6, rotateX: 4, rotateY: -4 }}
-              style={{ transformStyle: "preserve-3d" }}
-              className="rounded-2xl border border-border bg-surface p-5 shadow-card transition-shadow hover:shadow-lg"
-            >
-              <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary-soft">
-                <v.icon size={19} className="text-brand-primary" />
-              </div>
-              <p className="text-sm font-semibold">{v.title}</p>
-              <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{v.body}</p>
+            <motion.div key={v.title} variants={fadeUp}>
+              <TiltCard className="rounded-2xl border border-border bg-surface p-5 shadow-card transition-shadow hover:shadow-lg">
+                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary-soft">
+                  <v.icon size={19} className="text-brand-primary" />
+                </div>
+                <p className="text-sm font-semibold">{v.title}</p>
+                <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{v.body}</p>
+              </TiltCard>
             </motion.div>
           ))}
         </motion.div>
@@ -293,33 +405,29 @@ export function MarketingHome({
           variants={stagger}
           className="flex flex-col items-center justify-center gap-4 sm:flex-row"
         >
-          <motion.div
-            variants={fadeUp}
-            whileHover={{ y: -4 }}
-            className="w-full max-w-[200px] rounded-2xl border border-border bg-surface p-6 text-left shadow-card"
-          >
-            <p className="text-xs text-ink-soft">Monthly</p>
-            <p className="mt-1 text-2xl font-extrabold">{monthlyPriceLabel}</p>
-            <ul className="mt-4 space-y-1.5 text-xs text-ink-soft">
-              <li className="flex items-center gap-1.5"><Check size={13} className="text-success" />Unlimited memories</li>
-              <li className="flex items-center gap-1.5"><Check size={13} className="text-success" />AI chat</li>
-            </ul>
+          <motion.div variants={fadeUp} className="w-full max-w-[200px]">
+            <TiltCard className="rounded-2xl border border-border bg-surface p-6 text-left shadow-card">
+              <p className="text-xs text-ink-soft">Monthly</p>
+              <p className="mt-1 text-2xl font-extrabold">{monthlyPriceLabel}</p>
+              <ul className="mt-4 space-y-1.5 text-xs text-ink-soft">
+                <li className="flex items-center gap-1.5"><Check size={13} className="text-success" />Unlimited memories</li>
+                <li className="flex items-center gap-1.5"><Check size={13} className="text-success" />AI chat</li>
+              </ul>
+            </TiltCard>
           </motion.div>
-          <motion.div
-            variants={fadeUp}
-            whileHover={{ y: -6 }}
-            className="w-full max-w-[200px] rounded-2xl border-2 border-brand-primary bg-gradient-brand p-6 text-left text-white shadow-[0_12px_30px_rgba(124,58,237,0.3)]"
-          >
-            <p className="text-xs text-white/80">Annual · save 50%</p>
-            <p className="mt-1 text-2xl font-extrabold">
-              {annualPriceLabel}
-              <span className="ml-1.5 text-xs font-normal text-white/60 line-through">{annualListPriceLabel}</span>
-            </p>
-            <ul className="mt-4 space-y-1.5 text-xs text-white/85">
-              <li className="flex items-center gap-1.5"><Check size={13} />Unlimited memories</li>
-              <li className="flex items-center gap-1.5"><Check size={13} />AI chat</li>
-              <li className="flex items-center gap-1.5"><Check size={13} />Priority support</li>
-            </ul>
+          <motion.div variants={fadeUp} className="w-full max-w-[200px]">
+            <TiltCard className="rounded-2xl border-2 border-brand-primary bg-gradient-brand p-6 text-left text-white shadow-[0_12px_30px_rgba(124,58,237,0.3)]">
+              <p className="text-xs text-white/80">Annual · save 50%</p>
+              <p className="mt-1 text-2xl font-extrabold">
+                {annualPriceLabel}
+                <span className="ml-1.5 text-xs font-normal text-white/60 line-through">{annualListPriceLabel}</span>
+              </p>
+              <ul className="mt-4 space-y-1.5 text-xs text-white/85">
+                <li className="flex items-center gap-1.5"><Check size={13} />Unlimited memories</li>
+                <li className="flex items-center gap-1.5"><Check size={13} />AI chat</li>
+                <li className="flex items-center gap-1.5"><Check size={13} />Priority support</li>
+              </ul>
+            </TiltCard>
           </motion.div>
         </motion.div>
       </section>
@@ -329,6 +437,7 @@ export function MarketingHome({
         className="relative overflow-hidden px-6 py-20 text-center text-white"
         style={{ background: "linear-gradient(155deg, #171246 0%, #241068 50%, #120a2e 100%)" }}
       >
+        <Grain opacity={0.04} />
         <span className="pointer-events-none absolute left-1/2 top-[-20%] h-64 w-96 -translate-x-1/2 rounded-full bg-brand-primary/40 blur-3xl animate-float-blob" />
         <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.4 }} variants={stagger} className="relative mx-auto max-w-md">
           <motion.h2 variants={fadeUp} className="text-2xl font-bold tracking-tight sm:text-3xl">
