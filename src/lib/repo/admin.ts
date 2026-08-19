@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { getSubscriptionInfo, type User } from "@/lib/repo/users";
+import { getLatestAppVersionForUser } from "@/lib/repo/pushTokens";
 
 export type AdminMetrics = {
   totalUsers: number;
@@ -23,6 +24,19 @@ export type AdminMetrics = {
   // yet, since that only happens once someone has the app build with
   // notifications built in installed and open at least once.
   registeredDevices: number;
+  // Day-by-day counts, oldest first, for the growth/engagement charts on
+  // the admin dashboard.
+  dailySignups: { date: string; count: number }[];
+  dailyMemories: { date: string; count: number }[];
+  memorySourceBreakdown: { voice: number; text: number; file: number };
+  topCategories: { category: string; count: number }[];
+  // Signed up but never recorded a single memory — the clearest signal of
+  // someone who bounced off the core "record a memory" action entirely.
+  zeroMemoryUsers: number;
+  // Fraction (0-1) of all signups who recorded at least one memory in the
+  // last 7 days — a rough stickiness/retention proxy until there's real
+  // session tracking.
+  recordedLast7dRate: number;
 };
 
 function isoDaysAgo(days: number): string {
@@ -53,6 +67,23 @@ function activeUsersSince(iso: string): number {
   );
 }
 
+// Day-by-day row counts for the last `days` days (including today),
+// oldest first, with gaps filled in as 0 — table name is only ever passed
+// as a fixed literal from computeAdminMetrics below, never user input.
+function dailyCounts(table: "users" | "memories", days = 14): { date: string; count: number }[] {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT substr(created_at,1,10) as d, COUNT(*) as c FROM ${table} WHERE created_at >= ? GROUP BY d`)
+    .all(isoDaysAgo(days - 1)) as { d: string; c: number }[];
+  const byDate = new Map(rows.map((r) => [r.d, r.c]));
+  const out: { date: string; count: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const key = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    out.push({ date: key, count: byDate.get(key) ?? 0 });
+  }
+  return out;
+}
+
 export function computeAdminMetrics(): AdminMetrics {
   const db = getDb();
 
@@ -78,6 +109,31 @@ export function computeAdminMetrics(): AdminMetrics {
   const avgMemoriesPerUser = totalUsers > 0 ? totalMemories / totalUsers : 0;
   const registeredDevices = count(`SELECT COUNT(*) as c FROM push_tokens`);
 
+  const sourceRows = db.prepare(`SELECT source, COUNT(*) as c FROM memories GROUP BY source`).all() as {
+    source: string;
+    c: number;
+  }[];
+  const memorySourceBreakdown = { voice: 0, text: 0, file: 0 };
+  for (const r of sourceRows) {
+    if (r.source === "voice" || r.source === "text" || r.source === "file") memorySourceBreakdown[r.source] = r.c;
+  }
+
+  const topCategories = db
+    .prepare(
+      `SELECT COALESCE(category,'Uncategorized') as category, COUNT(*) as count
+       FROM memories GROUP BY category ORDER BY count DESC LIMIT 5`
+    )
+    .all() as { category: string; count: number }[];
+
+  const zeroMemoryUsers = count(
+    `SELECT COUNT(*) as c FROM users u WHERE NOT EXISTS (SELECT 1 FROM memories m WHERE m.user_id = u.id)`
+  );
+  const recordedLast7d = count(
+    `SELECT COUNT(DISTINCT user_id) as c FROM memories WHERE created_at >= ?`,
+    isoDaysAgo(7)
+  );
+  const recordedLast7dRate = totalUsers > 0 ? recordedLast7d / totalUsers : 0;
+
   return {
     totalUsers,
     newUsersToday,
@@ -95,6 +151,12 @@ export function computeAdminMetrics(): AdminMetrics {
       monthly: activeUsersSince(isoDaysAgo(30)),
     },
     registeredDevices,
+    dailySignups: dailyCounts("users"),
+    dailyMemories: dailyCounts("memories"),
+    memorySourceBreakdown,
+    topCategories,
+    zeroMemoryUsers,
+    recordedLast7dRate,
   };
 }
 
@@ -108,6 +170,11 @@ export type AdminUserRow = {
   createdAt: string;
   memoryCount: number;
   chatCount: number;
+  // From their most recently registered device (see push_tokens.app_version).
+  // Null means they've never registered a push token — either a web-only
+  // user, notifications declined, or they haven't opened the app since the
+  // push-enabled build shipped.
+  appVersion: string | null;
 };
 
 export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
@@ -135,6 +202,7 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
       createdAt: u.created_at,
       memoryCount: count(`SELECT COUNT(*) as c FROM memories WHERE user_id = ?`, u.id),
       chatCount: count(`SELECT COUNT(*) as c FROM chats WHERE user_id = ?`, u.id),
+      appVersion: getLatestAppVersionForUser(u.id),
     };
   });
 }

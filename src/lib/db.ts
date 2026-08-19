@@ -181,6 +181,18 @@ function migrate(db: DatabaseSync) {
     db.exec(`ALTER TABLE memories ADD COLUMN search_text TEXT;`);
   }
 
+  // The app's versionName (e.g. "1.5.1"), sent by the client on push-token
+  // registration (see App.getInfo() in usePushRegistration.ts) — lets the
+  // admin panel show which build each user is actually running, since push
+  // notifications only reach phones on a version that has them built in.
+  // Null for tokens registered before this existed.
+  const pushTokenColumns = (db.prepare(`PRAGMA table_info(push_tokens)`).all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!pushTokenColumns.includes("app_version")) {
+    db.exec(`ALTER TABLE push_tokens ADD COLUMN app_version TEXT;`);
+  }
+
   // Backfill trial_ends_at for any existing users who don't have one yet
   // (e.g. accounts created before the subscription system existed) — gives
   // them a fresh trial starting now rather than leaving it null. Kept in

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, type ReactNode, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, Send, Search } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
@@ -24,6 +24,105 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
+}
+
+// Simple day-by-day bar chart, no charting library — keeps this a pure web
+// deploy with zero new npm dependencies. The most recent bar is highlighted
+// with the brand gradient, older bars are a flat muted tint.
+function BarChart({ data }: { data: { date: string; count: number }[] }) {
+  const max = Math.max(1, ...data.map((d) => d.count));
+  const barWidth = 26;
+  const gap = 8;
+  const height = 84;
+  const width = data.length * (barWidth + gap) - gap;
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#a78bfa" />
+          <stop offset="100%" stopColor="#60a5fa" />
+        </linearGradient>
+      </defs>
+      {data.map((d, i) => {
+        const h = Math.max(3, (d.count / max) * height);
+        const isLast = i === data.length - 1;
+        return (
+          <rect
+            key={d.date}
+            x={i * (barWidth + gap)}
+            y={height - h}
+            width={barWidth}
+            height={h}
+            rx={4}
+            fill={isLast ? "url(#barGradient)" : "#ece5f5"}
+          />
+        );
+      })}
+    </svg>
+  );
+}
+
+// Classic SVG donut trick: a circle with radius 15.91549430918952 has a
+// circumference of exactly 100, so each segment's dasharray can just be its
+// raw percentage — no circumference math needed per segment.
+function DonutChart({ segments }: { segments: { label: string; value: number; color: string }[] }) {
+  const total = segments.reduce((s, x) => s + x.value, 0);
+  const r = 15.91549430918952;
+  let cumulative = 0;
+  return (
+    <svg width={104} height={104} viewBox="0 0 42 42" role="img" aria-label="Subscription breakdown">
+      <circle cx="21" cy="21" r={r} fill="transparent" stroke="#f3f0fa" strokeWidth="6" />
+      {total > 0 &&
+        segments.map((s) => {
+          const segPct = (s.value / total) * 100;
+          const dashoffset = 25 - cumulative;
+          cumulative += segPct;
+          return (
+            <circle
+              key={s.label}
+              cx="21"
+              cy="21"
+              r={r}
+              fill="transparent"
+              stroke={s.color}
+              strokeWidth="6"
+              strokeDasharray={`${segPct} ${100 - segPct}`}
+              strokeDashoffset={dashoffset}
+            />
+          );
+        })}
+      <text x="21" y="24" textAnchor="middle" fontSize="7" fontWeight="700" fill="#26213c">
+        {total}
+      </text>
+    </svg>
+  );
+}
+
+function ProgressRow({ label, value, max }: { label: string; value: number; max: number }) {
+  const width = max > 0 ? Math.max(value > 0 ? 4 : 0, (value / max) * 100) : 0;
+  return (
+    <div>
+      <div className="mb-1 flex justify-between text-[11px] text-[#8a82a8]">
+        <span>{label}</span>
+        <span>{value}</span>
+      </div>
+      <div className="h-[7px] rounded-full bg-[#f3f0fa]">
+        <div
+          className="h-[7px] rounded-full"
+          style={{ width: `${width}%`, background: "linear-gradient(90deg,#a78bfa,#60a5fa)" }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ChartCard({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+      <p className="mb-3 text-[12px] font-semibold text-[#3c3650]">{title}</p>
+      {children}
+    </div>
+  );
 }
 
 export default function AdminDashboardPage() {
@@ -72,6 +171,7 @@ export default function AdminDashboardPage() {
   );
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial auth-gated fetch on mount, not a render loop
     Promise.all([loadMetrics(), loadNudge(), loadUsers("")]).finally(() => setCheckedAuth(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
@@ -86,7 +186,7 @@ export default function AdminDashboardPage() {
     router.push("/admin/login");
   }
 
-  async function handleSendNudge(e: React.FormEvent) {
+  async function handleSendNudge(e: FormEvent) {
     e.preventDefault();
     if (!nudgeTitle.trim() || !nudgeMessage.trim()) return;
     setSendingNudge(true);
@@ -183,18 +283,42 @@ export default function AdminDashboardPage() {
                 <StatCard label="New this week" value={String(metrics.newUsersThisWeek)} />
                 <StatCard label="New this month" value={String(metrics.newUsersThisMonth)} />
               </div>
+              <div className="mt-3">
+                <ChartCard title="Signups — last 14 days">
+                  <BarChart data={metrics.dailySignups} />
+                </ChartCard>
+              </div>
             </section>
 
-            <section className="mt-6">
+            <section className="mt-8">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Subscriptions</p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                <StatCard label="In trial" value={String(metrics.statusCounts.trial)} />
-                <StatCard label="Paid (active)" value={String(metrics.statusCounts.active)} />
-                <StatCard label="Trial expired" value={String(metrics.statusCounts.expired)} />
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1.3fr_1fr]">
+                <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+                  <div className="flex items-center gap-5">
+                    <DonutChart
+                      segments={[
+                        { label: "Trial", value: metrics.statusCounts.trial, color: "#f59e0b" },
+                        { label: "Paid", value: metrics.statusCounts.active, color: "#8b5cf6" },
+                        { label: "Expired", value: metrics.statusCounts.expired, color: "#ef4444" },
+                      ]}
+                    />
+                    <div className="flex flex-col gap-2 text-[12.5px] text-ink-soft">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Trial · {metrics.statusCounts.trial}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#8b5cf6]" /> Paid · {metrics.statusCounts.active}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-red-500" /> Expired · {metrics.statusCounts.expired}
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <StatCard
                   label="Trial → paid rate"
                   value={metrics.conversionRate === null ? "—" : pct(metrics.conversionRate)}
-                  hint="Active / (active + expired)"
+                  hint="Active ÷ (active + expired)"
                 />
               </div>
               <p className="mt-2 text-[11px] text-ink-faint">
@@ -203,7 +327,7 @@ export default function AdminDashboardPage() {
               </p>
             </section>
 
-            <section className="mt-6">
+            <section className="mt-8">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Engagement</p>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <StatCard label="Memories captured" value={String(metrics.totalMemories)} />
@@ -213,6 +337,63 @@ export default function AdminDashboardPage() {
                   label="Active users"
                   value={`${metrics.activeUsers.daily} / ${metrics.activeUsers.weekly} / ${metrics.activeUsers.monthly}`}
                   hint="Daily / weekly / monthly"
+                />
+              </div>
+              <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <ChartCard title="Memories captured — last 14 days">
+                  <BarChart data={metrics.dailyMemories} />
+                </ChartCard>
+                <ChartCard title="How memories are captured">
+                  <div className="flex flex-col gap-2.5">
+                    <ProgressRow
+                      label="Voice"
+                      value={metrics.memorySourceBreakdown.voice}
+                      max={metrics.totalMemories}
+                    />
+                    <ProgressRow label="Text" value={metrics.memorySourceBreakdown.text} max={metrics.totalMemories} />
+                    <ProgressRow
+                      label="File upload"
+                      value={metrics.memorySourceBreakdown.file}
+                      max={metrics.totalMemories}
+                    />
+                  </div>
+                </ChartCard>
+                <ChartCard title="Top memory categories">
+                  {metrics.topCategories.length === 0 ? (
+                    <p className="text-[12px] text-ink-faint">No memories yet.</p>
+                  ) : (
+                    <div className="flex flex-col gap-2.5">
+                      {metrics.topCategories.map((c) => (
+                        <ProgressRow
+                          key={c.category}
+                          label={c.category}
+                          value={c.count}
+                          max={metrics.topCategories[0].count}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </ChartCard>
+              </div>
+            </section>
+
+            <section className="mt-8">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Retention</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <StatCard
+                  label="Recorded in last 7d"
+                  value={pct(metrics.recordedLast7dRate)}
+                  hint="Of all signups"
+                />
+                <StatCard
+                  label="Never recorded"
+                  value={String(metrics.zeroMemoryUsers)}
+                  hint="Signed up, zero memories"
+                />
+                <StatCard
+                  label="Push registered"
+                  value={String(metrics.registeredDevices)}
+                  hint="Devices reachable by push"
                 />
               </div>
             </section>
@@ -297,6 +478,7 @@ export default function AdminDashboardPage() {
                           <th className="px-4 py-3 font-semibold">Status</th>
                           <th className="px-4 py-3 font-semibold">Memories</th>
                           <th className="px-4 py-3 font-semibold">Chats</th>
+                          <th className="px-4 py-3 font-semibold">App version</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
                           <th className="px-4 py-3 font-semibold"></th>
                         </tr>
@@ -322,6 +504,16 @@ export default function AdminDashboardPage() {
                             </td>
                             <td className="px-4 py-3 text-ink-soft">{u.memoryCount}</td>
                             <td className="px-4 py-3 text-ink-soft">{u.chatCount}</td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {u.appVersion ? (
+                                <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />v
+                                  {u.appVersion}
+                                </span>
+                              ) : (
+                                <span className="text-[12px] text-ink-faint">No push token</span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-ink-soft whitespace-nowrap">
                               {new Date(u.createdAt).toLocaleDateString()}
                             </td>

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { PushNotifications } from "@capacitor/push-notifications";
+import { App } from "@capacitor/app";
 import { isNativeApp } from "@/lib/nativePlatform";
 
 // Registers this device's push token with the backend so admin nudges (see
@@ -20,11 +21,18 @@ export function usePushRegistration(enabled: boolean) {
     if (!enabled || !isNativeApp() || started.current) return;
     started.current = true;
 
-    const regListener = PushNotifications.addListener("registration", (token) => {
+    const regListener = PushNotifications.addListener("registration", async (token) => {
+      // App.getInfo().version is the versionName (e.g. "1.5.1"), sent along
+      // so the admin panel can show which build each user is actually
+      // running (see repo/pushTokens.ts). Best-effort — if it fails for any
+      // reason, the token still registers, just without a version tag.
+      const appVersion = await App.getInfo()
+        .then((info) => info.version)
+        .catch(() => undefined);
       fetch("/api/user/push-token", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token: token.value, platform: "android" }),
+        body: JSON.stringify({ token: token.value, platform: "android", appVersion }),
       }).catch(() => {});
     });
     const errListener = PushNotifications.addListener("registrationError", (err) => {
