@@ -1,6 +1,5 @@
 import { getDb } from "@/lib/db";
 import { getSubscriptionInfo, type User } from "@/lib/repo/users";
-import { getLatestAppVersionForUser } from "@/lib/repo/pushTokens";
 
 export type AdminMetrics = {
   totalUsers: number;
@@ -170,10 +169,9 @@ export type AdminUserRow = {
   createdAt: string;
   memoryCount: number;
   chatCount: number;
-  // From their most recently registered device (see push_tokens.app_version).
-  // Null means they've never registered a push token — either a web-only
-  // user, notifications declined, or they haven't opened the app since the
-  // push-enabled build shipped.
+  // Pinged on every native app open/resume regardless of notification
+  // permission (see useAppVersionPing.ts) — null means either a web-only
+  // user or someone who hasn't opened the native app since this shipped.
   appVersion: string | null;
 };
 
@@ -202,7 +200,7 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
       createdAt: u.created_at,
       memoryCount: count(`SELECT COUNT(*) as c FROM memories WHERE user_id = ?`, u.id),
       chatCount: count(`SELECT COUNT(*) as c FROM chats WHERE user_id = ?`, u.id),
-      appVersion: getLatestAppVersionForUser(u.id),
+      appVersion: u.app_version,
     };
   });
 }

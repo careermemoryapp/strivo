@@ -10,6 +10,7 @@ export type User = {
   subscription_status: string;
   trial_ends_at: string | null;
   dismissed_nudge_id: string | null;
+  app_version: string | null;
   created_at: string;
 };
 
@@ -125,6 +126,14 @@ export function deleteUser(id: string) {
 export function setDismissedNudge(id: string, nudgeId: string) {
   const db = getDb();
   db.prepare(`UPDATE users SET dismissed_nudge_id = ? WHERE id = ?`).run(nudgeId, id);
+}
+
+// Pinged once per native app open/resume (see useAppVersionPing.ts) so the
+// admin Users table can show which build every native user is actually
+// running, regardless of whether they've granted notification permission.
+export function setUserAppVersion(id: string, version: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET app_version = ? WHERE id = ?`).run(version, id);
 }
 
 // Manual override for the admin panel — lets the founder grant or revoke

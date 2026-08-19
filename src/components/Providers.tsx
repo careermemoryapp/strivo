@@ -4,6 +4,7 @@ import { ReactNode, useEffect } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import { isNativeApp } from "@/lib/nativePlatform";
 import { usePushRegistration } from "@/lib/usePushRegistration";
+import { useAppVersionPing } from "@/lib/useAppVersionPing";
 
 // Android doesn't destroy/reload the app's WebView when it's backgrounded
 // (home button, app switcher) — it just freezes whatever was on screen and
@@ -33,6 +34,7 @@ function useReloadOnNativeResume() {
 function PushRegistration() {
   const { status } = useSession();
   usePushRegistration(status === "authenticated");
+  useAppVersionPing(status === "authenticated");
   return null;
 }
 

@@ -511,7 +511,7 @@ export default function AdminDashboardPage() {
                                   {u.appVersion}
                                 </span>
                               ) : (
-                                <span className="text-[12px] text-ink-faint">No push token</span>
+                                <span className="text-[12px] text-ink-faint">Not seen yet</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-ink-soft whitespace-nowrap">

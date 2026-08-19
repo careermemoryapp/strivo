@@ -167,6 +167,16 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("dismissed_nudge_id")) {
     db.exec(`ALTER TABLE users ADD COLUMN dismissed_nudge_id TEXT;`);
   }
+  // The native app's versionName (e.g. "1.5.1"), pinged once per app
+  // open/resume regardless of whether they've granted notification
+  // permission (see useAppVersionPing.ts) — unlike push_tokens.app_version,
+  // this covers every native user, not just ones who opted into push, so
+  // it's the source of truth for the admin Users table's "App version"
+  // column. Null for web-only users and anyone who hasn't opened the app
+  // since this shipped.
+  if (!userColumns.includes("app_version")) {
+    db.exec(`ALTER TABLE users ADD COLUMN app_version TEXT;`);
+  }
 
   // English translation/paraphrase of the transcript, generated alongside
   // the rest of the AI metadata (see generateMemoryMetadata in lib/ai.ts)
