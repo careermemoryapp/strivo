@@ -53,6 +53,17 @@ body {
   background: var(--color-brand-primary-soft);
 }
 
+/* Marketing homepage (strivo.ai root) — bold black-editorial theme, the
+   only page in the app with a dark background. Pinned to a literal ID
+   selector with !important rather than relying purely on a Tailwind
+   utility/inline style, since those alone were mysteriously not painting
+   on some deployments even though the DOM/computed styles looked correct
+   in devtools — this is the most bulletproof way to guarantee the dark
+   background actually renders regardless of any other cascade quirk. */
+#marketing-root {
+  background-color: #0a0a0f !important;
+}
+
 .bg-gradient-brand {
   background-image: linear-gradient(135deg, var(--color-brand-secondary), var(--color-brand-primary));
 }

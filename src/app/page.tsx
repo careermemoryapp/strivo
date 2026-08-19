@@ -13,6 +13,13 @@ export const metadata = {
   description: APP_TAGLINE,
 };
 
+// Force this route to render fresh on every request instead of Next's
+// static Full Route Cache. That cache was observed serving
+// `Cache-Control: s-maxage=31536000` + `x-nextjs-cache: HIT` on this route,
+// which is a plausible source of stale content surviving redeploys — this
+// removes that layer entirely so there's nothing to invalidate on deploy.
+export const dynamic = "force-dynamic";
+
 export default function RootPage() {
   return (
     <MarketingHome

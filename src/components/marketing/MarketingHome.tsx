@@ -252,7 +252,7 @@ export function MarketingHome({
   annualListPriceLabel: string;
 }) {
   return (
-    <div className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
+    <div id="marketing-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
       {/* Nav */}
       <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5">
         <div className="flex items-center gap-2.5">
