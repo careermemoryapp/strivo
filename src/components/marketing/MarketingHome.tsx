@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { motion, useMotionValue, useSpring, type Variants } from "framer-motion";
 import { Check } from "lucide-react";
 import Link from "next/link";
+import { LogoMark } from "@/components/Logo";
 import { APP_NAME } from "@/lib/config";
 
 // The public marketing homepage at strivo.ai — the ONLY thing a browser
@@ -120,8 +121,8 @@ function PillButton({ className = "" }: { className?: string }) {
 function PhoneFrame({ children, width = 210 }: { children: React.ReactNode; width?: number }) {
   return (
     <div
-      className="overflow-hidden rounded-[32px] border-[7px] border-[#1c1c24] bg-[#0a0a0f]"
-      style={{ width, boxShadow: "0 30px 70px rgba(124,58,237,0.25)" }}
+      className="overflow-hidden rounded-[32px] border-[7px] border-[#1c1c24]"
+      style={{ width, background: "#0a0a0f", boxShadow: "0 30px 70px rgba(124,58,237,0.25)" }}
     >
       {children}
     </div>
@@ -251,10 +252,13 @@ export function MarketingHome({
   annualListPriceLabel: string;
 }) {
   return (
-    <div className="min-h-screen bg-[#0a0a0f] font-sans text-white">
+    <div className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
       {/* Nav */}
       <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5">
-        <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
+        <div className="flex items-center gap-2.5">
+          <LogoMark size={28} />
+          <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
+        </div>
         <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#888] hover:text-white">
           Get the app →
         </a>
