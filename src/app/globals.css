@@ -129,6 +129,19 @@ body {
   animation: splash-glow 2.2s ease-in-out infinite;
 }
 
+/* Marketing homepage hero/CTA background — the Aurora effect's blob sheet
+   slowly rotates and drifts so the light looks alive rather than static.
+   See Aurora() in MarketingHome.tsx. */
+@keyframes aurora-drift {
+  0% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
+  33% { transform: translate(4%, -3%) rotate(8deg) scale(1.05); }
+  66% { transform: translate(-3%, 4%) rotate(-6deg) scale(1.08); }
+  100% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
+}
+.animate-aurora-drift {
+  animation: aurora-drift 22s ease-in-out infinite;
+}
+
 /* Marketing homepage hero headline — a soft light sweep across the
    gradient text, looping slowly so it reads as premium/alive rather than
    distracting. See src/components/marketing/MarketingHome.tsx. */

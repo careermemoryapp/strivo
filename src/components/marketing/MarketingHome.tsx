@@ -41,6 +41,53 @@ function Grain({ opacity = 0.05 }: { opacity?: number }) {
   );
 }
 
+// "Aurora" background — several oversized, heavily-blurred color blobs that
+// slowly drift and shift hue, blended together so they read as one living
+// sheet of light rather than separate circles. This is the technique
+// behind most premium dark-mode AI product heroes (Aurora/Spotlight-style
+// components popularized by the Aceternity/Magic UI component ecosystem on
+// 21st.dev) — built here directly in CSS so it stays a single dependency
+// (Framer Motion) rather than pulling in a whole external UI kit.
+function Aurora() {
+  return (
+    <div className="pointer-events-none absolute inset-0 overflow-hidden">
+      <div className="animate-aurora-drift absolute -inset-[40%] opacity-70 mix-blend-screen" style={{
+        backgroundImage:
+          "radial-gradient(ellipse 40% 30% at 20% 30%, rgba(79,110,247,0.5), transparent 60%)," +
+          "radial-gradient(ellipse 35% 25% at 75% 20%, rgba(124,58,237,0.55), transparent 60%)," +
+          "radial-gradient(ellipse 45% 35% at 60% 70%, rgba(217,70,239,0.35), transparent 60%)," +
+          "radial-gradient(ellipse 30% 25% at 15% 75%, rgba(79,110,247,0.4), transparent 60%)",
+        filter: "blur(40px)",
+      }} />
+    </div>
+  );
+}
+
+// A soft radial highlight that follows the cursor across a dark section —
+// makes the surface feel responsive/alive rather than static. Position is
+// tracked via CSS custom properties so the browser can composite it purely
+// on the GPU (no React re-renders per mouse move).
+function Spotlight({ className = "" }: { className?: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  function handleMove(e: React.MouseEvent) {
+    const el = ref.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--spot-x", `${e.clientX - rect.left}px`);
+    el.style.setProperty("--spot-y", `${e.clientY - rect.top}px`);
+  }
+  return (
+    <div
+      ref={ref}
+      onMouseMove={handleMove}
+      className={`absolute inset-0 opacity-0 transition-opacity duration-500 hover:opacity-100 ${className}`}
+      style={{
+        background: "radial-gradient(600px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgba(255,255,255,0.08), transparent 70%)",
+      }}
+    />
+  );
+}
+
 // A button/card that visually "leans toward" the cursor as it approaches —
 // a small magnetic-pull effect. Spring-damped so it feels physical rather
 // than snapping. Resets to center on mouse leave.
@@ -223,18 +270,16 @@ export function MarketingHome({
         className="relative overflow-hidden px-6 pb-24 pt-20 text-center text-white"
         style={{ background: "linear-gradient(155deg, #120a2e 0%, #1c0f45 30%, #241068 55%, #171246 78%, #0a0f2e 100%)" }}
       >
+        <Spotlight />
+        <Aurora />
         <Grain opacity={0.04} />
         <motion.span
           style={{ y: orb1Y }}
-          className="pointer-events-none absolute -left-24 top-[10%] h-72 w-72 rounded-full bg-brand-secondary/40 blur-3xl animate-float-blob"
+          className="pointer-events-none absolute -left-24 top-[10%] h-72 w-72 rounded-full bg-brand-secondary/30 blur-3xl animate-float-blob"
         />
         <motion.span
           style={{ y: orb2Y }}
-          className="pointer-events-none absolute -right-20 top-[45%] h-80 w-80 rounded-full bg-brand-primary/45 blur-3xl animate-float-blob"
-        />
-        <span
-          className="pointer-events-none absolute left-[15%] bottom-[-10%] h-64 w-64 rounded-full bg-fuchsia-500/30 blur-3xl animate-float-blob"
-          style={{ animationDelay: "-6s" }}
+          className="pointer-events-none absolute -right-20 top-[45%] h-80 w-80 rounded-full bg-brand-primary/35 blur-3xl animate-float-blob"
         />
 
         <motion.div style={{ opacity: heroFade }} initial="hidden" animate="show" variants={stagger} className="relative mx-auto max-w-xl">
@@ -437,6 +482,7 @@ export function MarketingHome({
         className="relative overflow-hidden px-6 py-20 text-center text-white"
         style={{ background: "linear-gradient(155deg, #171246 0%, #241068 50%, #120a2e 100%)" }}
       >
+        <Spotlight />
         <Grain opacity={0.04} />
         <span className="pointer-events-none absolute left-1/2 top-[-20%] h-64 w-96 -translate-x-1/2 rounded-full bg-brand-primary/40 blur-3xl animate-float-blob" />
         <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.4 }} variants={stagger} className="relative mx-auto max-w-md">
