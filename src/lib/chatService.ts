@@ -12,11 +12,24 @@ export async function sendUserMessageAndGetReply(
 ): Promise<{ userMessage: Message; aiMessage: Message; retrieval: RetrievalResult; error?: string }> {
   const userMessage = createMessage({ chatId, userId, sender: "user", content, status: "sent" });
 
-  const retrieval = await retrieveRelevantMemories(userId, content);
-
   const priorMessages = listMessages(userId, chatId)
     .filter((m) => m.status !== "error")
     .slice(-HISTORY_LIMIT);
+
+  // Short follow-ups ("what did I do in that presentation?") lean on
+  // pronouns that only resolve using the recent conversation — searched on
+  // their own, they're too generic and can surface an unrelated but
+  // topically-similar older memory instead of the one actually being
+  // discussed (e.g. an old memory about a different presentation entirely).
+  // Folding in the last couple of turns gives retrieval the context it
+  // needs to disambiguate. The actual chat reply below still uses the real
+  // conversation history/content field, unaffected by this.
+  const retrievalQuery = priorMessages
+    .slice(-4)
+    .map((m) => m.content)
+    .join("\n");
+
+  const retrieval = await retrieveRelevantMemories(userId, retrievalQuery || content);
   const history: ChatMessage[] = priorMessages.map((m) => ({
     role: m.sender === "user" ? "user" : "assistant",
     content: m.content,
