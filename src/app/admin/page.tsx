@@ -88,14 +88,14 @@ export default function AdminDashboardPage() {
 
   async function handleSendNudge(e: React.FormEvent) {
     e.preventDefault();
-    if (!nudgeMessage.trim()) return;
+    if (!nudgeTitle.trim() || !nudgeMessage.trim()) return;
     setSendingNudge(true);
     setError(null);
     try {
       const res = await fetch("/api/admin/nudge", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: nudgeTitle.trim() || undefined, message: nudgeMessage.trim() }),
+        body: JSON.stringify({ title: nudgeTitle.trim(), message: nudgeMessage.trim() }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -234,7 +234,6 @@ export default function AdminDashboardPage() {
                       maxLength={60}
                       className="w-full rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
                     />
-                    <p className="mt-1 text-[10.5px] text-[#a29ab9]">Leave blank to just show &quot;Strivo&quot;.</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
@@ -251,7 +250,7 @@ export default function AdminDashboardPage() {
                   </div>
                   <button
                     type="submit"
-                    disabled={!nudgeMessage.trim() || sendingNudge}
+                    disabled={!nudgeTitle.trim() || !nudgeMessage.trim() || sendingNudge}
                     className="flex items-center gap-2 rounded-pill px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                     style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
                   >

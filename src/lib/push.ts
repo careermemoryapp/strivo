@@ -2,7 +2,6 @@ import type { App } from "firebase-admin/app";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import { deletePushTokens } from "@/lib/repo/pushTokens";
-import { APP_NAME } from "@/lib/config";
 
 // Lazily initialized so a deploy without FIREBASE_SERVICE_ACCOUNT_JSON set
 // yet (e.g. before the Firebase setup steps are finished) doesn't crash on
@@ -57,7 +56,12 @@ export async function sendPushToAllDevices(
     try {
       const res = await messaging.sendEachForMulticast({
         tokens: batch,
-        notification: { title: input.title || APP_NAME, body: input.body },
+        // No fallback title here — the admin nudge composer requires a
+        // Headline (see /api/admin/nudge), so falling back to the app name
+        // would just duplicate the "Strivo" line Android already shows
+        // automatically above every notification. If a future caller omits
+        // it, Android simply shows the body with no bold line.
+        notification: { title: input.title, body: input.body },
         // The small status-bar icon (res/drawable/ic_notification.xml) is
         // forced to a flat white silhouette by Android — this `color` is
         // what gives it its little brand-purple circle background instead
