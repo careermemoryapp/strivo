@@ -1,97 +1,43 @@
 "use client";
 
 import { useRef } from "react";
-import {
-  motion,
-  useMotionValue,
-  useSpring,
-  useScroll,
-  useTransform,
-  type Variants,
-} from "framer-motion";
-import {
-  Mic,
-  Brain,
-  MessageCircle,
-  Bell,
-  Lightbulb,
-  BookOpen,
-  Briefcase,
-  HeartHandshake,
-  Check,
-  Smartphone,
-  ArrowRight,
-} from "lucide-react";
+import { motion, useMotionValue, useSpring, type Variants } from "framer-motion";
+import { Check } from "lucide-react";
 import Link from "next/link";
-import { LogoMark } from "@/components/Logo";
-import { APP_NAME, APP_TAGLINE } from "@/lib/config";
+import { APP_NAME } from "@/lib/config";
 
-// Subtle film-grain texture (SVG turbulence), used at very low opacity over
-// dark sections so they don't read as flat digital gradients. Purely
-// decorative — aria-hidden, no layout impact.
-function Grain({ opacity = 0.05 }: { opacity?: number }) {
-  return (
-    <svg className="pointer-events-none absolute inset-0 h-full w-full" style={{ opacity }} aria-hidden>
-      <filter id="grain-filter">
-        <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch" />
-        <feColorMatrix type="saturate" values="0" />
-      </filter>
-      <rect width="100%" height="100%" filter="url(#grain-filter)" />
-    </svg>
-  );
-}
+// The public marketing homepage at strivo.ai — the ONLY thing a browser
+// visitor ever sees. The real app (voice recording, chat, memories) lives
+// behind the native Android app now; this page's only job is to sell that
+// download. See src/app/app/page.tsx for where the app itself now lives,
+// and capacitor.config.ts for how the native shell skips this page
+// entirely and opens straight to /app.
+//
+// Design direction: bold black-background editorial layout (large stacked
+// headlines, generous whitespace, a white pill CTA) rather than a colorful
+// gradient SaaS template — chosen directly from mockup options shown to
+// the founder. The three phone mockups below are hand-built recreations of
+// the ACTUAL app screens (Home, Record, Chat — see src/app/(app)/home,
+// /record, and the chat UI) rather than abstract placeholders, so visitors
+// get a feel for the real product before downloading. Copy is grounded in
+// Strivo's real QUICK_ACTIONS (lib/config.ts) — this is a career-memory
+// coach (interview prep, resumes, performance reviews, leadership
+// examples), not a generic journaling app.
+const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ai.strivo.app";
 
-// "Aurora" background — several oversized, heavily-blurred color blobs that
-// slowly drift and shift hue, blended together so they read as one living
-// sheet of light rather than separate circles. This is the technique
-// behind most premium dark-mode AI product heroes (Aurora/Spotlight-style
-// components popularized by the Aceternity/Magic UI component ecosystem on
-// 21st.dev) — built here directly in CSS so it stays a single dependency
-// (Framer Motion) rather than pulling in a whole external UI kit.
-function Aurora() {
-  return (
-    <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="animate-aurora-drift absolute -inset-[40%] opacity-95 mix-blend-screen" style={{
-        backgroundImage:
-          "radial-gradient(ellipse 40% 30% at 20% 30%, rgba(79,110,247,0.9), transparent 60%)," +
-          "radial-gradient(ellipse 35% 25% at 75% 20%, rgba(124,58,237,0.95), transparent 60%)," +
-          "radial-gradient(ellipse 45% 35% at 60% 70%, rgba(217,70,239,0.7), transparent 60%)," +
-          "radial-gradient(ellipse 30% 25% at 15% 75%, rgba(79,110,247,0.75), transparent 60%)",
-        filter: "blur(50px)",
-      }} />
-    </div>
-  );
-}
+const fadeUp: Variants = {
+  hidden: { opacity: 0, y: 24 },
+  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
+};
 
-// A soft radial highlight that follows the cursor across a dark section —
-// makes the surface feel responsive/alive rather than static. Position is
-// tracked via CSS custom properties so the browser can composite it purely
-// on the GPU (no React re-renders per mouse move).
-function Spotlight({ className = "" }: { className?: string }) {
-  const ref = useRef<HTMLDivElement>(null);
-  function handleMove(e: React.MouseEvent) {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    el.style.setProperty("--spot-x", `${e.clientX - rect.left}px`);
-    el.style.setProperty("--spot-y", `${e.clientY - rect.top}px`);
-  }
-  return (
-    <div
-      ref={ref}
-      onMouseMove={handleMove}
-      className={`absolute inset-0 opacity-60 transition-opacity duration-500 hover:opacity-100 ${className}`}
-      style={{
-        background: "radial-gradient(600px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgba(255,255,255,0.08), transparent 70%)",
-      }}
-    />
-  );
-}
+const stagger: Variants = {
+  hidden: {},
+  show: { transition: { staggerChildren: 0.12 } },
+};
 
-// A button/card that visually "leans toward" the cursor as it approaches —
-// a small magnetic-pull effect. Spring-damped so it feels physical rather
-// than snapping. Resets to center on mouse leave.
-function Magnetic({ children, strength = 0.3 }: { children: React.ReactNode; strength?: number }) {
+// A button that visually "leans toward" the cursor as it approaches — a
+// small magnetic-pull effect, spring-damped so it feels physical.
+function Magnetic({ children, strength = 0.25 }: { children: React.ReactNode; strength?: number }) {
   const ref = useRef<HTMLDivElement>(null);
   const x = useMotionValue(0);
   const y = useMotionValue(0);
@@ -111,22 +57,15 @@ function Magnetic({ children, strength = 0.3 }: { children: React.ReactNode; str
   }
 
   return (
-    <motion.div
-      ref={ref}
-      onMouseMove={handleMove}
-      onMouseLeave={handleLeave}
-      style={{ x: springX, y: springY }}
-      className="inline-block"
-    >
+    <motion.div ref={ref} onMouseMove={handleMove} onMouseLeave={handleLeave} style={{ x: springX, y: springY }} className="inline-block">
       {children}
     </motion.div>
   );
 }
 
-// 3D card tilt that tracks the cursor position (not just a fixed hover
-// angle) — the card leans away from wherever the pointer actually is,
-// spring-damped back to flat on leave. This is what gives the value-prop
-// and pricing cards their "premium, physical" feel.
+// 3D tilt that tracks the cursor position, spring-damped back to flat on
+// leave — used on the use-case and pricing cards for a "premium, physical"
+// feel without a fixed hover angle.
 function TiltCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const rotateX = useMotionValue(0);
@@ -140,8 +79,8 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
     const rect = el.getBoundingClientRect();
     const px = (e.clientX - rect.left) / rect.width - 0.5;
     const py = (e.clientY - rect.top) / rect.height - 0.5;
-    rotateY.set(px * 14);
-    rotateX.set(py * -14);
+    rotateY.set(px * 10);
+    rotateX.set(py * -10);
   }
   function handleLeave() {
     rotateX.set(0);
@@ -161,108 +100,143 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
   );
 }
 
-// The public marketing homepage at strivo.ai — the ONLY thing a browser
-// visitor ever sees. The real app (voice recording, chat, memories) lives
-// behind the native Android app now; this page's only job is to sell that
-// download. See src/app/app/page.tsx for where the app itself now lives,
-// and capacitor.config.ts for how the native shell skips this page
-// entirely and opens straight to /app.
-const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ai.strivo.app";
-
-const fadeUp: Variants = {
-  hidden: { opacity: 0, y: 24 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
-};
-
-const stagger: Variants = {
-  hidden: {},
-  show: { transition: { staggerChildren: 0.12 } },
-};
-
-function DownloadButton({ className = "", big = false }: { className?: string; big?: boolean }) {
+function PillButton({ className = "" }: { className?: string }) {
   return (
-    <Magnetic strength={0.25}>
+    <Magnetic>
       <a
         href={PLAY_STORE_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className={`group relative inline-flex items-center gap-2.5 rounded-2xl bg-gradient-brand text-white font-semibold shadow-[0_8px_30px_rgba(124,58,237,0.35)] transition-shadow hover:shadow-[0_12px_40px_rgba(124,58,237,0.5)] active:scale-[0.98] ${
-          big ? "px-8 py-4 text-base" : "px-6 py-3.5 text-sm"
-        } ${className}`}
+        className={`inline-block rounded-full bg-white px-9 py-4 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] ${className}`}
       >
-        <span className="absolute inset-0 rounded-2xl animate-pulse-ring" aria-hidden />
-        <Smartphone size={big ? 20 : 18} />
-        Get {APP_NAME} on Google Play
-        <ArrowRight size={big ? 18 : 16} className="transition-transform group-hover:translate-x-1" />
+        Get the app →
       </a>
     </Magnetic>
   );
 }
 
-// A tiny looping "product demo" inside the hero — waveform bars pulse as
-// if listening, then a chat bubble fades in with the AI's reply. This
-// replaces a static mockup with something that actually shows what the
-// app does in five seconds, which sells the product far better than an
-// abstract phone silhouette.
-function VoiceDemo() {
-  const bars = [10, 22, 14, 28, 18, 24, 12, 20];
+// --- Phone mockups — faithful recreations of the real app screens -------
+
+function PhoneFrame({ children, width = 210 }: { children: React.ReactNode; width?: number }) {
   return (
-    <div className="relative mx-auto mt-16 w-72 rounded-3xl border border-white/15 bg-white/[0.06] p-5 text-left backdrop-blur-md">
-      <div className="mb-4 flex items-center gap-2">
-        <span className="h-2 w-2 rounded-full bg-brand-secondary animate-pulse" />
-        <span className="text-[11px] font-medium uppercase tracking-wide text-white/50">Listening</span>
-      </div>
-      <div className="flex h-14 items-end gap-1.5">
-        {bars.map((h, i) => (
-          <span
-            key={i}
-            className="w-2 rounded-full bg-gradient-brand"
-            style={{
-              height: `${h}px`,
-              animation: `bar-pulse 0.9s ease-in-out infinite alternate`,
-              animationDelay: `${i * 0.09}s`,
-            }}
-          />
-        ))}
-      </div>
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.4, duration: 0.5, repeat: Infinity, repeatDelay: 3.5, repeatType: "reverse" }}
-        className="mt-4 rounded-2xl rounded-bl-sm bg-white/10 px-3.5 py-2.5 text-xs text-white/90"
-      >
-        Got it — saved. I&apos;ll remember that for you.
-      </motion.div>
+    <div
+      className="overflow-hidden rounded-[32px] border-[7px] border-[#1c1c24] bg-[#0a0a0f]"
+      style={{ width, boxShadow: "0 30px 70px rgba(124,58,237,0.25)" }}
+    >
+      {children}
     </div>
   );
 }
 
+function HomeScreenMock() {
+  const actions = [
+    { title: "Prepare for an interview", icon: "◎" },
+    { title: "Update my resume", icon: "▤" },
+    { title: "Find leadership examples", icon: "◆" },
+  ];
+  return (
+    <PhoneFrame>
+      <div className="px-3.5 pb-5 pt-4" style={{ background: "linear-gradient(160deg,#1c1435,#2a1550,#150c2e)" }}>
+        <p className="text-[10px] text-[#c9bdf0]">Good evening</p>
+        <p className="mt-0.5 text-sm font-bold text-white">Shikhar</p>
+        <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-[#1c1830] px-3 py-2.5">
+          <span className="text-[9px] text-[#c9bdf0]">✦</span>
+          <span className="text-[10px] text-white/40">Ask anything — career advice…</span>
+        </div>
+      </div>
+      <div className="bg-white px-3 py-3.5">
+        <div className="rounded-[13px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-3 text-center">
+          <div className="mx-auto mb-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs text-[#8b5cf6]" style={{ boxShadow: "0 4px 10px rgba(139,92,246,0.2)" }}>●</div>
+          <p className="text-[10px] font-bold text-[#3c3650]">What&apos;s on your mind today?</p>
+          <div className="mt-1.5 inline-block rounded-full px-3 py-1.5 text-[9px] font-bold text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
+            Start recording
+          </div>
+        </div>
+        <p className="mb-1 mt-3 text-[8px] font-bold tracking-wide text-[#a8a2bd]">OR ACCOMPLISH TODAY</p>
+        {actions.map((a, i) => (
+          <div key={a.title} className={`flex items-center gap-2 py-2 ${i === 0 ? "border-t border-[#f0ecf7]" : "border-t border-[#f0ecf7]"} ${i === actions.length - 1 ? "border-b" : ""}`}>
+            <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-[#f2effa] text-[10px] text-[#8b5cf6]">{a.icon}</div>
+            <p className="text-[9.5px] font-semibold text-[#3c3650]">{a.title}</p>
+          </div>
+        ))}
+      </div>
+    </PhoneFrame>
+  );
+}
+
+function RecordScreenMock() {
+  const bars = [7, 15, 9, 17, 8, 13, 10];
+  return (
+    <PhoneFrame width={170}>
+      <div className="px-3 py-6 text-center" style={{ background: "linear-gradient(160deg,#1c1435,#150c2e)" }}>
+        <div className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-full bg-white text-base text-[#8b5cf6]" style={{ boxShadow: "0 0 0 6px rgba(139,92,246,0.25)" }}>●</div>
+        <div className="flex h-[18px] items-end justify-center gap-[2px]">
+          {bars.map((h, i) => (
+            <span
+              key={i}
+              className={`w-[2px] rounded-full ${i % 2 === 0 ? "bg-[#c9bdf0]" : "bg-[#8b5cf6]"}`}
+              style={{ height: h, animation: `bar-pulse 0.9s ease-in-out ${i * 0.08}s infinite alternate` }}
+            />
+          ))}
+        </div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+function CreateMemoryScreenMock() {
+  return (
+    <PhoneFrame width={170}>
+      <div className="px-3 py-4 text-left">
+        <p className="mb-1.5 text-[8px] font-bold uppercase tracking-wide text-[#a8a2bd]">Transcript</p>
+        <p className="mb-3 text-[9px] leading-relaxed text-[#3c3650]">
+          &quot;...led the launch when two teammates were out, shipped on time...&quot;
+        </p>
+        <div className="inline-block rounded-full px-4 py-1.5 text-[9.5px] font-bold text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
+          Create Memory
+        </div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+function ChatScreenMock() {
+  return (
+    <PhoneFrame width={170}>
+      <div className="px-2.5 py-3.5">
+        <div className="rounded-xl rounded-bl-sm bg-[#f2effa] p-2.5 text-[9px] leading-relaxed text-[#3c3650]">
+          A time I showed leadership?
+        </div>
+        <div className="mt-1.5 rounded-xl rounded-br-sm p-2.5 text-[9px] leading-relaxed text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
+          In March you led the launch solo.
+        </div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
+// --- Content, grounded in the real product -------------------------------
+
 const VALUE_PROPS = [
-  { icon: Mic, title: "Just speak", body: "No typing. Capture a thought, a memory, or an idea in seconds." },
-  { icon: Brain, title: "It remembers", body: "Every memory organized, tagged, and instantly searchable." },
-  { icon: MessageCircle, title: "Ask anything", body: "Chat with an AI that actually knows your history." },
-  { icon: Bell, title: "Gentle nudges", body: "Quiet reminders to check in with yourself, on your schedule." },
+  { n: "01", title: "Just speak", body: "No typing. Talk through a meeting, a win, or a tough moment right after it happens, and Strivo turns it into a saved memory automatically." },
+  { n: "02", title: "It organizes everything", body: "Every memory is tagged — Work, Achievement, Leadership, Review — and instantly searchable, so nothing gets buried in old notes." },
+  { n: "03", title: "It finds the right story", body: "Ask for a leadership example or a resume-ready win, and Strivo pulls from your real history instead of you staring at a blank page." },
+  { n: "04", title: "Gentle nudges", body: "A quiet reminder to log a win before you forget it — so your memory bank keeps growing without extra effort." },
 ];
 
+// Mirrors the real QUICK_ACTIONS in lib/config.ts (minus "Others").
 const USE_CASES = [
-  { icon: Lightbulb, title: "Capture ideas on the go" },
-  { icon: BookOpen, title: "Journal your day by voice" },
-  { icon: Briefcase, title: "Prep for interviews" },
-  { icon: HeartHandshake, title: "Remember what people tell you" },
-];
-
-const STEPS = [
-  { n: 1, title: "Open Strivo" },
-  { n: 2, title: "Tap record, speak" },
-  { n: 3, title: "Strivo organizes it" },
-  { n: 4, title: "Ask, anytime" },
+  { title: "Prepare for an interview", body: "Find the right stories and examples" },
+  { title: "Update my resume", body: "Create strong bullet points and impact" },
+  { title: "Prepare for performance review", body: "Highlight your achievements and growth" },
+  { title: "Find leadership examples", body: "Discover moments that show your leadership", highlight: true },
 ];
 
 const TESTIMONIALS = [
-  { initials: "RS", name: "Riya S.", quote: "I talk to Strivo like a journal, and it actually recalls things I told it weeks ago." },
-  { initials: "AK", name: "Arjun K.", quote: "Faster than writing anything down. It just gets what I mean." },
-  { initials: "MP", name: "Meera P.", quote: "Used it to prep for an interview by recalling my own past answers. Wild." },
-  { initials: "DG", name: "Dev G.", quote: "My dad uses it daily now. Simplest app on his phone by far." },
+  { name: "Riya S.", quote: "I talk to Strivo like a journal, and it actually recalls things I told it weeks ago." },
+  { name: "Arjun K.", quote: "Faster than writing anything down. It just gets what I mean." },
+  { name: "Meera P.", quote: "Used it to prep for an interview by recalling my own past answers. Wild." },
+  { name: "Dev G.", quote: "My dad uses it daily now. Simplest app on his phone by far." },
 ];
 
 export function MarketingHome({
@@ -276,229 +250,167 @@ export function MarketingHome({
   annualPriceLabel: string;
   annualListPriceLabel: string;
 }) {
-  const heroRef = useRef<HTMLElement>(null);
-  const { scrollYProgress: heroProgress } = useScroll({ target: heroRef, offset: ["start start", "end start"] });
-  const orb1Y = useTransform(heroProgress, [0, 1], [0, -60]);
-  const orb2Y = useTransform(heroProgress, [0, 1], [0, 80]);
-  const phoneY = useTransform(heroProgress, [0, 1], [0, 120]);
-  const heroFade = useTransform(heroProgress, [0, 0.8], [1, 0]);
-
   return (
-    <div className="min-h-screen bg-bg text-ink overflow-x-hidden">
+    <div className="min-h-screen bg-[#0a0a0f] font-sans text-white">
       {/* Nav */}
-      <header className="sticky top-0 z-30 border-b border-border/70 bg-bg/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-          <div className="flex items-center gap-2.5">
-            <LogoMark size={28} />
-            <span className="font-extrabold tracking-tight">{APP_NAME}</span>
-          </div>
-          <a
-            href={PLAY_STORE_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-full bg-ink px-4 py-2 text-xs font-semibold text-white transition-transform hover:-translate-y-0.5"
-          >
-            Get the app
-          </a>
-        </div>
+      <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5">
+        <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
+        <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#888] hover:text-white">
+          Get the app →
+        </a>
       </header>
 
       {/* Hero */}
-      <section
-        ref={heroRef}
-        className="relative overflow-hidden px-6 pb-24 pt-20 text-center text-white"
-        style={{ background: "linear-gradient(155deg, #120a2e 0%, #1c0f45 30%, #241068 55%, #171246 78%, #0a0f2e 100%)" }}
-      >
-        <Spotlight />
-        <Aurora />
-        <Grain opacity={0.04} />
-        <motion.span
-          style={{ y: orb1Y }}
-          className="pointer-events-none absolute -left-24 top-[10%] h-72 w-72 rounded-full bg-brand-secondary/30 blur-3xl animate-float-blob"
-        />
-        <motion.span
-          style={{ y: orb2Y }}
-          className="pointer-events-none absolute -right-20 top-[45%] h-80 w-80 rounded-full bg-brand-primary/35 blur-3xl animate-float-blob"
-        />
-
-        <motion.div style={{ opacity: heroFade }} initial="hidden" animate="show" variants={stagger} className="relative mx-auto max-w-xl">
-          <motion.div
-            variants={fadeUp}
-            className="mx-auto mb-6 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-4 py-1.5 text-xs font-medium text-white/80"
-          >
-            Now on Google Play
-          </motion.div>
-          <motion.h1 variants={fadeUp} className="text-5xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
-            Speak it once.{" "}
+      <section className="px-8 pb-16 pt-16 text-center sm:pt-24">
+        <motion.div initial="hidden" animate="show" variants={stagger}>
+          <motion.p variants={fadeUp} className="mb-5 text-xs font-semibold tracking-[0.2em] text-brand-primary">
+            YOUR AI CAREER MEMORY
+          </motion.p>
+          <motion.h1 variants={fadeUp} className="mx-auto text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
+            Never forget the story
+            <br />
             <span
-              className="animate-shimmer-text bg-clip-text text-transparent"
-              style={{
-                backgroundImage: "linear-gradient(110deg, #8ea6ff 20%, #f0abfc 40%, #c4b5fd 60%, #8ea6ff 80%)",
-                backgroundSize: "200% auto",
-              }}
+              className="bg-clip-text text-transparent"
+              style={{ backgroundImage: "linear-gradient(90deg,#4f6ef7,#d946ef)" }}
             >
-              {APP_NAME} never forgets.
+              that gets you the offer.
             </span>
           </motion.h1>
-          <motion.p variants={fadeUp} className="mx-auto mt-6 max-w-md text-lg text-white/70">
-            {APP_TAGLINE}
+          <motion.p variants={fadeUp} className="mx-auto mt-6 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:text-lg">
+            Speak it once. Strivo captures it, organizes it, and hands it back exactly when an interview, resume, or review needs it.
           </motion.p>
-          <motion.div variants={fadeUp} className="mt-10 flex flex-col items-center gap-3">
-            <DownloadButton big />
-            <span className="text-xs text-white/50">Free for 2 months · no card needed · cancel anytime</span>
+          <motion.div variants={fadeUp} className="mt-8">
+            <PillButton />
           </motion.div>
+          <motion.p variants={fadeUp} className="mt-3 text-xs text-[#5a5a66]">
+            Free for {trialMonths} months · no card needed
+          </motion.p>
         </motion.div>
 
-        {/* Live product demo */}
-        <motion.div style={{ y: phoneY }} initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.8, delay: 0.4, ease: [0.16, 1, 0.3, 1] }} className="relative">
-          <VoiceDemo />
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, amount: 0.3 }}
+          transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
+          className="mt-12 flex flex-col items-center"
+        >
+          <HomeScreenMock />
+          <p className="mt-3 text-xs text-[#5a5a66]">The actual Strivo home screen</p>
         </motion.div>
       </section>
 
       {/* Value props */}
-      <section className="mx-auto max-w-5xl px-6 py-24">
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="mx-auto mb-14 max-w-lg text-center">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-primary">What {APP_NAME} offers</p>
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">One app, every memory, one conversation away</h2>
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12">
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
+          WHAT STRIVO OFFERS
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-2 mt-2 max-w-md text-2xl font-bold tracking-tight">
+          Four things, working together every day
+        </motion.h2>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="mt-8">
+          {VALUE_PROPS.map((v, i) => (
+            <motion.div key={v.n} variants={fadeUp} className={`flex gap-5 border-t border-[#1e1e26] py-6 ${i === VALUE_PROPS.length - 1 ? "border-b" : ""}`}>
+              <span className="w-6 shrink-0 pt-0.5 text-xs text-[#5a5a66]">{v.n}</span>
+              <div>
+                <p className="text-lg font-bold text-white">{v.title}</p>
+                <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-[#8a8a99]">{v.body}</p>
+              </div>
+            </motion.div>
+          ))}
         </motion.div>
-        <motion.div
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.2 }}
-          variants={stagger}
-          className="grid grid-cols-2 gap-4 sm:grid-cols-4"
-        >
-          {VALUE_PROPS.map((v) => (
-            <motion.div key={v.title} variants={fadeUp}>
-              <TiltCard className="rounded-2xl border border-border bg-surface p-5 shadow-card transition-shadow hover:shadow-lg">
-                <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-xl bg-brand-primary-soft">
-                  <v.icon size={19} className="text-brand-primary" />
-                </div>
-                <p className="text-sm font-semibold">{v.title}</p>
-                <p className="mt-1.5 text-xs leading-relaxed text-ink-soft">{v.body}</p>
+      </section>
+
+      {/* How it works — three real screens */}
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "linear-gradient(135deg,#12081f,#0a0a0f)" }}>
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-center text-xs font-semibold tracking-[0.15em] text-brand-primary">
+          HOW IT WORKS
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-10 mt-2 text-center text-2xl font-bold tracking-tight">
+          Three steps, start to finish
+        </motion.h2>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.15 }} variants={stagger} className="flex flex-wrap justify-center gap-8">
+          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 170 }}>
+            <RecordScreenMock />
+            <p className="mt-3.5 text-sm font-bold">1. Record</p>
+            <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Tap the mic, speak freely for up to 5 minutes.</p>
+          </motion.div>
+          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 170 }}>
+            <CreateMemoryScreenMock />
+            <p className="mt-3.5 text-sm font-bold">2. Create memory</p>
+            <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Strivo transcribes and tags it automatically.</p>
+          </motion.div>
+          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 170 }}>
+            <ChatScreenMock />
+            <p className="mt-3.5 text-sm font-bold">3. Chat</p>
+            <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Ask for it back — anytime, in your own words.</p>
+          </motion.div>
+        </motion.div>
+      </section>
+
+      {/* Use cases */}
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12">
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
+          BUILT FOR MOMENTS LIKE THESE
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 mt-2 max-w-md text-2xl font-bold tracking-tight">
+          The exact use cases Strivo is designed around
+        </motion.h2>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          {USE_CASES.map((u) => (
+            <motion.div key={u.title} variants={fadeUp}>
+              <TiltCard
+                className={`rounded-2xl p-5 ${u.highlight ? "bg-gradient-brand" : "border border-[#2a2a35]"}`}
+              >
+                <p className="text-base font-bold text-white">{u.title}</p>
+                <p className={`mt-1.5 text-sm leading-relaxed ${u.highlight ? "text-white/85" : "text-[#8a8a99]"}`}>{u.body}</p>
               </TiltCard>
             </motion.div>
           ))}
         </motion.div>
       </section>
 
-      {/* Use cases */}
-      <section className="px-6 py-20" style={{ background: "linear-gradient(180deg, transparent, var(--color-brand-primary-soft) 40%, transparent)" }}>
-        <div className="mx-auto max-w-5xl">
-          <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="mx-auto mb-14 max-w-lg text-center">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-secondary">Top use cases</p>
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Built around how you already think</h2>
-          </motion.div>
-          <motion.div
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.2 }}
-            variants={stagger}
-            className="grid grid-cols-2 gap-4 sm:grid-cols-4"
-          >
-            {USE_CASES.map((u) => (
-              <motion.div
-                key={u.title}
-                variants={fadeUp}
-                whileHover={{ y: -4 }}
-                className="rounded-2xl bg-surface p-5 shadow-card"
-              >
-                <u.icon size={20} className="text-brand-primary" />
-                <p className="mt-3 text-sm font-semibold leading-snug">{u.title}</p>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
-      {/* How it works — flowchart */}
-      <section className="mx-auto max-w-3xl px-6 py-24">
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="mx-auto mb-16 max-w-lg text-center">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-primary">How it works</p>
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Four steps, no learning curve</h2>
-        </motion.div>
-        <motion.div
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.3 }}
-          variants={stagger}
-          className="relative flex items-start justify-between"
-        >
-          <div
-            className="absolute left-[12%] right-[12%] top-[19px] h-0.5"
-            style={{ backgroundImage: "repeating-linear-gradient(90deg, var(--color-brand-primary-soft) 0 8px, transparent 8px 16px)" }}
-          />
-          {STEPS.map((s) => (
-            <motion.div key={s.n} variants={fadeUp} className="relative flex-1 px-1 text-center">
-              <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-gradient-brand text-sm font-bold text-white ring-8 ring-bg">
-                {s.n}
-              </div>
-              <p className="text-xs font-semibold sm:text-sm">{s.title}</p>
+      {/* Testimonials */}
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12">
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.15em] text-brand-primary">
+          LOVED BY EARLY USERS
+        </motion.p>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {TESTIMONIALS.map((t) => (
+            <motion.div key={t.name} variants={fadeUp} className="rounded-2xl border border-[#2a2a35] p-5">
+              <p className="text-sm leading-relaxed text-white">&ldquo;{t.quote}&rdquo;</p>
+              <p className="mt-3 text-xs text-[#8a8a99]">— {t.name}</p>
             </motion.div>
           ))}
         </motion.div>
       </section>
 
-      {/* Testimonials */}
-      <section className="px-6 py-20" style={{ background: "linear-gradient(180deg, transparent, var(--color-brand-secondary-soft) 40%, transparent)" }}>
-        <div className="mx-auto max-w-5xl">
-          <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="mx-auto mb-14 max-w-lg text-center">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-secondary">What people say</p>
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Loved by early users</h2>
-          </motion.div>
-          <motion.div
-            initial="hidden"
-            whileInView="show"
-            viewport={{ once: true, amount: 0.15 }}
-            variants={stagger}
-            className="grid grid-cols-1 gap-4 sm:grid-cols-2"
-          >
-            {TESTIMONIALS.map((t) => (
-              <motion.div key={t.name} variants={fadeUp} className="rounded-2xl bg-surface p-5 shadow-card">
-                <p className="text-sm leading-relaxed text-ink">&ldquo;{t.quote}&rdquo;</p>
-                <div className="mt-4 flex items-center gap-2.5">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-brand text-[11px] font-semibold text-white">
-                    {t.initials}
-                  </div>
-                  <span className="text-xs font-medium text-ink-soft">{t.name}</span>
-                </div>
-              </motion.div>
-            ))}
-          </motion.div>
-        </div>
-      </section>
-
       {/* Pricing */}
-      <section className="mx-auto max-w-3xl px-6 py-24 text-center">
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="mx-auto mb-14 max-w-lg">
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-brand-primary">Simple pricing</p>
-          <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">Free for {trialMonths} months, then</h2>
-        </motion.div>
-        <motion.div
-          initial="hidden"
-          whileInView="show"
-          viewport={{ once: true, amount: 0.2 }}
-          variants={stagger}
-          className="flex flex-col items-center justify-center gap-4 sm:flex-row"
-        >
-          <motion.div variants={fadeUp} className="w-full max-w-[200px]">
-            <TiltCard className="rounded-2xl border border-border bg-surface p-6 text-left shadow-card">
-              <p className="text-xs text-ink-soft">Monthly</p>
-              <p className="mt-1 text-2xl font-extrabold">{monthlyPriceLabel}</p>
-              <ul className="mt-4 space-y-1.5 text-xs text-ink-soft">
-                <li className="flex items-center gap-1.5"><Check size={13} className="text-success" />Unlimited memories</li>
-                <li className="flex items-center gap-1.5"><Check size={13} className="text-success" />AI chat</li>
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12">
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
+          SIMPLE PRICING
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 mt-2 text-2xl font-bold tracking-tight">
+          Free for {trialMonths} months, then
+        </motion.h2>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} variants={stagger} className="flex flex-wrap gap-4">
+          <motion.div variants={fadeUp} className="min-w-[180px] flex-1">
+            <TiltCard className="rounded-[18px] border border-[#2a2a35] p-6 text-left">
+              <p className="text-xs text-[#8a8a99]">Monthly</p>
+              <p className="mt-1.5 text-3xl font-extrabold">{monthlyPriceLabel}</p>
+              <ul className="mt-3.5 space-y-1.5 text-xs text-[#8a8a99]">
+                <li className="flex items-center gap-1.5"><Check size={13} />Unlimited memories</li>
+                <li className="flex items-center gap-1.5"><Check size={13} />AI chat</li>
               </ul>
             </TiltCard>
           </motion.div>
-          <motion.div variants={fadeUp} className="w-full max-w-[200px]">
-            <TiltCard className="rounded-2xl border-2 border-brand-primary bg-gradient-brand p-6 text-left text-white shadow-[0_12px_30px_rgba(124,58,237,0.3)]">
-              <p className="text-xs text-white/80">Annual · save 50%</p>
-              <p className="mt-1 text-2xl font-extrabold">
+          <motion.div variants={fadeUp} className="min-w-[180px] flex-1">
+            <TiltCard className="rounded-[18px] bg-white p-6 text-left text-[#0a0a0f]">
+              <p className="text-xs text-[#666]">Annual · save 50%</p>
+              <p className="mt-1.5 text-3xl font-extrabold">
                 {annualPriceLabel}
-                <span className="ml-1.5 text-xs font-normal text-white/60 line-through">{annualListPriceLabel}</span>
+                <span className="ml-1.5 text-xs font-normal text-[#999] line-through">{annualListPriceLabel}</span>
               </p>
-              <ul className="mt-4 space-y-1.5 text-xs text-white/85">
+              <ul className="mt-3.5 space-y-1.5 text-xs text-[#555]">
                 <li className="flex items-center gap-1.5"><Check size={13} />Unlimited memories</li>
                 <li className="flex items-center gap-1.5"><Check size={13} />AI chat</li>
                 <li className="flex items-center gap-1.5"><Check size={13} />Priority support</li>
@@ -509,35 +421,29 @@ export function MarketingHome({
       </section>
 
       {/* Closing CTA */}
-      <section
-        className="relative overflow-hidden px-6 py-20 text-center text-white"
-        style={{ background: "linear-gradient(155deg, #171246 0%, #241068 50%, #120a2e 100%)" }}
-      >
-        <Spotlight />
-        <Grain opacity={0.04} />
-        <span className="pointer-events-none absolute left-1/2 top-[-20%] h-64 w-96 -translate-x-1/2 rounded-full bg-brand-primary/40 blur-3xl animate-float-blob" />
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.4 }} variants={stagger} className="relative mx-auto max-w-md">
-          <motion.h2 variants={fadeUp} className="text-2xl font-bold tracking-tight sm:text-3xl">
-            Ready to remember everything?
+      <section className="border-t border-[#1e1e26] px-8 py-20 text-center">
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.4 }} variants={stagger}>
+          <motion.h2 variants={fadeUp} className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
+            Ready to remember
+            <br />
+            everything that matters?
           </motion.h2>
-          <motion.p variants={fadeUp} className="mt-3 text-sm text-white/70">
+          <motion.p variants={fadeUp} className="mt-3 text-sm text-[#8a8a99]">
             Free for {trialMonths} months. No card needed to start.
           </motion.p>
-          <motion.div variants={fadeUp} className="mt-8 flex justify-center">
-            <DownloadButton big />
+          <motion.div variants={fadeUp} className="mt-8">
+            <PillButton />
           </motion.div>
         </motion.div>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border px-6 py-6">
-        <div className="mx-auto flex max-w-5xl flex-col items-center justify-between gap-3 text-xs text-ink-faint sm:flex-row">
-          <span>© {new Date().getFullYear()} {APP_NAME}</span>
-          <div className="flex gap-5">
-            <Link href="/privacy" className="hover:text-ink-soft">Privacy</Link>
-            <Link href="/terms" className="hover:text-ink-soft">Terms</Link>
-            <a href="mailto:hello@strivo.ai" className="hover:text-ink-soft">Contact</a>
-          </div>
+      <footer className="flex flex-col items-center justify-between gap-3 border-t border-[#1e1e26] px-8 py-6 text-xs text-[#5a5a66] sm:flex-row">
+        <span>© {new Date().getFullYear()} {APP_NAME}</span>
+        <div className="flex gap-5">
+          <Link href="/privacy" className="hover:text-white">Privacy</Link>
+          <Link href="/terms" className="hover:text-white">Terms</Link>
+          <a href="mailto:hello@strivo.ai" className="hover:text-white">Contact</a>
         </div>
       </footer>
     </div>
