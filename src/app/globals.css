@@ -139,7 +139,7 @@ body {
   100% { transform: translate(0%, 0%) rotate(0deg) scale(1); }
 }
 .animate-aurora-drift {
-  animation: aurora-drift 22s ease-in-out infinite;
+  animation: aurora-drift 10s ease-in-out infinite;
 }
 
 /* Marketing homepage hero headline — a soft light sweep across the

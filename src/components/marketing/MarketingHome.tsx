@@ -51,13 +51,13 @@ function Grain({ opacity = 0.05 }: { opacity?: number }) {
 function Aurora() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="animate-aurora-drift absolute -inset-[40%] opacity-70 mix-blend-screen" style={{
+      <div className="animate-aurora-drift absolute -inset-[40%] opacity-95 mix-blend-screen" style={{
         backgroundImage:
-          "radial-gradient(ellipse 40% 30% at 20% 30%, rgba(79,110,247,0.5), transparent 60%)," +
-          "radial-gradient(ellipse 35% 25% at 75% 20%, rgba(124,58,237,0.55), transparent 60%)," +
-          "radial-gradient(ellipse 45% 35% at 60% 70%, rgba(217,70,239,0.35), transparent 60%)," +
-          "radial-gradient(ellipse 30% 25% at 15% 75%, rgba(79,110,247,0.4), transparent 60%)",
-        filter: "blur(40px)",
+          "radial-gradient(ellipse 40% 30% at 20% 30%, rgba(79,110,247,0.9), transparent 60%)," +
+          "radial-gradient(ellipse 35% 25% at 75% 20%, rgba(124,58,237,0.95), transparent 60%)," +
+          "radial-gradient(ellipse 45% 35% at 60% 70%, rgba(217,70,239,0.7), transparent 60%)," +
+          "radial-gradient(ellipse 30% 25% at 15% 75%, rgba(79,110,247,0.75), transparent 60%)",
+        filter: "blur(50px)",
       }} />
     </div>
   );
@@ -80,7 +80,7 @@ function Spotlight({ className = "" }: { className?: string }) {
     <div
       ref={ref}
       onMouseMove={handleMove}
-      className={`absolute inset-0 opacity-0 transition-opacity duration-500 hover:opacity-100 ${className}`}
+      className={`absolute inset-0 opacity-60 transition-opacity duration-500 hover:opacity-100 ${className}`}
       style={{
         background: "radial-gradient(600px circle at var(--spot-x, 50%) var(--spot-y, 50%), rgba(255,255,255,0.08), transparent 70%)",
       }}
