@@ -9,6 +9,9 @@ export type Memory = {
   category: string | null;
   tags: string | null; // JSON string array
   embedding: string | null; // JSON number array
+  // English translation/paraphrase used only for cross-language matching —
+  // see the migration comment in lib/db.ts. Never rendered in the UI.
+  search_text: string | null;
   metadata_status: "pending" | "ready" | "failed";
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
@@ -78,7 +81,19 @@ export function updateMemoryMetadata(
   userId: string,
   id: string,
   input: Partial<
-    Pick<Memory, "title" | "transcript" | "summary" | "category" | "tags" | "embedding" | "metadata_status" | "key_points" | "summary_feedback">
+    Pick<
+      Memory,
+      | "title"
+      | "transcript"
+      | "summary"
+      | "category"
+      | "tags"
+      | "embedding"
+      | "search_text"
+      | "metadata_status"
+      | "key_points"
+      | "summary_feedback"
+    >
   >
 ): Memory | undefined {
   const db = getDb();
@@ -90,13 +105,28 @@ export function updateMemoryMetadata(
   const category = input.category ?? current.category;
   const tags = input.tags ?? current.tags;
   const embedding = input.embedding ?? current.embedding;
+  const search_text = input.search_text ?? current.search_text;
   const metadata_status = input.metadata_status ?? current.metadata_status;
   const key_points = input.key_points ?? current.key_points;
   const summary_feedback = input.summary_feedback ?? current.summary_feedback;
   db.prepare(
-    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
+    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
      WHERE id = ? AND user_id = ?`
-  ).run(title, transcript, summary, category, tags, embedding, metadata_status, key_points, summary_feedback, nowIso(), id, userId);
+  ).run(
+    title,
+    transcript,
+    summary,
+    category,
+    tags,
+    embedding,
+    search_text,
+    metadata_status,
+    key_points,
+    summary_feedback,
+    nowIso(),
+    id,
+    userId
+  );
   return getMemoryById(userId, id);
 }
 

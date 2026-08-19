@@ -1,5 +1,5 @@
 import { listMemories, listMemoriesWithEmbeddings, type Memory } from "@/lib/repo/memories";
-import { embedText } from "@/lib/ai";
+import { embedText, translateToEnglish } from "@/lib/ai";
 
 // ---------------------------------------------------------------------------
 // Personal memory retrieval layer.
@@ -54,7 +54,12 @@ function isLatinScript(text: string): boolean {
 }
 
 function keywordScore(queryTokens: string[], memory: Memory): number {
-  const haystack = `${memory.title} ${memory.summary ?? ""} ${memory.transcript} ${memory.tags ?? ""}`.toLowerCase();
+  // search_text (an always-English gloss, see generateMemoryMetadata in
+  // lib/ai.ts) is included here so an English-translated query can still
+  // find keyword corroboration against a memory that was recorded in a
+  // different language — the original title/transcript alone would never
+  // share literal words with a translated query.
+  const haystack = `${memory.title} ${memory.summary ?? ""} ${memory.transcript} ${memory.tags ?? ""} ${memory.search_text ?? ""}`.toLowerCase();
   let score = 0;
   for (const token of queryTokens) {
     if (haystack.includes(token)) score += 1;
@@ -84,11 +89,24 @@ export async function retrieveRelevantMemories(
   query: string,
   topK = 5
 ): Promise<RetrievalResult> {
+  // Translate the query to English before embedding/keyword-matching so it
+  // lands in the same space as search_text (the English gloss generated
+  // alongside every memory — see generateMemoryMetadata in lib/ai.ts and
+  // the embedding calls in the memories API routes). This is what lets a
+  // Hindi memory surface for an English question and vice versa, instead
+  // of relying on the embedding model's native cross-lingual alignment,
+  // which isn't reliable enough on its own for short, informal,
+  // voice-transcribed text. translateToEnglish already falls back to the
+  // original text on failure or if it's already English, so this never
+  // breaks retrieval — it just loses the cross-language boost for that one
+  // request if translation is unavailable.
+  const translatedQuery = await translateToEnglish(query);
+
   // 1. Try semantic retrieval.
   const withEmbeddings = listMemoriesWithEmbeddings(userId);
-  const queryTokensForGate = tokenize(query);
+  const queryTokensForGate = tokenize(translatedQuery);
   if (withEmbeddings.length > 0) {
-    const queryEmbedding = await embedText(query);
+    const queryEmbedding = await embedText(translatedQuery);
     if (queryEmbedding) {
       const scored = withEmbeddings
         .map((m) => {
@@ -123,7 +141,19 @@ export async function retrieveRelevantMemories(
         // indiscriminately. So for cross-script pairs we skip the keyword
         // requirement but raise the bar instead (0.4 vs 0.3), trading the
         // (impossible) keyword corroboration for a stricter semantic one.
+        //
+        // Memories that already have a search_text gloss (see
+        // generateMemoryMetadata) don't need this branching at all — that
+        // gloss is always English, so keywordHits above is already computed
+        // against an English translation of the memory regardless of its
+        // original script, meaning it can corroborate a translated query
+        // the same way same-script matching always could. Only memories
+        // from before this rollout (search_text still null) fall back to
+        // the old script-aware logic so they don't regress.
         .filter((s) => {
+          if (s.memory.search_text) {
+            return s.score > 0.45 || (s.score > 0.3 && s.keywordHits > 0);
+          }
           const memoryText = `${s.memory.title} ${s.memory.summary ?? ""} ${s.memory.transcript}`;
           const sameScript = isLatinScript(query) === isLatinScript(memoryText);
           if (sameScript) {
@@ -141,7 +171,7 @@ export async function retrieveRelevantMemories(
 
   // 2. Fallback: keyword overlap across all of the user's memories.
   const all = listMemories(userId);
-  const queryTokens = tokenize(query);
+  const queryTokens = tokenize(translatedQuery);
   if (all.length === 0 || queryTokens.length === 0) {
     return { memories: [], method: "none" };
   }

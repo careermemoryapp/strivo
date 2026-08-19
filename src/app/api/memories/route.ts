@@ -52,13 +52,20 @@ export async function POST(req: Request) {
       key_points: JSON.stringify(metadata.keyPoints),
       category: metadata.category,
       tags: JSON.stringify(metadata.tags),
+      search_text: metadata.searchText,
       metadata_status: "ready",
     });
   } else {
     updateMemoryMetadata(userId, memory.id, { metadata_status: "failed" });
   }
 
-  const embedding = await embedText(`${title}\n${transcript}`);
+  // Embedding input includes metadata.searchText (an English gloss of the
+  // transcript, generated above) alongside the original title/transcript —
+  // this is what lets a Hindi memory still surface for an English question
+  // (or vice versa) in retrieval.ts, instead of relying purely on the
+  // embedding model's native cross-lingual alignment. Falls back to just
+  // title+transcript if metadata generation failed.
+  const embedding = await embedText(`${title}\n${transcript}${metadata ? `\n${metadata.searchText}` : ""}`);
   if (embedding) {
     updateMemoryMetadata(userId, memory.id, { embedding: JSON.stringify(embedding) });
   }

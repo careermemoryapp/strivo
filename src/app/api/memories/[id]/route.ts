@@ -42,13 +42,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       key_points: JSON.stringify(metadata.keyPoints),
       category: metadata.category,
       tags: JSON.stringify(metadata.tags),
+      search_text: metadata.searchText,
       metadata_status: "ready",
     });
   } else {
     updateMemoryMetadata(userId, id, { metadata_status: "failed" });
   }
 
-  const embedding = await embedText(`${existing.title}\n${parsed.data.transcript}`);
+  // Same cross-language fix as the create route: fold the English
+  // searchText gloss into what gets embedded so an edited memory stays
+  // findable from a question in a different language.
+  const embedding = await embedText(
+    `${existing.title}\n${parsed.data.transcript}${metadata ? `\n${metadata.searchText}` : ""}`
+  );
   if (embedding) {
     updateMemoryMetadata(userId, id, { embedding: JSON.stringify(embedding) });
   }

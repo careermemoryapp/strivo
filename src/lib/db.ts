@@ -168,6 +168,19 @@ function migrate(db: DatabaseSync) {
     db.exec(`ALTER TABLE users ADD COLUMN dismissed_nudge_id TEXT;`);
   }
 
+  // English translation/paraphrase of the transcript, generated alongside
+  // the rest of the AI metadata (see generateMemoryMetadata in lib/ai.ts)
+  // and folded into what gets embedded (see lib/retrieval.ts). Never shown
+  // to the user — it exists purely so a Hindi memory and an English
+  // question (or vice versa) land in the same embedding neighborhood
+  // instead of relying on the embedding model's native cross-lingual
+  // alignment, which isn't reliable enough on its own for short, informal,
+  // voice-transcribed text. Null for memories created before this existed.
+  const memoryColumns = (db.prepare(`PRAGMA table_info(memories)`).all() as { name: string }[]).map((c) => c.name);
+  if (!memoryColumns.includes("search_text")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN search_text TEXT;`);
+  }
+
   // Backfill trial_ends_at for any existing users who don't have one yet
   // (e.g. accounts created before the subscription system existed) — gives
   // them a fresh trial starting now rather than leaving it null. Kept in

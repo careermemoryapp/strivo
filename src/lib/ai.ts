@@ -23,6 +23,12 @@ export type MemoryMetadata = {
   keyPoints: string[];
   category: string;
   tags: string[];
+  // English translation/paraphrase of the transcript, used only internally
+  // for cross-language retrieval matching (see search_text in
+  // lib/repo/memories.ts) — never shown to the user, so it's fine (and
+  // expected) that a Hindi memory's user-facing summary above stays in
+  // Hindi while this field is always English.
+  searchText: string;
 };
 
 const CATEGORY_OPTIONS = [
@@ -52,11 +58,12 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
         {
           role: "system",
           content:
-            "You turn a raw first-person memory transcript (spoken or typed) into structured metadata. " +
-            "Respond ONLY with a JSON object with keys: title (string, <=8 words, concrete and specific), " +
-            "summary (string, 1-2 sentences, third-person-neutral but factual, a brief intro to what happened), " +
-            "keyPoints (array of 3-6 short factual bullet points capturing the specific details, decisions, numbers and outcomes mentioned), " +
-            `category (one of: ${CATEGORY_OPTIONS.join(", ")}), tags (array of 2-5 short lowercase keyword strings). ` +
+            "You turn a raw first-person memory transcript (spoken or typed, in any language) into structured metadata. " +
+            "Respond ONLY with a JSON object with keys: title (string, <=8 words, concrete and specific, SAME language as the transcript), " +
+            "summary (string, 1-2 sentences, third-person-neutral but factual, a brief intro to what happened, SAME language as the transcript), " +
+            "keyPoints (array of 3-6 short factual bullet points capturing the specific details, decisions, numbers and outcomes mentioned, SAME language as the transcript), " +
+            `category (one of: ${CATEGORY_OPTIONS.join(", ")}), tags (array of 2-5 short lowercase keyword strings), ` +
+            "searchText (string, 2-4 sentences, ALWAYS IN ENGLISH regardless of the transcript's language — translate it if the transcript isn't already English; this is for internal search indexing only and is never shown to the user, so prioritize covering the concrete nouns/topics/keywords over elegant phrasing). " +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -74,10 +81,47 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
         : [],
       category: CATEGORY_OPTIONS.includes(parsed.category) ? parsed.category : "General",
       tags: Array.isArray(parsed.tags) ? parsed.tags.slice(0, 5).map((t: unknown) => String(t).toLowerCase()) : [],
+      // Falls back to the summary if the model ever omits searchText —
+      // still better than nothing for cross-language matching, even though
+      // it won't be a guaranteed-English translation in that fallback case.
+      searchText: parsed.searchText ? String(parsed.searchText).slice(0, 2000) : String(parsed.summary).slice(0, 2000),
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
     return null;
+  }
+}
+
+// Translates a chat question to English purely so retrieval (see
+// retrieveRelevantMemories in lib/retrieval.ts) can compare it against
+// memories' English search_text on equal footing, regardless of what
+// language either side was originally written in. Returns the original
+// text on failure or if it's already English — retrieval degrades
+// gracefully to same-language-only matching in that case rather than
+// breaking. Never used for anything user-facing (the actual chat reply
+// still responds in whatever language/style is appropriate).
+export async function translateToEnglish(text: string): Promise<string> {
+  const openai = getClient();
+  if (!openai) return text;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Translate the user's message to English. If it's already in English, return it completely unchanged. " +
+            "Respond with ONLY the translation — no quotes, no commentary, no explanation.",
+        },
+        { role: "user", content: text },
+      ],
+    });
+    const translated = completion.choices[0]?.message?.content?.trim();
+    return translated || text;
+  } catch (err) {
+    console.error("translateToEnglish failed:", err);
+    return text;
   }
 }
 
