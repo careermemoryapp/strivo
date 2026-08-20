@@ -258,7 +258,7 @@ export function MarketingHome({
   return (
     <div id="marketing-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
       {/* Nav */}
-      <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5">
+      <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
         <div className="flex items-center gap-2.5">
           <LogoMark size={28} />
           <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
@@ -269,7 +269,7 @@ export function MarketingHome({
       </header>
 
       {/* Hero */}
-      <section className="relative overflow-hidden px-8 pb-16 pt-16 text-center sm:pt-24">
+      <section className="relative overflow-hidden px-8 pb-16 pt-16 text-center sm:pt-24" style={{ background: "#0a0a0f" }}>
         <div
           className="pointer-events-none absolute left-1/2 top-[-120px] -translate-x-1/2"
           style={{
@@ -317,7 +317,7 @@ export function MarketingHome({
       </section>
 
       {/* Value props */}
-      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12">
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
           WHAT STRIVO OFFERS
         </motion.p>
@@ -369,7 +369,7 @@ export function MarketingHome({
       </section>
 
       {/* Use cases */}
-      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12">
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
           BUILT FOR MOMENTS LIKE THESE
         </motion.p>
@@ -392,7 +392,7 @@ export function MarketingHome({
       </section>
 
       {/* Testimonials */}
-      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12">
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.15em] text-brand-primary">
           LOVED BY EARLY USERS
         </motion.p>
@@ -408,7 +408,7 @@ export function MarketingHome({
       </section>
 
       {/* Pricing */}
-      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12">
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
           SIMPLE PRICING
         </motion.p>
@@ -444,7 +444,7 @@ export function MarketingHome({
       </section>
 
       {/* Closing CTA */}
-      <section className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 text-center">
+      <section className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 text-center" style={{ background: "#0a0a0f" }}>
         <div
           className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
           style={{ width: 500, height: 260, background: "radial-gradient(ellipse at center, rgba(79,110,247,0.2), transparent 70%)" }}
@@ -465,7 +465,7 @@ export function MarketingHome({
       </section>
 
       {/* Footer */}
-      <footer className="flex flex-col items-center justify-between gap-3 border-t border-[#1e1e26] px-8 py-6 text-xs text-[#5a5a66] sm:flex-row">
+      <footer className="flex flex-col items-center justify-between gap-3 border-t border-[#1e1e26] px-8 py-6 text-xs text-[#5a5a66] sm:flex-row" style={{ background: "#0a0a0f" }}>
         <span>© {new Date().getFullYear()} {APP_NAME}</span>
         <div className="flex gap-5">
           <Link href="/privacy" className="hover:text-white">Privacy</Link>
