@@ -23,6 +23,14 @@ function createConnection(): DatabaseSync {
   const db = new DatabaseSync(DB_PATH);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
+  // Once pm2 runs Strivo as multiple clustered processes, more than one of
+  // them can open this same file at once. WAL mode already lets that work
+  // (one writer + concurrent readers), but without a busy_timeout a writer
+  // that loses a brief race gets an immediate "database is locked" error
+  // instead of just waiting its turn. 5s is far longer than any single
+  // query here should ever take, so this only ever kicks in on genuine
+  // contention.
+  db.exec("PRAGMA busy_timeout = 5000;");
   migrate(db);
   return db;
 }
@@ -176,6 +184,18 @@ function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_blog_posts_created ON blog_posts(created_at);
     CREATE INDEX IF NOT EXISTS idx_blog_posts_category ON blog_posts(category);
+
+    -- Backs the rate limiter (see lib/rateLimit.ts). Used to live as a
+    -- plain in-memory Map, which was correct only because Strivo ran as a
+    -- single pm2 process. Now that pm2 runs it in cluster mode (multiple
+    -- Node processes sharing this same DB file), the counter has to live
+    -- somewhere all processes see -- this table, not each process's own
+    -- memory.
+    CREATE TABLE IF NOT EXISTS rate_limit_buckets (
+      key TEXT PRIMARY KEY,
+      count INTEGER NOT NULL,
+      reset_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

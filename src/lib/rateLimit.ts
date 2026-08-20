@@ -1,41 +1,56 @@
 import { NextResponse } from "next/server";
+import { getDb, nowIso } from "@/lib/db";
 
-// Lightweight in-memory rate limiter. Strivo runs as a single pm2 process
-// (no cluster mode), so a plain in-memory Map is a real, correct limiter
-// here — not an approximation that breaks under multiple instances. If the
-// deployment ever moves to multiple Node processes/instances, this should
-// be swapped for a shared store (Redis) instead.
-type Bucket = { count: number; resetAt: number };
-const buckets = new Map<string, Bucket>();
+// Backed by the `rate_limit_buckets` SQLite table (see lib/db.ts) instead of
+// an in-memory Map. Strivo now runs as multiple clustered pm2 processes, so
+// an in-memory counter would live separately in each process -- two
+// processes would each let a request through "10 times in the last hour",
+// letting 20 through in practice. SQLite is already shared across every
+// process (same file, WAL mode), so it doubles as the shared counter store
+// without needing a separate service like Redis.
+//
+// This still isn't a precise sliding-window limiter (fixed windows can let
+// a burst through right at the boundary) -- it's "good enough" abuse
+// protection for auth/cost-sensitive endpoints, same as before.
 
-let lastSweep = Date.now();
+let lastSweep = 0;
 function sweepExpired() {
   const now = Date.now();
-  if (now - lastSweep < 5 * 60 * 1000) return; // sweep at most every 5 min
+  if (now - lastSweep < 5 * 60 * 1000) return; // sweep at most every 5 min, per-process
   lastSweep = now;
-  for (const [key, b] of buckets) {
-    if (b.resetAt <= now) buckets.delete(key);
-  }
+  const db = getDb();
+  db.prepare(`DELETE FROM rate_limit_buckets WHERE reset_at <= ?`).run(nowIso());
 }
 
 /**
  * Fixed-window rate limit. Returns ok:false once `limit` calls have been
  * made for this key within `windowMs`. Cheap and good enough for
- * protecting auth/cost-sensitive endpoints from brute force and abuse —
+ * protecting auth/cost-sensitive endpoints from brute force and abuse --
  * not meant to be a precise sliding-window limiter.
  */
 export function checkRateLimit(key: string, limit: number, windowMs: number): { ok: boolean; retryAfterSeconds: number } {
   sweepExpired();
+  const db = getDb();
   const now = Date.now();
-  const existing = buckets.get(key);
-  if (!existing || existing.resetAt <= now) {
-    buckets.set(key, { count: 1, resetAt: now + windowMs });
+
+  const existing = db.prepare(`SELECT count, reset_at FROM rate_limit_buckets WHERE key = ?`).get(key) as
+    | { count: number; reset_at: string }
+    | undefined;
+
+  if (!existing || new Date(existing.reset_at).getTime() <= now) {
+    const resetAt = new Date(now + windowMs).toISOString();
+    db.prepare(
+      `INSERT INTO rate_limit_buckets (key, count, reset_at) VALUES (?, 1, ?)
+       ON CONFLICT(key) DO UPDATE SET count = 1, reset_at = excluded.reset_at`
+    ).run(key, resetAt);
     return { ok: true, retryAfterSeconds: 0 };
   }
+
   if (existing.count >= limit) {
-    return { ok: false, retryAfterSeconds: Math.ceil((existing.resetAt - now) / 1000) };
+    return { ok: false, retryAfterSeconds: Math.ceil((new Date(existing.reset_at).getTime() - now) / 1000) };
   }
-  existing.count += 1;
+
+  db.prepare(`UPDATE rate_limit_buckets SET count = count + 1 WHERE key = ?`).run(key);
   return { ok: true, retryAfterSeconds: 0 };
 }
 
