@@ -302,9 +302,14 @@ export function MarketingHome({
           <LogoMark size={28} />
           <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
         </div>
-        <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#888] hover:text-white">
-          Get the app →
-        </a>
+        <div className="flex items-center gap-6">
+          <Link href="/blog" className="text-xs font-medium text-[#888] hover:text-white">
+            Blog
+          </Link>
+          <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#888] hover:text-white">
+            Get the app →
+          </a>
+        </div>
       </header>
 
       {/* Hero */}
