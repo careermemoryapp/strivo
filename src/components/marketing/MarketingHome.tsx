@@ -198,15 +198,36 @@ function RecordScreenMock() {
 }
 
 function CreateMemoryScreenMock() {
+  const tags = ["Leadership", "Work", "Achievement"];
   return (
     <PhoneFrame width={200} glow="0 24px 60px rgba(0,0,0,0.35)">
-      <div className="px-4 py-5 text-left" style={{ height: 340 }}>
+      <div className="flex flex-col text-left" style={{ height: 340, padding: "20px 18px" }}>
         <p className="mb-2 text-[9px] font-bold uppercase tracking-wide text-[#a8a2bd]">Transcript</p>
         <p className="mb-4 text-[11px] leading-relaxed text-[#3c3650]">
           &quot;...led the launch when two teammates were out, shipped on time...&quot;
         </p>
-        <div className="inline-block rounded-full px-4 py-2 text-[11px] font-bold text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
-          Create Memory
+        <div className="mb-3 border-t border-[#f0ecf7] pt-3">
+          <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-[#a8a2bd]">Title</p>
+          <p className="text-[11px] font-semibold text-[#3c3650]">Led product launch solo</p>
+        </div>
+        <div className="mb-4">
+          <p className="mb-1.5 text-[9px] font-bold uppercase tracking-wide text-[#a8a2bd]">Tags</p>
+          <div className="flex flex-wrap gap-1.5">
+            {tags.map((tag, i) => (
+              <span
+                key={tag}
+                className="rounded-full px-2.5 py-1 text-[9px] font-semibold"
+                style={i === 0 ? { background: "linear-gradient(135deg,#a78bfa,#60a5fa)", color: "#fff" } : { background: "#f2effa", color: "#8b5cf6" }}
+              >
+                {tag}
+              </span>
+            ))}
+          </div>
+        </div>
+        <div className="mt-auto">
+          <div className="inline-block rounded-full px-4 py-2 text-[11px] font-bold text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
+            Create Memory
+          </div>
         </div>
       </div>
     </PhoneFrame>
@@ -216,12 +237,24 @@ function CreateMemoryScreenMock() {
 function ChatScreenMock() {
   return (
     <PhoneFrame width={200} glow="0 24px 60px rgba(0,0,0,0.35)">
-      <div className="px-4 py-5" style={{ height: 340 }}>
+      <div className="flex flex-col" style={{ height: 340, padding: "20px 16px" }}>
+        <div className="flex-1">
         <div className="rounded-xl rounded-bl-sm bg-[#f2effa] p-3 text-[11px] leading-relaxed text-[#3c3650]">
           A time I showed leadership?
         </div>
         <div className="mt-2 rounded-xl rounded-br-sm p-3 text-[11px] leading-relaxed text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
           In March you led the launch solo.
+        </div>
+        <div className="mt-2 rounded-xl rounded-bl-sm bg-[#f2effa] p-3 text-[11px] leading-relaxed text-[#3c3650]">
+          Any resume-ready bullet for that?
+        </div>
+        <div className="mt-2 rounded-xl rounded-br-sm p-3 text-[11px] leading-relaxed text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
+          &quot;Led product launch solo after two teammates were out, shipping on time.&quot;
+        </div>
+        </div>
+        <div className="mt-3 flex items-center gap-2 rounded-full border border-[#ece5f5] px-3 py-2.5">
+          <span className="flex-1 text-[10px] text-[#a8a2bd]">Ask a follow-up…</span>
+          <span className="flex h-5 w-5 items-center justify-center rounded-full text-[9px] text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>➤</span>
         </div>
       </div>
     </PhoneFrame>
