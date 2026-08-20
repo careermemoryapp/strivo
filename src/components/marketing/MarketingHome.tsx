@@ -67,7 +67,7 @@ function Magnetic({ children, strength = 0.25 }: { children: React.ReactNode; st
 // 3D tilt that tracks the cursor position, spring-damped back to flat on
 // leave — used on the use-case and pricing cards for a "premium, physical"
 // feel without a fixed hover angle.
-function TiltCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+function TiltCard({ children, className = "", style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
   const ref = useRef<HTMLDivElement>(null);
   const rotateX = useMotionValue(0);
   const rotateY = useMotionValue(0);
@@ -93,7 +93,7 @@ function TiltCard({ children, className = "" }: { children: React.ReactNode; cla
       ref={ref}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
-      style={{ rotateX: springRX, rotateY: springRY, transformStyle: "preserve-3d" }}
+      style={{ rotateX: springRX, rotateY: springRY, transformStyle: "preserve-3d", ...style }}
       className={className}
     >
       {children}
@@ -109,6 +109,7 @@ function PillButton({ className = "" }: { className?: string }) {
         target="_blank"
         rel="noopener noreferrer"
         className={`inline-block rounded-full bg-white px-9 py-4 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] ${className}`}
+        style={{ boxShadow: "0 8px 24px rgba(255,255,255,0.15)" }}
       >
         Get the app →
       </a>
@@ -118,11 +119,11 @@ function PillButton({ className = "" }: { className?: string }) {
 
 // --- Phone mockups — faithful recreations of the real app screens -------
 
-function PhoneFrame({ children, width = 210 }: { children: React.ReactNode; width?: number }) {
+function PhoneFrame({ children, width = 210, glow }: { children: React.ReactNode; width?: number; glow?: string }) {
   return (
     <div
       className="overflow-hidden rounded-[32px] border-[7px] border-[#1c1c24]"
-      style={{ width, background: "#0a0a0f" }}
+      style={{ width, background: "#0a0a0f", boxShadow: glow }}
     >
       {children}
     </div>
@@ -136,7 +137,7 @@ function HomeScreenMock() {
     { title: "Find leadership examples", icon: "◆" },
   ];
   return (
-    <PhoneFrame>
+    <PhoneFrame width={230} glow="0 40px 90px rgba(124,58,237,0.25), 0 0 0 1px rgba(255,255,255,0.06)">
       <div className="px-3.5 pb-5 pt-4" style={{ background: "linear-gradient(160deg,#1c1435,#2a1550,#150c2e)" }}>
         <p className="text-[10px] text-[#c9bdf0]">Good evening</p>
         <p className="mt-0.5 text-sm font-bold text-white">Shikhar</p>
@@ -166,16 +167,19 @@ function HomeScreenMock() {
 }
 
 function RecordScreenMock() {
-  const bars = [7, 15, 9, 17, 8, 13, 10];
+  const bars = [10, 20, 14, 22, 12, 18, 10];
   return (
-    <PhoneFrame width={170}>
-      <div className="px-3 py-6 text-center" style={{ background: "linear-gradient(160deg,#1c1435,#150c2e)" }}>
-        <div className="mx-auto mb-2.5 flex h-12 w-12 items-center justify-center rounded-full bg-white text-base text-[#8b5cf6]" style={{ boxShadow: "0 0 0 6px rgba(139,92,246,0.25)" }}>●</div>
-        <div className="flex h-[18px] items-end justify-center gap-[2px]">
+    <PhoneFrame width={200} glow="0 24px 60px rgba(124,58,237,0.3)">
+      <div
+        className="flex flex-col items-center justify-center gap-4 text-center"
+        style={{ background: "linear-gradient(160deg,#1c1435,#150c2e)", height: 340 }}
+      >
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-xl text-[#8b5cf6]" style={{ boxShadow: "0 0 0 10px rgba(139,92,246,0.25)" }}>●</div>
+        <div className="flex h-[22px] items-end justify-center gap-[3px]">
           {bars.map((h, i) => (
             <span
               key={i}
-              className={`w-[2px] rounded-full ${i % 2 === 0 ? "bg-[#c9bdf0]" : "bg-[#8b5cf6]"}`}
+              className={`w-[3px] rounded-full ${i % 2 === 0 ? "bg-[#c9bdf0]" : "bg-[#8b5cf6]"}`}
               style={{ height: h, animation: `bar-pulse 0.9s ease-in-out ${i * 0.08}s infinite alternate` }}
             />
           ))}
@@ -187,13 +191,13 @@ function RecordScreenMock() {
 
 function CreateMemoryScreenMock() {
   return (
-    <PhoneFrame width={170}>
-      <div className="px-3 py-4 text-left">
-        <p className="mb-1.5 text-[8px] font-bold uppercase tracking-wide text-[#a8a2bd]">Transcript</p>
-        <p className="mb-3 text-[9px] leading-relaxed text-[#3c3650]">
+    <PhoneFrame width={200} glow="0 24px 60px rgba(0,0,0,0.35)">
+      <div className="px-4 py-5 text-left" style={{ height: 340 }}>
+        <p className="mb-2 text-[9px] font-bold uppercase tracking-wide text-[#a8a2bd]">Transcript</p>
+        <p className="mb-4 text-[11px] leading-relaxed text-[#3c3650]">
           &quot;...led the launch when two teammates were out, shipped on time...&quot;
         </p>
-        <div className="inline-block rounded-full px-4 py-1.5 text-[9.5px] font-bold text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
+        <div className="inline-block rounded-full px-4 py-2 text-[11px] font-bold text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
           Create Memory
         </div>
       </div>
@@ -203,12 +207,12 @@ function CreateMemoryScreenMock() {
 
 function ChatScreenMock() {
   return (
-    <PhoneFrame width={170}>
-      <div className="px-2.5 py-3.5">
-        <div className="rounded-xl rounded-bl-sm bg-[#f2effa] p-2.5 text-[9px] leading-relaxed text-[#3c3650]">
+    <PhoneFrame width={200} glow="0 24px 60px rgba(0,0,0,0.35)">
+      <div className="px-4 py-5" style={{ height: 340 }}>
+        <div className="rounded-xl rounded-bl-sm bg-[#f2effa] p-3 text-[11px] leading-relaxed text-[#3c3650]">
           A time I showed leadership?
         </div>
-        <div className="mt-1.5 rounded-xl rounded-br-sm p-2.5 text-[9px] leading-relaxed text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
+        <div className="mt-2 rounded-xl rounded-br-sm p-3 text-[11px] leading-relaxed text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
           In March you led the launch solo.
         </div>
       </div>
@@ -265,8 +269,17 @@ export function MarketingHome({
       </header>
 
       {/* Hero */}
-      <section className="px-8 pb-16 pt-16 text-center sm:pt-24">
-        <motion.div initial="hidden" animate="show" variants={stagger}>
+      <section className="relative overflow-hidden px-8 pb-16 pt-16 text-center sm:pt-24">
+        <div
+          className="pointer-events-none absolute left-1/2 top-[-120px] -translate-x-1/2"
+          style={{
+            width: 640,
+            height: 420,
+            background: "radial-gradient(ellipse at center, rgba(124,58,237,0.35), rgba(79,110,247,0.15) 45%, transparent 75%)",
+            filter: "blur(10px)",
+          }}
+        />
+        <motion.div initial="hidden" animate="show" variants={stagger} className="relative">
           <motion.p variants={fadeUp} className="mb-5 text-xs font-semibold tracking-[0.2em] text-brand-primary">
             YOUR AI CAREER MEMORY
           </motion.p>
@@ -275,7 +288,7 @@ export function MarketingHome({
             <br />
             <span
               className="bg-clip-text text-transparent"
-              style={{ backgroundImage: "linear-gradient(90deg,#4f6ef7,#d946ef)" }}
+              style={{ backgroundImage: "linear-gradient(90deg,#6d8bff,#c266f2,#e879f9)" }}
             >
               that gets you the offer.
             </span>
@@ -313,8 +326,8 @@ export function MarketingHome({
         </motion.h2>
         <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="mt-8">
           {VALUE_PROPS.map((v, i) => (
-            <motion.div key={v.n} variants={fadeUp} className={`flex gap-5 border-t border-[#1e1e26] py-6 ${i === VALUE_PROPS.length - 1 ? "border-b" : ""}`}>
-              <span className="w-6 shrink-0 pt-0.5 text-xs text-[#5a5a66]">{v.n}</span>
+            <motion.div key={v.n} variants={fadeUp} className={`flex items-start gap-4 border-t border-[#1e1e26] py-6 ${i === VALUE_PROPS.length - 1 ? "border-b" : ""}`}>
+              <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-[#2a2a35] bg-[#161620] text-[10px] text-brand-secondary">{v.n}</span>
               <div>
                 <p className="text-lg font-bold text-white">{v.title}</p>
                 <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-[#8a8a99]">{v.body}</p>
@@ -325,27 +338,31 @@ export function MarketingHome({
       </section>
 
       {/* How it works — three real screens */}
-      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "linear-gradient(135deg,#12081f,#0a0a0f)" }}>
-        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-center text-xs font-semibold tracking-[0.15em] text-brand-primary">
+      <section className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 sm:px-12" style={{ background: "linear-gradient(135deg,#160a26,#0a0a0f 60%)" }}>
+        <div
+          className="pointer-events-none absolute left-1/2 top-8 -translate-x-1/2"
+          style={{ width: 700, height: 340, background: "radial-gradient(ellipse at center, rgba(124,58,237,0.22), transparent 70%)" }}
+        />
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative text-center text-xs font-semibold tracking-[0.15em] text-brand-primary">
           HOW IT WORKS
         </motion.p>
-        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-10 mt-2 text-center text-2xl font-bold tracking-tight">
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mb-12 mt-2 text-center text-2xl font-bold tracking-tight">
           Three steps, start to finish
         </motion.h2>
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.15 }} variants={stagger} className="flex flex-wrap justify-center gap-8">
-          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 170 }}>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.15 }} variants={stagger} className="relative flex flex-wrap justify-center gap-9">
+          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 200 }}>
             <RecordScreenMock />
-            <p className="mt-3.5 text-sm font-bold">1. Record</p>
+            <p className="mt-4 text-sm font-bold">1. Record</p>
             <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Tap the mic, speak freely for up to 5 minutes.</p>
           </motion.div>
-          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 170 }}>
+          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 200 }}>
             <CreateMemoryScreenMock />
-            <p className="mt-3.5 text-sm font-bold">2. Create memory</p>
+            <p className="mt-4 text-sm font-bold">2. Create memory</p>
             <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Strivo transcribes and tags it automatically.</p>
           </motion.div>
-          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 170 }}>
+          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 200 }}>
             <ChatScreenMock />
-            <p className="mt-3.5 text-sm font-bold">3. Chat</p>
+            <p className="mt-4 text-sm font-bold">3. Chat</p>
             <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Ask for it back — anytime, in your own words.</p>
           </motion.div>
         </motion.div>
@@ -364,6 +381,7 @@ export function MarketingHome({
             <motion.div key={u.title} variants={fadeUp}>
               <TiltCard
                 className={`rounded-2xl p-5 ${u.highlight ? "bg-gradient-brand" : "border border-[#2a2a35]"}`}
+                style={u.highlight ? { boxShadow: "0 16px 40px rgba(124,58,237,0.35)" } : undefined}
               >
                 <p className="text-base font-bold text-white">{u.title}</p>
                 <p className={`mt-1.5 text-sm leading-relaxed ${u.highlight ? "text-white/85" : "text-[#8a8a99]"}`}>{u.body}</p>
@@ -381,7 +399,8 @@ export function MarketingHome({
         <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           {TESTIMONIALS.map((t) => (
             <motion.div key={t.name} variants={fadeUp} className="rounded-2xl border border-[#2a2a35] p-5">
-              <p className="text-sm leading-relaxed text-white">&ldquo;{t.quote}&rdquo;</p>
+              <p className="mb-1 text-2xl leading-none text-[#5a4a99]">&ldquo;</p>
+              <p className="text-sm leading-relaxed text-white">{t.quote}</p>
               <p className="mt-3 text-xs text-[#8a8a99]">— {t.name}</p>
             </motion.div>
           ))}
@@ -408,7 +427,7 @@ export function MarketingHome({
             </TiltCard>
           </motion.div>
           <motion.div variants={fadeUp} className="min-w-[180px] flex-1">
-            <TiltCard className="rounded-[18px] bg-white p-6 text-left text-[#0a0a0f]">
+            <TiltCard className="rounded-[18px] bg-white p-6 text-left text-[#0a0a0f]" style={{ boxShadow: "0 16px 40px rgba(255,255,255,0.08)" }}>
               <p className="text-xs text-[#666]">Annual · save 50%</p>
               <p className="mt-1.5 text-3xl font-extrabold">
                 {annualPriceLabel}
@@ -425,8 +444,12 @@ export function MarketingHome({
       </section>
 
       {/* Closing CTA */}
-      <section className="border-t border-[#1e1e26] px-8 py-20 text-center">
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.4 }} variants={stagger}>
+      <section className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 text-center">
+        <div
+          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
+          style={{ width: 500, height: 260, background: "radial-gradient(ellipse at center, rgba(79,110,247,0.2), transparent 70%)" }}
+        />
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.4 }} variants={stagger} className="relative">
           <motion.h2 variants={fadeUp} className="text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">
             Ready to remember
             <br />
