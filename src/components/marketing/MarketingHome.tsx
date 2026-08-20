@@ -171,19 +171,27 @@ function RecordScreenMock() {
   return (
     <PhoneFrame width={200} glow="0 24px 60px rgba(124,58,237,0.3)">
       <div
-        className="flex flex-col items-center justify-center gap-4 text-center"
-        style={{ background: "linear-gradient(160deg,#1c1435,#150c2e)", height: 340 }}
+        className="flex flex-col items-center text-center"
+        style={{ background: "linear-gradient(160deg,#1c1435,#150c2e)", height: 340, padding: "22px 18px" }}
       >
-        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-xl text-[#8b5cf6]" style={{ boxShadow: "0 0 0 10px rgba(139,92,246,0.25)" }}>●</div>
-        <div className="flex h-[22px] items-end justify-center gap-[3px]">
-          {bars.map((h, i) => (
-            <span
-              key={i}
-              className={`w-[3px] rounded-full ${i % 2 === 0 ? "bg-[#c9bdf0]" : "bg-[#8b5cf6]"}`}
-              style={{ height: h, animation: `bar-pulse 0.9s ease-in-out ${i * 0.08}s infinite alternate` }}
-            />
-          ))}
+        <div className="flex items-center gap-1.5 rounded-full bg-[#2a1550] px-3 py-1.5">
+          <span className="h-[6px] w-[6px] rounded-full bg-[#ef4444]" />
+          <span className="text-[10px] font-semibold tracking-wide text-[#e0d5f7]">RECORDING</span>
         </div>
+        <p className="mt-2 text-[11px] text-[#a08fc9]">00:42</p>
+        <div className="flex flex-1 flex-col items-center justify-center gap-5">
+          <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-xl text-[#8b5cf6]" style={{ boxShadow: "0 0 0 10px rgba(139,92,246,0.25)" }}>●</div>
+          <div className="flex h-[22px] items-end justify-center gap-[3px]">
+            {bars.map((h, i) => (
+              <span
+                key={i}
+                className={`w-[3px] rounded-full ${i % 2 === 0 ? "bg-[#c9bdf0]" : "bg-[#8b5cf6]"}`}
+                style={{ height: h, animation: `bar-pulse 0.9s ease-in-out ${i * 0.08}s infinite alternate` }}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="rounded-full bg-white/10 px-5 py-2 text-[11px] font-bold text-white">Stop</div>
       </div>
     </PhoneFrame>
   );
@@ -312,25 +320,25 @@ export function MarketingHome({
           className="mt-12 flex flex-col items-center"
         >
           <HomeScreenMock />
-          <p className="mt-3 text-xs text-[#5a5a66]">The actual Strivo home screen</p>
+          <p className="mt-3 text-xs text-[#c9bdf0]">The actual Strivo home screen</p>
         </motion.div>
       </section>
 
       {/* Value props */}
-      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>
+      <section className="border-t border-[#1e1e26] px-8 py-16 text-center sm:px-12" style={{ background: "#0a0a0f" }}>
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
           WHAT STRIVO OFFERS
         </motion.p>
-        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-2 mt-2 max-w-md text-2xl font-bold tracking-tight">
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mx-auto mb-10 mt-2 max-w-lg text-2xl font-bold tracking-tight">
           Four things, working together every day
         </motion.h2>
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="mt-8">
-          {VALUE_PROPS.map((v, i) => (
-            <motion.div key={v.n} variants={fadeUp} className={`flex items-start gap-4 border-t border-[#1e1e26] py-6 ${i === VALUE_PROPS.length - 1 ? "border-b" : ""}`}>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="mx-auto grid max-w-4xl grid-cols-1 gap-x-10 gap-y-8 text-left sm:grid-cols-2">
+          {VALUE_PROPS.map((v) => (
+            <motion.div key={v.n} variants={fadeUp} className="flex items-start gap-4 rounded-2xl border border-[#1e1e26] p-5">
               <span className="flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-[#2a2a35] bg-[#161620] text-[10px] text-brand-secondary">{v.n}</span>
               <div>
                 <p className="text-lg font-bold text-white">{v.title}</p>
-                <p className="mt-1.5 max-w-lg text-sm leading-relaxed text-[#8a8a99]">{v.body}</p>
+                <p className="mt-1.5 text-sm leading-relaxed text-[#8a8a99]">{v.body}</p>
               </div>
             </motion.div>
           ))}
@@ -396,12 +404,16 @@ export function MarketingHome({
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.15em] text-brand-primary">
           LOVED BY EARLY USERS
         </motion.p>
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           {TESTIMONIALS.map((t) => (
-            <motion.div key={t.name} variants={fadeUp} className="rounded-2xl border border-[#2a2a35] p-5">
-              <p className="mb-1 text-2xl leading-none text-[#5a4a99]">&ldquo;</p>
-              <p className="text-sm leading-relaxed text-white">{t.quote}</p>
-              <p className="mt-3 text-xs text-[#8a8a99]">— {t.name}</p>
+            <motion.div key={t.name} variants={fadeUp} className="flex flex-col items-start">
+              <div
+                className="rounded-2xl rounded-bl-sm px-5 py-4 text-sm leading-relaxed text-white"
+                style={{ background: "linear-gradient(135deg,#4f6ef7,#8b5cf6)", boxShadow: "0 12px 30px rgba(124,58,237,0.25)" }}
+              >
+                {t.quote}
+              </div>
+              <p className="ml-2 mt-2 text-xs text-[#8a8a99]">— {t.name}</p>
             </motion.div>
           ))}
         </motion.div>
