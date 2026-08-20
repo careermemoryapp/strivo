@@ -71,3 +71,17 @@ export async function isAdminAuthed(): Promise<boolean> {
 }
 
 export const ADMIN_COOKIE_MAX_AGE = MAX_AGE_SECONDS;
+
+// A second, separate credential (BLOG_AUTOMATION_SECRET) for the daily
+// blog-writing automation to authenticate with, instead of reusing the
+// founder's own admin password. Deliberately its own env var so rotating
+// it (e.g. if it ever leaked) doesn't also log the founder out of /admin,
+// and so the automation's blast radius if compromised is limited to
+// publishing blog posts rather than full admin access. Checked via a
+// request header (`x-blog-secret`) since the automation is a script, not a
+// browser with cookies. See /api/blog/publish.
+export function checkBlogAutomationSecret(secret: string | null): boolean {
+  const expected = process.env.BLOG_AUTOMATION_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

@@ -60,8 +60,60 @@ body {
    on some deployments even though the DOM/computed styles looked correct
    in devtools — this is the most bulletproof way to guarantee the dark
    background actually renders regardless of any other cascade quirk. */
-#marketing-root {
+#marketing-root,
+#blog-root {
   background-color: #0a0a0f !important;
+}
+
+/* Blog article body — injected as raw HTML (dangerouslySetInnerHTML) from
+   blog_posts.content_html, so it has no Tailwind classes of its own. These
+   rules give it readable typography against the dark blog theme. */
+.prose-blog h2 {
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  font-size: 1.375rem;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+}
+.prose-blog h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #ffffff;
+}
+.prose-blog p {
+  margin-bottom: 1.1rem;
+}
+.prose-blog ul,
+.prose-blog ol {
+  margin-bottom: 1.1rem;
+  padding-left: 1.4rem;
+}
+.prose-blog ul {
+  list-style: disc;
+}
+.prose-blog ol {
+  list-style: decimal;
+}
+.prose-blog li {
+  margin-bottom: 0.4rem;
+}
+.prose-blog strong {
+  color: #ffffff;
+  font-weight: 700;
+}
+.prose-blog a {
+  color: var(--color-brand-secondary);
+  text-decoration: underline;
+}
+.prose-blog blockquote {
+  margin: 1.5rem 0;
+  padding-left: 1rem;
+  border-left: 2px solid #2a2a35;
+  color: #a0a0ac;
+  font-style: italic;
 }
 
 .bg-gradient-brand {

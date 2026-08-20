@@ -152,6 +152,30 @@ function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_push_tokens_user ON push_tokens(user_id);
+
+    -- SEO content marketing posts served at strivo.ai/blog, aimed at
+    -- ranking for career/interview/resume search terms and funneling
+    -- readers to the app via the CTA banner on every post (see
+    -- src/app/blog). Rows are created either by the founder (reusing the
+    -- admin session cookie) or by the daily automation task (authenticated
+    -- via the separate BLOG_AUTOMATION_SECRET header instead of the human
+    -- admin password — see /api/blog/publish) — kept as its own secret
+    -- specifically so the automation's credential can be rotated without
+    -- logging the founder out of /admin.
+    CREATE TABLE IF NOT EXISTS blog_posts (
+      id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      meta_title TEXT NOT NULL,
+      meta_description TEXT NOT NULL,
+      category TEXT NOT NULL,
+      excerpt TEXT NOT NULL,
+      content_html TEXT NOT NULL,
+      keywords TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_blog_posts_created ON blog_posts(created_at);
+    CREATE INDEX IF NOT EXISTS idx_blog_posts_category ON blog_posts(category);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

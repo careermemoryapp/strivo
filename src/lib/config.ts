@@ -4,6 +4,11 @@
 export const APP_NAME = "Strivo";
 export const APP_TAGLINE = "Your personal AI, built from your own experiences.";
 
+// Shared between the marketing homepage and the blog (every CTA/download
+// link points here) so there's one place to update if the Play Store
+// listing URL ever changes.
+export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ai.strivo.app";
+
 export const HOME_SUBTITLE = "Capture today. Remember forever. Achieve more.";
 
 // Each quick action starts a new chat with `prompt` as the opening user

@@ -5,7 +5,7 @@ import { motion, useMotionValue, useSpring, type Variants } from "framer-motion"
 import { Check, Star } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
-import { APP_NAME } from "@/lib/config";
+import { APP_NAME, PLAY_STORE_URL } from "@/lib/config";
 
 // The public marketing homepage at strivo.ai — the ONLY thing a browser
 // visitor ever sees. The real app (voice recording, chat, memories) lives
@@ -24,8 +24,6 @@ import { APP_NAME } from "@/lib/config";
 // Strivo's real QUICK_ACTIONS (lib/config.ts) — this is a career-memory
 // coach (interview prep, resumes, performance reviews, leadership
 // examples), not a generic journaling app.
-const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ai.strivo.app";
-
 const fadeUp: Variants = {
   hidden: { opacity: 0, y: 24 },
   show: { opacity: 1, y: 0, transition: { duration: 0.6, ease: [0.16, 1, 0.3, 1] } },
