@@ -87,11 +87,17 @@ async function extractText(buffer: Buffer, ext: string): Promise<string> {
     case "md":
       return buffer.toString("utf-8").trim();
     default:
-      throw new Error(
+      throw new UnsupportedFileTypeError(
         "Unsupported file type. Please upload a PDF, Word (.docx), PowerPoint (.pptx), Excel (.xlsx/.csv), or text file."
       );
   }
 }
+
+// Distinguishes our own deliberate, user-safe validation message from
+// whatever pdf-parse/mammoth/jszip/xlsx might throw internally (which can
+// include library internals, file paths, or other implementation details
+// we don't want to hand back to whoever is uploading the file).
+class UnsupportedFileTypeError extends Error {}
 
 export async function POST(req: Request) {
   const userId = await requireUserId();
@@ -121,9 +127,14 @@ export async function POST(req: Request) {
     const finalText = text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}…` : text;
     return NextResponse.json({ text: finalText, filename: name });
   } catch (e) {
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : "Couldn't read that file. Try a different format." },
-      { status: 400 }
-    );
+    if (e instanceof UnsupportedFileTypeError) {
+      return NextResponse.json({ error: e.message }, { status: 400 });
+    }
+    // Whatever pdf-parse/mammoth/jszip/xlsx actually threw stays server-side
+    // only -- it can include internal file paths or library details that
+    // shouldn't go back in an API response. The client gets a safe generic
+    // message instead.
+    console.error("File extraction failed:", e);
+    return NextResponse.json({ error: "Couldn't read that file. Try a different format." }, { status: 400 });
   }
 }
