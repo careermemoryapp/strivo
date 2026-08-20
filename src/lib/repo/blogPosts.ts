@@ -35,6 +35,45 @@ function slugify(title: string): string {
     .slice(0, 80);
 }
 
+// Blog post bodies come from the daily writing automation (or, in future,
+// a founder-facing composer) and are rendered on the public blog with
+// dangerouslySetInnerHTML — so even though the writer is instructed to
+// only use a small set of tags, this is a second, server-side line of
+// defense against stored XSS if that instruction is ever bypassed or the
+// publish credential leaks. It's a lightweight allow-list pass (not a full
+// HTML parser), but it removes every realistic script-injection vector:
+// <script>/<style>/<iframe>/<object>/<embed> blocks, inline event-handler
+// attributes (onclick=...), and javascript:/data: URIs in links.
+const ALLOWED_TAGS = new Set(["h2", "h3", "p", "ul", "ol", "li", "strong", "em", "a", "blockquote", "br"]);
+
+function sanitizeBlogHtml(html: string): string {
+  let out = html
+    // Strip entire elements whose content should never reach the page.
+    .replace(/<(script|style|iframe|object|embed|link|meta|form|noscript)\b[^>]*>[\s\S]*?<\/\1\s*>/gi, "")
+    .replace(/<(script|style|iframe|object|embed|link|meta|form|noscript)\b[^>]*\/?>/gi, "");
+
+  // Walk every remaining tag: drop ones not on the allow-list (but keep
+  // their text content), and on allowed tags strip all attributes except a
+  // safe `href` on <a> (http/https/relative only — no javascript:/data:).
+  out = out.replace(/<\/?([a-zA-Z0-9]+)([^>]*)>/g, (full, rawTag: string, attrs: string) => {
+    const tag = rawTag.toLowerCase();
+    const isClosing = full.startsWith("</");
+    if (!ALLOWED_TAGS.has(tag)) return ""; // drop disallowed tags, keep inner text
+    if (isClosing) return `</${tag}>`;
+    if (tag === "a") {
+      const hrefMatch = attrs.match(/href\s*=\s*["']([^"']*)["']/i);
+      const href = hrefMatch?.[1]?.trim() ?? "";
+      const safeHref = /^(https?:\/\/|\/)/i.test(href) ? href : "";
+      return safeHref
+        ? `<a href="${safeHref.replace(/"/g, "&quot;")}" target="_blank" rel="noopener noreferrer nofollow">`
+        : `<a>`;
+    }
+    return `<${tag}>`;
+  });
+
+  return out.trim();
+}
+
 export function listBlogPosts(opts: { category?: string; limit?: number } = {}): BlogPost[] {
   const db = getDb();
   if (opts.category) {
@@ -96,7 +135,7 @@ export function createBlogPost(input: {
     input.metaDescription.trim(),
     input.category,
     input.excerpt.trim(),
-    input.contentHtml,
+    sanitizeBlogHtml(input.contentHtml),
     input.keywords?.trim() || null,
     created_at
   );

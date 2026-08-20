@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireUserId } from "@/lib/serverAuth";
+import { rateLimitOrResponse } from "@/lib/rateLimit";
 
 // Node-only: pdf-parse/mammoth/jszip/xlsx all need real filesystem/buffer
 // APIs, so this route can't run on the edge runtime.
@@ -95,6 +96,9 @@ async function extractText(buffer: Buffer, ext: string): Promise<string> {
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limited = rateLimitOrResponse(`extract:${userId}`, 30, 60 * 60 * 1000);
+  if (limited) return limited;
 
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");

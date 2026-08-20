@@ -1,10 +1,15 @@
 import type { AuthOptions } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
 import GoogleProvider from "next-auth/providers/google";
 import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { getUserByEmail, createUser, updateUserProfile } from "@/lib/repo/users";
 
+// Strivo is Google-sign-in-only — there's no email/password login,
+// signup, or password-reset flow (those pages/routes were removed; see
+// commit history if they're ever needed again). Every user record still
+// has a password_hash column for schema-simplicity reasons, but it's only
+// ever filled with a random, never-checked placeholder (below) since
+// nothing reads it back for authentication anymore.
 export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
@@ -16,35 +21,9 @@ export const authOptions: AuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     }),
-    CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) return null;
-        const user = getUserByEmail(credentials.email);
-        if (!user) return null;
-        const valid = await bcrypt.compare(credentials.password, user.password_hash);
-        if (!valid) return null;
-        return {
-          id: user.id,
-          email: user.email,
-          name: `${user.first_name} ${user.last_name}`.trim(),
-          firstName: user.first_name,
-          lastName: user.last_name,
-          image: user.profile_image ?? undefined,
-        } as never;
-      },
-    }),
   ],
   callbacks: {
     async signIn({ user, account }) {
-      // Google sign-ins don't go through our credentials/authorize flow above,
-      // so the first time someone signs in with Google we create their user
-      // record here (using a random, never-checked placeholder password hash
-      // since this account can only ever be accessed via Google).
       if (account?.provider === "google") {
         const email = user.email;
         if (!email) return false;

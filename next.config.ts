@@ -9,6 +9,39 @@ const nextConfig: NextConfig = {
   // node_modules requires instead of bundling them, so the worker path
   // resolves correctly.
   serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas"],
+
+  // Security headers applied to every response. Deliberately not adding a
+  // strict Content-Security-Policy here — Strivo doesn't embed third-party
+  // scripts/iframes today, but a CSP is easy to get subtly wrong (breaking
+  // Google sign-in, the mobile WebView, etc.) and hard for a non-engineer
+  // to debug in production, so it's left as a follow-up to introduce
+  // carefully rather than blind. The headers below are safe, high-value,
+  // and don't change how any existing feature behaves.
+  async headers() {
+    return [
+      {
+        source: "/:path*",
+        headers: [
+          // Stops the browser from guessing content types (e.g. treating
+          // an uploaded file as HTML/JS instead of what it's declared as).
+          { key: "X-Content-Type-Options", value: "nosniff" },
+          // Strivo is never meant to be embedded in another site's iframe
+          // — this blocks clickjacking attempts that try to do that.
+          { key: "X-Frame-Options", value: "SAMEORIGIN" },
+          // Don't leak full referrer URLs (which can contain tokens/paths)
+          // to other origins when a Strivo page links out.
+          { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
+          // Explicitly allow microphone for the app's own origin (the
+          // Record feature needs it) and deny camera/geolocation, which
+          // Strivo never uses.
+          { key: "Permissions-Policy", value: "microphone=(self), camera=(), geolocation=()" },
+          // Force HTTPS for two years including subdomains — the whole
+          // site already only runs over HTTPS via the Let's Encrypt cert.
+          { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

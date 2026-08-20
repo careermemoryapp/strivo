@@ -3,12 +3,19 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { getChatById } from "@/lib/repo/chats";
 import { sendUserMessageAndGetReply } from "@/lib/chatService";
+import { rateLimitOrResponse } from "@/lib/rateLimit";
 
 const schema = z.object({ content: z.string().trim().min(1, "Message can't be empty").max(4000) });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Every message triggers an OpenAI chat completion (and often an
+  // embedding call) — cap per-user spend from a runaway client/script.
+  const limited = rateLimitOrResponse(`chat-message:${userId}`, 60, 60 * 60 * 1000);
+  if (limited) return limited;
+
   const { id } = await params;
 
   const chat = getChatById(userId, id);

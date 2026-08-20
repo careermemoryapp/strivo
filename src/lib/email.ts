@@ -53,3 +53,37 @@ export async function sendSupportEmail(params: {
     return false;
   }
 }
+
+// Sends the password-reset link to the account owner's own email address
+// (not to the shared support inbox). This replaces the earlier MVP
+// shortcut of returning the reset link directly in the API response —
+// that shortcut let anyone reset any account's password just by knowing
+// the email address, since no email delivery was actually required to
+// complete the flow. Returns false (rather than throwing) if SES isn't
+// configured or the send fails, so callers can log/monitor without
+// crashing the request.
+export async function sendPasswordResetEmail(params: { toEmail: string; resetUrl: string }): Promise<boolean> {
+  if (!sesConfigured()) {
+    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — cannot send password reset email.");
+    return false;
+  }
+
+  const body = `We got a request to reset your Strivo password.\n\nReset it here (this link expires soon and can only be used once):\n${params.resetUrl}\n\nIf you didn't request this, you can safely ignore this email — your password won't change.`;
+
+  try {
+    await getClient().send(
+      new SendEmailCommand({
+        Source: FROM_EMAIL,
+        Destination: { ToAddresses: [params.toEmail] },
+        Message: {
+          Subject: { Data: "Reset your Strivo password", Charset: "UTF-8" },
+          Body: { Text: { Data: body, Charset: "UTF-8" } },
+        },
+      })
+    );
+    return true;
+  } catch (e) {
+    console.error("Failed to send password reset email via SES:", e);
+    return false;
+  }
+}

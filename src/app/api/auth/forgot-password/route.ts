@@ -1,26 +1,9 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { getUserByEmail } from "@/lib/repo/users";
-import { createResetToken } from "@/lib/repo/passwordReset";
 
-const schema = z.object({ email: z.string().trim().email() });
-
-// NOTE (MVP limitation, disclosed rather than faked): this sandbox has no
-// outbound email service configured, so we cannot actually send a reset
-// email. Instead we return the reset link directly in the API response so
-// the flow is fully testable end-to-end. In production this would be
-// emailed and devResetLink would be removed.
-export async function POST(req: Request) {
-  const body = await req.json().catch(() => null);
-  const parsed = schema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Enter a valid email" }, { status: 400 });
-  }
-  const user = getUserByEmail(parsed.data.email);
-  if (!user) {
-    // Don't reveal whether the account exists.
-    return NextResponse.json({ ok: true });
-  }
-  const { token } = createResetToken(user.id);
-  return NextResponse.json({ ok: true, devResetLink: `/reset-password?token=${token}` });
+// Strivo is Google-sign-in-only now — there's no password to reset, so this
+// endpoint is retired. Left as an inert 410 (rather than deleted) since the
+// route file can't be removed from this workspace; it does nothing and
+// accepts no input.
+export async function POST() {
+  return NextResponse.json({ error: "Password reset is no longer available. Sign in with Google instead." }, { status: 410 });
 }
