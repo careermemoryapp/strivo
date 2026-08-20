@@ -31,17 +31,44 @@ export default async function BlogIndexPage({
           <LogoMark size={28} />
           <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
         </Link>
-        <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#888] hover:text-white">
-          Get the app →
-        </a>
+        <div className="flex items-center gap-6">
+          <span className="text-xs font-semibold text-white">Blog</span>
+          <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#888] hover:text-white">
+            Get the app →
+          </a>
+        </div>
       </header>
 
       {/* Hero */}
-      <section className="border-b border-[#1e1e26] px-8 py-16 text-center sm:py-20" style={{ background: "#0a0a0f" }}>
-        <p className="text-xs font-semibold tracking-[0.2em] text-brand-primary">THE {APP_NAME.toUpperCase()} BLOG</p>
-        <h1 className="mx-auto mt-4 max-w-xl text-3xl font-extrabold leading-tight tracking-tight sm:text-5xl">
-          Career advice, interview prep, and stories to help you tell yours better.
-        </h1>
+      <section className="relative overflow-hidden border-b border-[#1e1e26] px-8 py-20 text-center sm:py-28" style={{ background: "#0a0a0f" }}>
+        <div
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
+          style={{
+            width: 640,
+            height: 420,
+            background: "radial-gradient(ellipse at center, rgba(124,58,237,0.35), rgba(79,110,247,0.12) 45%, transparent 75%)",
+          }}
+        />
+        <div className="relative">
+          <p className="inline-flex items-center gap-2 rounded-full border border-[#2a2a35] bg-[#12081f] px-4 py-1.5 text-xs font-semibold tracking-[0.15em] text-brand-primary">
+            THE {APP_NAME.toUpperCase()} BLOG
+          </p>
+          <h1 className="mx-auto mt-6 max-w-2xl text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-6xl">
+            Career advice,
+            <br />
+            <span
+              className="bg-clip-text text-transparent"
+              style={{ backgroundImage: "linear-gradient(90deg,#6d8bff,#c266f2,#e879f9)" }}
+            >
+              interview prep, and stories
+            </span>{" "}
+            to help you tell yours better.
+          </h1>
+          <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-[#a0a0ac] sm:text-base">
+            Practical, specific advice on interviews, resumes, and career growth — no fluff.
+          </p>
+        </div>
       </section>
 
       {/* Category filter */}
