@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { getMemoryById, deleteMemory, updateMemoryMetadata } from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
+import { rateLimitOrResponse } from "@/lib/rateLimit";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
@@ -23,6 +24,12 @@ const patchSchema = z.object({
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Same two OpenAI calls per request as creation — shares that bucket so
+  // create+edit spend is capped together per user, not doubled.
+  const limited = rateLimitOrResponse(`memory-create:${userId}`, 60, 60 * 60 * 1000);
+  if (limited) return limited;
+
   const { id } = await params;
   const existing = getMemoryById(userId, id);
   if (!existing) return NextResponse.json({ error: "Memory not found" }, { status: 404 });

@@ -15,8 +15,17 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Incorrect password." }, { status: 401 });
   }
 
+  let sessionValue: string;
+  try {
+    sessionValue = createAdminSessionValue();
+  } catch {
+    // Server is missing ADMIN_SESSION_SECRET/NEXTAUTH_SECRET -- fail closed
+    // with a clear error instead of a generic crash.
+    return NextResponse.json({ error: "Server misconfigured: no session secret set." }, { status: 500 });
+  }
+
   const res = NextResponse.json({ ok: true });
-  res.cookies.set(ADMIN_COOKIE_NAME, createAdminSessionValue(), {
+  res.cookies.set(ADMIN_COOKIE_NAME, sessionValue, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",

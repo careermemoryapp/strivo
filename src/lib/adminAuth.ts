@@ -12,16 +12,17 @@ import { cookies } from "next/headers";
 export const ADMIN_COOKIE_NAME = "strivo_admin_session";
 const MAX_AGE_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
-function sessionSecret(): string {
-  // Falls back to NEXTAUTH_SECRET so this works out of the box in an
-  // environment that already has that set, but a dedicated
-  // ADMIN_SESSION_SECRET is recommended so rotating one doesn't log the
-  // other out.
-  return process.env.ADMIN_SESSION_SECRET || process.env.NEXTAUTH_SECRET || "strivo-admin-dev-secret";
+// Deliberately no hardcoded fallback string here. If neither env var is
+// set, admin sessions must fail closed (nobody can create or verify one)
+// rather than silently sign with a value that's sitting in plain text in
+// this file and every clone of this repo -- a hardcoded fallback secret is
+// the same class of bug as a default database password.
+function sessionSecret(): string | null {
+  return process.env.ADMIN_SESSION_SECRET || process.env.NEXTAUTH_SECRET || null;
 }
 
-function sign(value: string): string {
-  return crypto.createHmac("sha256", sessionSecret()).update(value).digest("hex");
+function sign(value: string, secret: string): string {
+  return crypto.createHmac("sha256", secret).update(value).digest("hex");
 }
 
 function timingSafeStringEqual(a: string, b: string): boolean {
@@ -40,14 +41,23 @@ export function checkAdminPassword(password: string): boolean {
   return timingSafeStringEqual(password, expected);
 }
 
+// Throws (rather than silently signing with a guessable value) if the
+// server is misconfigured with no secret available at all -- the admin
+// login route lets that surface as a 500 instead of ever issuing a forgeable
+// session.
 export function createAdminSessionValue(): string {
+  const secret = sessionSecret();
+  if (!secret) {
+    throw new Error("Cannot create an admin session: set ADMIN_SESSION_SECRET or NEXTAUTH_SECRET.");
+  }
   const payload = `admin:${Date.now()}`;
   const payloadB64 = Buffer.from(payload).toString("base64url");
-  return `${payloadB64}.${sign(payload)}`;
+  return `${payloadB64}.${sign(payload, secret)}`;
 }
 
 function isValidAdminSessionValue(value: string | undefined): boolean {
-  if (!value) return false;
+  const secret = sessionSecret();
+  if (!secret || !value) return false;
   const [payloadB64, sig] = value.split(".");
   if (!payloadB64 || !sig) return false;
   let payload: string;
@@ -56,7 +66,7 @@ function isValidAdminSessionValue(value: string | undefined): boolean {
   } catch {
     return false;
   }
-  if (!timingSafeStringEqual(sig, sign(payload))) return false;
+  if (!timingSafeStringEqual(sig, sign(payload, secret))) return false;
   const match = payload.match(/^admin:(\d+)$/);
   if (!match) return false;
   return Date.now() - Number(match[1]) < MAX_AGE_SECONDS * 1000;

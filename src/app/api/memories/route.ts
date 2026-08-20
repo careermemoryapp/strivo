@@ -3,6 +3,7 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { createMemory, listMemories, updateMemoryMetadata, getMemoryById } from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
+import { rateLimitOrResponse } from "@/lib/rateLimit";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -30,6 +31,12 @@ function fallbackTitle(transcript: string): string {
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Every memory triggers two OpenAI calls (metadata generation + embedding)
+  // — cap per-user spend from a runaway client/script, same reasoning as
+  // the transcribe and chat-message endpoints.
+  const limited = rateLimitOrResponse(`memory-create:${userId}`, 60, 60 * 60 * 1000);
+  if (limited) return limited;
 
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);
