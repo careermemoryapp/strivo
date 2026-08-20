@@ -10,6 +10,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 export default function AdminLoginPage() {
   const router = useRouter();
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,7 +22,7 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
+        body: JSON.stringify({ password, code }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -54,6 +55,15 @@ export default function AdminLoginPage() {
             autoFocus
             value={password}
             onChange={(e) => setPassword(e.target.value)}
+          />
+          <TextField
+            label="Authenticator code"
+            type="text"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            placeholder="6-digit code (leave blank if not set up yet)"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
           />
           <Button type="submit" className="w-full" loading={loading}>
             Continue

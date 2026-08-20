@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
+import { verifyTotp } from "@/lib/totp";
 
 // A deliberately lightweight admin session, separate from the regular
 // NextAuth user session — this gates the founder-only /admin dashboard
@@ -39,6 +40,23 @@ export function checkAdminPassword(password: string): boolean {
   const expected = process.env.ADMIN_PASSWORD;
   if (!expected || !password) return false;
   return timingSafeStringEqual(password, expected);
+}
+
+// Second factor: a 6-digit authenticator-app code, checked against
+// ADMIN_TOTP_SECRET. Deliberately opt-in during rollout -- if that env var
+// isn't set yet, this returns true (no second factor required) so deploying
+// this code doesn't immediately lock anyone out before they've had a chance
+// to actually set up their authenticator app. Once ADMIN_TOTP_SECRET is set,
+// every login requires a valid code.
+export function checkAdminTotp(code: string | undefined): boolean {
+  const secret = process.env.ADMIN_TOTP_SECRET;
+  if (!secret) return true;
+  if (!code) return false;
+  return verifyTotp(secret, code);
+}
+
+export function adminTotpConfigured(): boolean {
+  return !!process.env.ADMIN_TOTP_SECRET;
 }
 
 // Throws (rather than silently signing with a guessable value) if the
