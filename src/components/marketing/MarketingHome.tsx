@@ -145,7 +145,7 @@ function HomeScreenMock() {
           <span className="text-[10px] text-white/40">Ask anything — career advice…</span>
         </div>
       </div>
-      <div className="px-3 py-3.5" style={{ background: "#0a0a0f" }}>
+      <div className="bg-white px-3 py-3.5">
         <div className="rounded-[13px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-3 text-center">
           <div className="mx-auto mb-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs text-[#8b5cf6]" style={{ boxShadow: "0 4px 10px rgba(139,92,246,0.2)" }}>●</div>
           <p className="text-[10px] font-bold text-[#3c3650]">What&apos;s on your mind today?</p>
