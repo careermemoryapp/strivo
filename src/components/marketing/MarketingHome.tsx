@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { motion, useMotionValue, useSpring, type Variants } from "framer-motion";
-import { Check } from "lucide-react";
+import { Check, Star } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME } from "@/lib/config";
@@ -201,7 +201,7 @@ function CreateMemoryScreenMock() {
   const tags = ["Leadership", "Work", "Achievement"];
   return (
     <PhoneFrame width={200} glow="0 24px 60px rgba(0,0,0,0.35)">
-      <div className="flex flex-col text-left" style={{ height: 340, padding: "20px 18px" }}>
+      <div className="flex flex-col bg-white text-left" style={{ height: 340, padding: "20px 18px" }}>
         <p className="mb-2 text-[9px] font-bold uppercase tracking-wide text-[#a8a2bd]">Transcript</p>
         <p className="mb-4 text-[11px] leading-relaxed text-[#3c3650]">
           &quot;...led the launch when two teammates were out, shipped on time...&quot;
@@ -279,10 +279,10 @@ const USE_CASES = [
 ];
 
 const TESTIMONIALS = [
-  { name: "Riya S.", quote: "I talk to Strivo like a journal, and it actually recalls things I told it weeks ago." },
-  { name: "Arjun K.", quote: "Faster than writing anything down. It just gets what I mean." },
-  { name: "Meera P.", quote: "Used it to prep for an interview by recalling my own past answers. Wild." },
-  { name: "Dev G.", quote: "My dad uses it daily now. Simplest app on his phone by far." },
+  { name: "Riya S.", role: "Product Manager", quote: "I talk to Strivo like a journal, and it actually recalls things I told it weeks ago." },
+  { name: "Arjun K.", role: "Software Engineer", quote: "Faster than writing anything down. It just gets what I mean." },
+  { name: "Meera P.", role: "Job seeker", quote: "Used it to prep for an interview by recalling my own past answers. Wild." },
+  { name: "Dev G.", role: "Sales Lead", quote: "My dad uses it daily now. Simplest app on his phone by far." },
 ];
 
 export function MarketingHome({
@@ -444,9 +444,25 @@ export function MarketingHome({
                 className="rounded-2xl rounded-bl-sm px-5 py-4 text-sm leading-relaxed text-white"
                 style={{ background: "linear-gradient(135deg,#4f6ef7,#8b5cf6)", boxShadow: "0 12px 30px rgba(124,58,237,0.25)" }}
               >
+                <div className="mb-2 flex gap-0.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Star key={i} size={12} fill="#fbbf24" color="#fbbf24" />
+                  ))}
+                </div>
                 {t.quote}
               </div>
-              <p className="ml-2 mt-2 text-xs text-[#8a8a99]">— {t.name}</p>
+              <div className="ml-2 mt-2.5 flex items-center gap-2">
+                <span
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
+                  style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                >
+                  {t.name.split(" ").map((p) => p[0]).join("")}
+                </span>
+                <div>
+                  <p className="text-xs font-semibold text-white">{t.name}</p>
+                  <p className="text-[11px] text-[#8a8a99]">{t.role}</p>
+                </div>
+              </div>
             </motion.div>
           ))}
         </motion.div>
