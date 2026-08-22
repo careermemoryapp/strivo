@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { getChatById } from "@/lib/repo/chats";
 import { sendUserMessageAndGetReply } from "@/lib/chatService";
-import { rateLimitOrResponse } from "@/lib/rateLimit";
+import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 
 const schema = z.object({ content: z.string().trim().min(1, "Message can't be empty").max(4000) });
 
@@ -15,6 +15,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   // embedding call) — cap per-user spend from a runaway client/script.
   const limited = rateLimitOrResponse(`chat-message:${userId}`, 60, 60 * 60 * 1000);
   if (limited) return limited;
+
+  // Shares the -ip bucket with the initial-message path in chats/route.ts.
+  const limitedByIp = rateLimitOrResponse(`chat-message-ip:${requestIp(req)}`, 300, 60 * 60 * 1000);
+  if (limitedByIp) return limitedByIp;
 
   const { id } = await params;
 

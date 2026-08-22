@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { requireUserId } from "@/lib/serverAuth";
-import { rateLimitOrResponse } from "@/lib/rateLimit";
+import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 
 // Node-only: pdf-parse/mammoth/jszip/xlsx all need real filesystem/buffer
 // APIs, so this route can't run on the edge runtime.
@@ -106,6 +106,10 @@ export async function POST(req: Request) {
 
   const limited = rateLimitOrResponse(`extract:${userId}`, 30, 60 * 60 * 1000);
   if (limited) return limited;
+
+  // Defense-in-depth on top of the per-user limit above.
+  const limitedByIp = rateLimitOrResponse(`extract-ip:${requestIp(req)}`, 150, 60 * 60 * 1000);
+  if (limitedByIp) return limitedByIp;
 
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");

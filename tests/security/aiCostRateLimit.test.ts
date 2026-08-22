@@ -68,6 +68,14 @@ function jsonRequest(body: unknown): Request {
   });
 }
 
+function jsonRequestFromIp(body: unknown, ip: string): Request {
+  return new Request("https://strivo.ai/api/test", {
+    method: "POST",
+    headers: { "content-type": "application/json", "x-forwarded-for": ip },
+    body: JSON.stringify(body),
+  });
+}
+
 describe("AI-cost endpoints are rate limited", () => {
   it("POST /api/memories blocks after the per-user limit", async () => {
     const { requireUserId } = await import("@/lib/serverAuth");
@@ -102,5 +110,51 @@ describe("AI-cost endpoints are rate limited", () => {
     // Before the fix, POST /api/chats had no limit at all, so this loop
     // would run all 61 iterations and never see a 429.
     expect(lastStatus).toBe(429);
+  });
+});
+
+// Regression test for the IP-based layer added on top of the per-user
+// limits above (see rateLimit.ts's `-ip` buckets). The scenario this
+// guards against: someone creates several accounts specifically to dodge
+// a single account's 60/hour cap. Simulates 5 separate accounts, all
+// hitting from the same network (same x-forwarded-for), each staying
+// safely under their own 60/hour limit -- but the 6th account's very
+// first request, from that same IP, should already be blocked by the
+// shared IP bucket even though that account itself has made zero requests
+// so far.
+describe("AI-cost endpoints also cap spend per network (IP), not just per account", () => {
+  it("POST /api/memories blocks a brand-new account once its network has already spent the shared IP budget", async () => {
+    const usersRepo = await import("@/lib/repo/users");
+    const { requireUserId } = await import("@/lib/serverAuth");
+    const { POST } = await import("@/app/api/memories/route");
+
+    const sharedIp = "203.0.113.50";
+    const accounts = await Promise.all(
+      Array.from({ length: 6 }, (_, i) =>
+        usersRepo.createUser({
+          firstName: "Test",
+          lastName: `IP User ${i}`,
+          email: `aicost-ip-${i}@example.com`,
+          passwordHash: "unused-in-google-only-auth",
+        })
+      )
+    );
+
+    // Accounts 0-4: 60 requests each (300 total) -- each stays exactly at
+    // its own per-user ceiling, none of them individually rate limited.
+    for (const account of accounts.slice(0, 5)) {
+      vi.mocked(requireUserId).mockResolvedValue(account.id);
+      for (let i = 0; i < 60; i++) {
+        const res = await POST(jsonRequestFromIp({ transcript: `memory ${i}`, source: "text" }, sharedIp));
+        expect(res.status).not.toBe(429);
+      }
+    }
+
+    // Account 5 has made zero requests of its own -- a fresh account would
+    // normally sail through its own 60/hour limit. It should still get
+    // blocked, because the shared network has already used its 300/hour.
+    vi.mocked(requireUserId).mockResolvedValue(accounts[5].id);
+    const res = await POST(jsonRequestFromIp({ transcript: "one more", source: "text" }, sharedIp));
+    expect(res.status).toBe(429);
   });
 });

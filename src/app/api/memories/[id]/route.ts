@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { getMemoryById, deleteMemory, updateMemoryMetadata } from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
-import { rateLimitOrResponse } from "@/lib/rateLimit";
+import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
@@ -29,6 +29,11 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // create+edit spend is capped together per user, not doubled.
   const limited = rateLimitOrResponse(`memory-create:${userId}`, 60, 60 * 60 * 1000);
   if (limited) return limited;
+
+  // Same defense-in-depth as memories POST -- shares the -ip bucket too,
+  // so create+edit spend from one network is capped together.
+  const limitedByIp = rateLimitOrResponse(`memory-create-ip:${requestIp(req)}`, 300, 60 * 60 * 1000);
+  if (limitedByIp) return limitedByIp;
 
   const { id } = await params;
   const existing = getMemoryById(userId, id);

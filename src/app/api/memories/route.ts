@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { createMemory, listMemories, updateMemoryMetadata, getMemoryById } from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
-import { rateLimitOrResponse } from "@/lib/rateLimit";
+import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -37,6 +37,13 @@ export async function POST(req: Request) {
   // the transcribe and chat-message endpoints.
   const limited = rateLimitOrResponse(`memory-create:${userId}`, 60, 60 * 60 * 1000);
   if (limited) return limited;
+
+  // Defense-in-depth on top of the per-user limit above: someone could
+  // otherwise dodge it by creating several accounts from the same
+  // network. Generous enough that a normal shared connection (a family,
+  // a small office) never gets near it in real usage.
+  const limitedByIp = rateLimitOrResponse(`memory-create-ip:${requestIp(req)}`, 300, 60 * 60 * 1000);
+  if (limitedByIp) return limitedByIp;
 
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);

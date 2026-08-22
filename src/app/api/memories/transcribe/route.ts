@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUserId } from "@/lib/serverAuth";
 import { transcribeAudio } from "@/lib/ai";
-import { rateLimitOrResponse } from "@/lib/rateLimit";
+import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 
 // Needs real fetch/File handling talking to OpenAI, not the edge runtime.
 export const runtime = "nodejs";
@@ -16,6 +16,10 @@ export async function POST(req: Request) {
   // (e.g. a compromised session or buggy client looping requests).
   const limited = rateLimitOrResponse(`transcribe:${userId}`, 30, 60 * 60 * 1000);
   if (limited) return limited;
+
+  // Defense-in-depth on top of the per-user limit above.
+  const limitedByIp = rateLimitOrResponse(`transcribe-ip:${requestIp(req)}`, 150, 60 * 60 * 1000);
+  if (limitedByIp) return limitedByIp;
 
   const form = await req.formData().catch(() => null);
   const audio = form?.get("audio");

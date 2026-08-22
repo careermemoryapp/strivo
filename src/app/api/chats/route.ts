@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { createChat, listChats } from "@/lib/repo/chats";
 import { sendUserMessageAndGetReply } from "@/lib/chatService";
-import { rateLimitOrResponse } from "@/lib/rateLimit";
+import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -40,6 +40,11 @@ export async function POST(req: Request) {
   if (parsed.data.initialMessage) {
     const limited = rateLimitOrResponse(`chat-message:${userId}`, 60, 60 * 60 * 1000);
     if (limited) return limited;
+
+    // Defense-in-depth on top of the per-user limit: caps aggregate spend
+    // from one network even across several accounts.
+    const limitedByIp = rateLimitOrResponse(`chat-message-ip:${requestIp(req)}`, 300, 60 * 60 * 1000);
+    if (limitedByIp) return limitedByIp;
   }
 
   const chat = createChat({ userId, title: parsed.data.title, category: parsed.data.category });
