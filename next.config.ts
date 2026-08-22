@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   // pdf-parse (via pdfjs-dist) resolves its worker script relative to its
@@ -44,4 +45,13 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  org: "strivo-4i",
+  project: "javascript-nextjs",
+
+  // No SENTRY_AUTH_TOKEN is configured yet, so this stays quiet instead of
+  // warning on every build. Source map upload (for readable stack traces
+  // instead of minified ones) is a later, optional improvement — it needs
+  // an auth token treated as a secret, which is its own separate step.
+  silent: true,
+});
