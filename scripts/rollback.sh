@@ -27,6 +27,13 @@ echo "Installing dependencies..."
 npm install
 
 echo ""
+echo "Stopping the app for the build..."
+# Same reasoning as deploy.sh -- this server doesn't have enough spare RAM
+# to build Next.js while the live app keeps running, so the site is offline
+# for the length of the build below (recent runs: ~8-9 minutes).
+pm2 stop strivo || true
+
+echo ""
 echo "Building..."
 # Same scratch-dir-then-swap approach as deploy.sh -- see its comment for
 # why building straight into the live ".next" is worth avoiding.

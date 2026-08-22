@@ -32,15 +32,28 @@ npm audit --omit=dev --json > security-audit.json 2>/dev/null || true
 echo "Done (results visible on the admin dashboard)."
 
 echo ""
+echo "Stopping the app for the build..."
+# The server this runs on has under 1GB of real RAM. The live app's two pm2
+# workers alone eat a big chunk of that, and building Next.js at the same
+# time was pushing the machine into out-of-memory territory -- the build
+# would compile fine and then get silently SIGKILLed by the kernel right
+# after, even with 2GB of swap already in place (confirmed via `free -h` /
+# `pm2 list` on 2026-08-22: only ~264MB free RAM at idle before the build
+# even starts). Stopping the app frees that memory for the build instead.
+# This is the real, if unfortunate, tradeoff of a single small server: the
+# site is offline for the length of the build below (recent runs: ~8-9
+# minutes) every time you deploy. If that ever becomes a real problem,
+# upgrading to an instance with more RAM removes this tradeoff entirely --
+# ask before doing that, since it's an ongoing cost increase.
+pm2 stop strivo || true
+
+echo ""
 echo "Building..."
-# Build into a scratch directory instead of the live ".next" -- the old
-# server keeps running and answering real requests the whole time this
-# runs, and building straight into ".next" means it's overwriting, file by
-# file, the exact files that live process might be reading from at that
-# exact moment. That's the real cause of the odd one-off "manifest does not
-# exist" / "cannot find module" errors that show up in Sentry right around
-# deploy times. Swapping the whole finished directory in with one instant
-# rename removes that window almost entirely.
+# Build into a scratch directory instead of the live ".next" -- even with
+# the app stopped above, building straight into ".next" risks the restart
+# below picking up a half-written directory if anything goes wrong
+# mid-build. Swapping the whole finished directory in with one instant
+# rename avoids that.
 rm -rf .next-build
 NEXT_DIST_DIR=.next-build npm run build
 
