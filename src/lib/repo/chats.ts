@@ -60,8 +60,12 @@ export function listChats(userId: string, opts: { search?: string; category?: st
     clauses.push("category = ?");
     params.push(opts.category);
   }
+  // Sane upper bound so one very long-lived account can't make this query
+  // (or the list it renders) grow unbounded. Always newest-first, so
+  // capping here never hides anything a user would actually be looking
+  // for -- it just stops showing chats from years ago on this screen.
   return db
-    .prepare(`SELECT * FROM chats WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC`)
+    .prepare(`SELECT * FROM chats WHERE ${clauses.join(" AND ")} ORDER BY updated_at DESC LIMIT 500`)
     .all(...(params as [])) as Chat[];
 }
 

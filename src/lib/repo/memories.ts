@@ -46,6 +46,14 @@ export function getMemoryById(userId: string, id: string): Memory | undefined {
     .get(id, userId) as Memory | undefined;
 }
 
+// Deliberately unbounded (no LIMIT): this supports both "newest" and
+// "oldest" sort, and a blind LIMIT would silently hide real entries
+// depending on which direction the user is browsing (e.g. LIMIT 500 on an
+// "oldest first" sort would hide everything after their 500th memory,
+// which is the opposite of what that view is for). Fine at today's scale
+// -- if a single user's memory count ever climbs into the hundreds+,
+// the right fix is real "load more" pagination in the UI, not a silent
+// cap here.
 export function listMemories(
   userId: string,
   opts: { search?: string; sort?: "newest" | "oldest" } = {}
