@@ -23,6 +23,16 @@ function createConnection(): DatabaseSync {
   const db = new DatabaseSync(DB_PATH);
   db.exec("PRAGMA journal_mode = WAL;");
   db.exec("PRAGMA foreign_keys = ON;");
+  // SQLite's actual default (synchronous=FULL) does a full disk sync on
+  // every single write -- safe, but the slowest option, and mostly
+  // redundant once WAL mode is already on. SQLite's own docs recommend
+  // NORMAL specifically for WAL-mode databases: it only forces a sync at
+  // WAL checkpoints instead of every write, which is significantly faster
+  // for a write-heavy path like chat messages, while still never
+  // corrupting the database file even in a crash -- the only real-world
+  // risk is losing the last few WAL-only commits in an OS crash/power
+  // loss, not app-level crashes or a normal `pm2 restart`.
+  db.exec("PRAGMA synchronous = NORMAL;");
   // Once pm2 runs Strivo as multiple clustered processes, more than one of
   // them can open this same file at once. WAL mode already lets that work
   // (one writer + concurrent readers), but without a busy_timeout a writer
