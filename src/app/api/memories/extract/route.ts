@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { requireUserId } from "@/lib/serverAuth";
 import { rateLimitOrResponse } from "@/lib/rateLimit";
 
@@ -135,6 +136,7 @@ export async function POST(req: Request) {
     // shouldn't go back in an API response. The client gets a safe generic
     // message instead.
     console.error("File extraction failed:", e);
+    Sentry.captureException(e);
     return NextResponse.json({ error: "Couldn't read that file. Try a different format." }, { status: 400 });
   }
 }

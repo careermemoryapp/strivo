@@ -1,4 +1,5 @@
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
+import * as Sentry from "@sentry/nextjs";
 
 // Sends outbound email via AWS SES. Uses the standard AWS SDK env vars
 // (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) so it picks up
@@ -50,6 +51,7 @@ export async function sendSupportEmail(params: {
     return true;
   } catch (e) {
     console.error("Failed to send support email via SES:", e);
+    Sentry.captureException(e);
     return false;
   }
 }
@@ -84,6 +86,7 @@ export async function sendPasswordResetEmail(params: { toEmail: string; resetUrl
     return true;
   } catch (e) {
     console.error("Failed to send password reset email via SES:", e);
+    Sentry.captureException(e);
     return false;
   }
 }

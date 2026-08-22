@@ -1,6 +1,7 @@
 import type { App } from "firebase-admin/app";
 import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
+import * as Sentry from "@sentry/nextjs";
 import { deletePushTokens } from "@/lib/repo/pushTokens";
 
 // Lazily initialized so a deploy without FIREBASE_SERVICE_ACCOUNT_JSON set
@@ -25,6 +26,7 @@ function getFirebaseApp(): App | null {
     firebaseApp = initializeApp({ credential: cert(JSON.parse(raw)) });
   } catch (e) {
     console.error("Failed to initialize Firebase Admin — check FIREBASE_SERVICE_ACCOUNT_JSON.", e);
+    Sentry.captureException(e);
     firebaseApp = null;
   }
   return firebaseApp;
@@ -85,6 +87,7 @@ export async function sendPushToAllDevices(
       });
     } catch (e) {
       console.error("Push send batch failed:", e);
+      Sentry.captureException(e);
     }
   }
 

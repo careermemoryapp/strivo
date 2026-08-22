@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { createNudge, listRecentNudges } from "@/lib/repo/nudges";
@@ -56,7 +57,10 @@ export async function POST(req: Request) {
     title: nudge.title ?? undefined,
     body: nudge.message,
     route: "/record",
-  }).catch((e) => console.error("Nudge push send failed:", e));
+  }).catch((e) => {
+    console.error("Nudge push send failed:", e);
+    Sentry.captureException(e);
+  });
 
   return NextResponse.json({ sent: nudge });
 }

@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import * as Sentry from "@sentry/nextjs";
 import type { Memory } from "@/lib/repo/memories";
 
 // Server-only. Never import this file from a "use client" component.
@@ -88,6 +89,7 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
+    Sentry.captureException(err);
     return null;
   }
 }
@@ -121,6 +123,7 @@ export async function translateToEnglish(text: string): Promise<string> {
     return translated || text;
   } catch (err) {
     console.error("translateToEnglish failed:", err);
+    Sentry.captureException(err);
     return text;
   }
 }
@@ -137,6 +140,7 @@ export async function embedText(text: string): Promise<number[] | null> {
     return res.data[0]?.embedding ?? null;
   } catch (err) {
     console.error("embedText failed:", err);
+    Sentry.captureException(err);
     return null;
   }
 }
@@ -174,6 +178,7 @@ export async function transcribeAudio(file: File): Promise<string | null> {
     return (result.text ?? "").trim();
   } catch (err) {
     console.error("transcribeAudio failed:", err);
+    Sentry.captureException(err);
     return null;
   }
 }
@@ -235,6 +240,7 @@ export async function chatCompletion(
     return { reply };
   } catch (err) {
     console.error("chatCompletion failed:", err);
+    Sentry.captureException(err);
     return { error: "The AI request failed. Please try again." };
   }
 }
