@@ -1,6 +1,5 @@
 import type { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
-import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { getUserByEmail, createUser, updateUserProfile } from "@/lib/repo/users";
 
@@ -9,7 +8,11 @@ import { getUserByEmail, createUser, updateUserProfile } from "@/lib/repo/users"
 // commit history if they're ever needed again). Every user record still
 // has a password_hash column for schema-simplicity reasons, but it's only
 // ever filled with a random, never-checked placeholder (below) since
-// nothing reads it back for authentication anymore.
+// nothing reads it back for authentication anymore. It's stored as plain
+// random bytes, not run through a password-hashing algorithm (bcrypt used
+// to be used here, but hashing a value nobody ever verifies against was
+// pure overhead — a dependency to maintain and a blocking CPU-bound call
+// on every signup — for no actual security benefit).
 export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
   secret: process.env.NEXTAUTH_SECRET,
@@ -31,7 +34,7 @@ export const authOptions: AuthOptions = {
         if (!dbUser) {
           const fullName = (user.name ?? "").trim();
           const [firstName, ...rest] = fullName.length ? fullName.split(" ") : ["Strivo", "User"];
-          const placeholderHash = bcrypt.hashSync(crypto.randomBytes(32).toString("hex"), 10);
+          const placeholderHash = crypto.randomBytes(32).toString("hex");
           dbUser = createUser({
             firstName: firstName || "Strivo",
             lastName: rest.join(" "),
