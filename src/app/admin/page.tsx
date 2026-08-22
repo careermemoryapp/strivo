@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, type ReactNode, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Send, Search } from "lucide-react";
+import { LogOut, Send, Search, Activity } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -40,6 +40,27 @@ function StatCard({ label, value, hint }: { label: string; value: string; hint?:
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
+
+function formatUptime(seconds: number): string {
+  const days = Math.floor(seconds / 86400);
+  const hours = Math.floor((seconds % 86400) / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${minutes}m`;
+  return `${minutes}m`;
+}
+
+type AdminHealth = {
+  status: "ok" | "degraded";
+  database: { ok: boolean; responseMs: number };
+  process: {
+    pm2InstanceId: string | null;
+    uptimeSeconds: number;
+    nodeVersion: string;
+    memoryMb: { rss: number; heapUsed: number; heapTotal: number };
+  };
+  checkedAt: string;
+};
 
 // Simple day-by-day bar chart, no charting library — keeps this a pure web
 // deploy with zero new npm dependencies. The most recent bar is highlighted
@@ -154,6 +175,8 @@ export default function AdminDashboardPage() {
   const [userActionId, setUserActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkedAuth, setCheckedAuth] = useState(false);
+  const [health, setHealth] = useState<AdminHealth | null>(null);
+  const [healthError, setHealthError] = useState(false);
 
   const handleUnauthorized = useCallback(() => {
     router.replace("/admin/login");
@@ -165,6 +188,18 @@ export default function AdminDashboardPage() {
     if (!res.ok) return setError("Couldn't load metrics.");
     const data = await res.json();
     setMetrics(data.metrics);
+  }, [handleUnauthorized]);
+
+  const loadHealth = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/health");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setHealthError(true);
+      setHealth(await res.json());
+      setHealthError(false);
+    } catch {
+      setHealthError(true);
+    }
   }, [handleUnauthorized]);
 
   const loadNudge = useCallback(async () => {
@@ -190,9 +225,16 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial auth-gated fetch on mount, not a render loop
-    Promise.all([loadMetrics(), loadNudge(), loadUsers("")]).finally(() => setCheckedAuth(true));
+    Promise.all([loadMetrics(), loadNudge(), loadUsers(""), loadHealth()]).finally(() => setCheckedAuth(true));
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
+
+  // Keep the health card live without needing a manual refresh -- cheap
+  // single-row SQLite query, so polling every 30s is not a real cost.
+  useEffect(() => {
+    const interval = setInterval(loadHealth, 30_000);
+    return () => clearInterval(interval);
+  }, [loadHealth]);
 
   useEffect(() => {
     const t = setTimeout(() => loadUsers(search), 250);
@@ -285,6 +327,53 @@ export default function AdminDashboardPage() {
             <ErrorBanner message={error} />
           </div>
         )}
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">System health</p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {healthError || (health && health.status !== "ok") ? (
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                <p className="text-sm font-semibold text-red-600">
+                  {healthError ? "Couldn't reach the health check." : "Database unreachable — investigate now."}
+                </p>
+              </div>
+            ) : !health ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 flex items-center gap-2.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-ink">All systems normal</p>
+                  <Activity size={13} className="text-[#a8a2bd]" />
+                  <p className="text-[11px] text-ink-faint">
+                    checked {new Date(health.checkedAt).toLocaleTimeString()}
+                  </p>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  <StatCard label="Database" value={`${health.database.responseMs}ms`} hint="Query response time" />
+                  <StatCard
+                    label="Server uptime"
+                    value={formatUptime(health.process.uptimeSeconds)}
+                    hint={health.process.pm2InstanceId !== null ? `Worker #${health.process.pm2InstanceId}` : undefined}
+                  />
+                  <StatCard
+                    label="Memory used"
+                    value={`${health.process.memoryMb.heapUsed}MB`}
+                    hint={`of ${health.process.memoryMb.heapTotal}MB heap`}
+                  />
+                  <StatCard label="Node version" value={health.process.nodeVersion} />
+                </div>
+              </>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Refreshes automatically every 30s. Public, minimal version at{" "}
+            <code className="text-[10.5px]">/api/health</code> for external uptime monitors.
+          </p>
+        </section>
 
         {!metrics ? (
           <div className="flex justify-center py-16">
