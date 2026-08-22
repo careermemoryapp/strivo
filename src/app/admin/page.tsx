@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback, type ReactNode, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Send, Search, Activity } from "lucide-react";
+import { LogOut, Send, Search, Activity, AlertTriangle, ExternalLink } from "lucide-react";
+import { formatDistanceToNow } from "date-fns";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -10,6 +11,7 @@ import { cn } from "@/lib/utils";
 import type { AdminMetrics, AdminUserRow } from "@/lib/repo/admin";
 import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
+import type { SentryIssue } from "@/lib/sentry";
 
 const DARK = "#26213c";
 
@@ -177,6 +179,9 @@ export default function AdminDashboardPage() {
   const [checkedAuth, setCheckedAuth] = useState(false);
   const [health, setHealth] = useState<AdminHealth | null>(null);
   const [healthError, setHealthError] = useState(false);
+  const [sentryIssues, setSentryIssues] = useState<SentryIssue[] | null>(null);
+  const [sentryConfigured, setSentryConfigured] = useState(true);
+  const [sentryError, setSentryError] = useState(false);
 
   const handleUnauthorized = useCallback(() => {
     router.replace("/admin/login");
@@ -199,6 +204,20 @@ export default function AdminDashboardPage() {
       setHealthError(false);
     } catch {
       setHealthError(true);
+    }
+  }, [handleUnauthorized]);
+
+  const loadSentryIssues = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/sentry-errors");
+      if (res.status === 401) return handleUnauthorized();
+      const data = await res.json().catch(() => null);
+      if (!data) return setSentryError(true);
+      setSentryConfigured(data.configured ?? false);
+      setSentryIssues(data.issues ?? []);
+      setSentryError(!res.ok);
+    } catch {
+      setSentryError(true);
     }
   }, [handleUnauthorized]);
 
@@ -225,7 +244,9 @@ export default function AdminDashboardPage() {
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- initial auth-gated fetch on mount, not a render loop
-    Promise.all([loadMetrics(), loadNudge(), loadUsers(""), loadHealth()]).finally(() => setCheckedAuth(true));
+    Promise.all([loadMetrics(), loadNudge(), loadUsers(""), loadHealth(), loadSentryIssues()]).finally(() =>
+      setCheckedAuth(true)
+    );
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
@@ -235,6 +256,13 @@ export default function AdminDashboardPage() {
     const interval = setInterval(loadHealth, 30_000);
     return () => clearInterval(interval);
   }, [loadHealth]);
+
+  // Errors don't need second-by-second freshness -- once a minute is
+  // plenty and keeps this from hammering Sentry's API.
+  useEffect(() => {
+    const interval = setInterval(loadSentryIssues, 60_000);
+    return () => clearInterval(interval);
+  }, [loadSentryIssues]);
 
   useEffect(() => {
     const t = setTimeout(() => loadUsers(search), 250);
@@ -372,6 +400,70 @@ export default function AdminDashboardPage() {
           <p className="mt-2 text-[11px] text-ink-faint">
             Refreshes automatically every 30s. Public, minimal version at{" "}
             <code className="text-[10.5px]">/api/health</code> for external uptime monitors.
+          </p>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Errors (Sentry)</p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {!sentryConfigured ? (
+              <p className="text-sm text-ink-soft">
+                Not set up yet — add a <code className="text-[12px]">SENTRY_API_TOKEN</code> environment variable to
+                show unresolved errors here.
+              </p>
+            ) : sentryError ? (
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t reach Sentry.</p>
+              </div>
+            ) : !sentryIssues ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : sentryIssues.length === 0 ? (
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                <p className="text-sm font-semibold text-ink">No unresolved errors</p>
+              </div>
+            ) : (
+              <>
+                <div className="mb-3 flex items-center gap-2.5">
+                  <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                  <p className="text-sm font-semibold text-ink">
+                    {sentryIssues.length} unresolved error{sentryIssues.length === 1 ? "" : "s"}
+                  </p>
+                  <AlertTriangle size={13} className="text-[#a8a2bd]" />
+                </div>
+                <div className="space-y-2">
+                  {sentryIssues.map((issue) => (
+                    <a
+                      key={issue.id}
+                      href={issue.permalink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center justify-between gap-3 rounded-[12px] border border-[#f5f2fa] p-2.5 hover:border-[#ece5f5]"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-ink">{issue.title}</p>
+                        <p className="truncate text-[11px] text-ink-faint">
+                          {issue.culprit ?? "—"} · last seen{" "}
+                          {formatDistanceToNow(new Date(issue.lastSeen), { addSuffix: true })}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="rounded-pill bg-red-50 px-2 py-0.5 text-[10.5px] font-semibold text-red-600 whitespace-nowrap">
+                          {issue.count}×
+                        </span>
+                        <ExternalLink size={12} className="text-[#a8a2bd]" />
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Refreshes automatically every 60s. Shows unresolved issues from the last 24h, most frequent first.
           </p>
         </section>
 
