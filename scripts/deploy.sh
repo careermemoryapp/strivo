@@ -23,6 +23,15 @@ echo "Installing dependencies..."
 npm install
 
 echo ""
+echo "Scanning dependencies for known vulnerabilities..."
+# npm audit exits non-zero when it finds anything, which would otherwise
+# trip this script's `set -e` -- `|| true` just means "don't stop the
+# deploy over this," the actual results still get written to disk either
+# way and read by the admin dashboard's Security status panel.
+npm audit --omit=dev --json > security-audit.json 2>/dev/null || true
+echo "Done (results visible on the admin dashboard)."
+
+echo ""
 echo "Building..."
 npm run build
 

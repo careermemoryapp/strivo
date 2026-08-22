@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback, type ReactNode, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Send, Search, Activity, AlertTriangle, ExternalLink } from "lucide-react";
+import { LogOut, Send, Search, Activity, AlertTriangle, ExternalLink, ShieldCheck, ShieldAlert } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
@@ -12,6 +12,7 @@ import type { AdminMetrics, AdminUserRow } from "@/lib/repo/admin";
 import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
 import type { SentryIssue } from "@/lib/sentry";
+import type { SecurityCheck, DependencyAuditSummary } from "@/lib/securityStatus";
 
 const DARK = "#26213c";
 
@@ -182,6 +183,9 @@ export default function AdminDashboardPage() {
   const [sentryIssues, setSentryIssues] = useState<SentryIssue[] | null>(null);
   const [sentryConfigured, setSentryConfigured] = useState(true);
   const [sentryError, setSentryError] = useState(false);
+  const [securityChecklist, setSecurityChecklist] = useState<SecurityCheck[] | null>(null);
+  const [dependencyAudit, setDependencyAudit] = useState<DependencyAuditSummary | null>(null);
+  const [securityError, setSecurityError] = useState(false);
 
   const handleUnauthorized = useCallback(() => {
     router.replace("/admin/login");
@@ -221,6 +225,20 @@ export default function AdminDashboardPage() {
     }
   }, [handleUnauthorized]);
 
+  const loadSecurityStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/security-status");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setSecurityError(true);
+      const data = await res.json();
+      setSecurityChecklist(data.checklist ?? []);
+      setDependencyAudit(data.dependencyAudit ?? null);
+      setSecurityError(false);
+    } catch {
+      setSecurityError(true);
+    }
+  }, [handleUnauthorized]);
+
   const loadNudge = useCallback(async () => {
     const res = await fetch("/api/admin/nudge");
     if (res.status === 401) return handleUnauthorized();
@@ -243,10 +261,17 @@ export default function AdminDashboardPage() {
   );
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial auth-gated fetch on mount, not a render loop
-    Promise.all([loadMetrics(), loadNudge(), loadUsers(""), loadHealth(), loadSentryIssues()]).finally(() =>
-      setCheckedAuth(true)
-    );
+    // Initial auth-gated fetch on mount, not a render loop.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    Promise.all([
+      loadMetrics(),
+      loadNudge(),
+      loadUsers(""),
+      loadHealth(),
+      loadSentryIssues(),
+      loadSecurityStatus(),
+    ]).finally(() => setCheckedAuth(true));
+    /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
   }, []);
 
@@ -465,6 +490,95 @@ export default function AdminDashboardPage() {
           <p className="mt-2 text-[11px] text-ink-faint">
             Refreshes automatically every 60s. Shows unresolved issues from the last 24h, most frequent first.
           </p>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Security status</p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {securityError ? (
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t load security status.</p>
+              </div>
+            ) : !securityChecklist ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {securityChecklist.map((check) => (
+                    <div key={check.id} className="flex items-start gap-2.5 rounded-[12px] border border-[#f5f2fa] p-2.5">
+                      {check.status === "protected" ? (
+                        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-500" />
+                      ) : (
+                        <ShieldAlert size={15} className="mt-0.5 shrink-0 text-amber-500" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-[12.5px] font-semibold text-ink">{check.label}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-faint">{check.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="mt-3 border-t border-[#f5f2fa] pt-3">
+                  <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                    Dependency vulnerabilities
+                  </p>
+                  {!dependencyAudit ? (
+                    <p className="text-sm text-ink-soft">
+                      Not scanned yet — this fills in automatically the next time a deploy runs.
+                    </p>
+                  ) : dependencyAudit.totals.total === 0 ? (
+                    <div className="flex items-center gap-2.5">
+                      <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                      <p className="text-sm font-semibold text-ink">No known vulnerabilities</p>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mb-2 flex flex-wrap items-center gap-2">
+                        {dependencyAudit.totals.critical > 0 && (
+                          <span className="rounded-pill bg-red-100 px-2 py-0.5 text-[10.5px] font-semibold text-red-700">
+                            {dependencyAudit.totals.critical} critical
+                          </span>
+                        )}
+                        {dependencyAudit.totals.high > 0 && (
+                          <span className="rounded-pill bg-red-50 px-2 py-0.5 text-[10.5px] font-semibold text-red-600">
+                            {dependencyAudit.totals.high} high
+                          </span>
+                        )}
+                        {dependencyAudit.totals.moderate > 0 && (
+                          <span className="rounded-pill bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-600">
+                            {dependencyAudit.totals.moderate} moderate
+                          </span>
+                        )}
+                        {dependencyAudit.totals.low > 0 && (
+                          <span className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-[10.5px] font-semibold text-[#8b5cf6]">
+                            {dependencyAudit.totals.low} low
+                          </span>
+                        )}
+                      </div>
+                      <div className="space-y-1">
+                        {dependencyAudit.vulnerablePackages.map((pkg) => (
+                          <p key={pkg.name} className="text-[12px] text-ink-soft">
+                            <span className="font-medium text-ink">{pkg.name}</span> — {pkg.severity}
+                            {!pkg.fixAvailable && <span className="text-ink-faint"> (no fix available yet)</span>}
+                          </p>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  {dependencyAudit && (
+                    <p className="mt-2 text-[11px] text-ink-faint">
+                      Last scanned {formatDistanceToNow(new Date(dependencyAudit.scannedAt), { addSuffix: true })}, via{" "}
+                      <code className="text-[10.5px]">npm audit</code> at deploy time.
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </section>
 
         {!metrics ? (

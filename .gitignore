@@ -44,3 +44,8 @@ data/
 # rollback bookkeeping -- written by scripts/deploy.sh on the server, local
 # to whichever machine deployed, never meant to be committed
 .last-known-good
+
+# npm audit snapshot -- written by scripts/deploy.sh on every deploy, read
+# by the admin dashboard's Security status panel. Server-generated data,
+# not source, and would go stale the moment it's committed.
+security-audit.json
