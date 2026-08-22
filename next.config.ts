@@ -2,6 +2,13 @@ import type { NextConfig } from "next";
 import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
+  // Normally ".next". scripts/deploy.sh and scripts/rollback.sh override
+  // this to a scratch directory (NEXT_DIST_DIR=.next-build) so a fresh
+  // build never overwrites the live ".next" the currently-running server
+  // is still reading from mid-request -- see the comment in deploy.sh for
+  // why that in-place overwrite was causing real, if rare, errors.
+  distDir: process.env.NEXT_DIST_DIR || ".next",
+
   // pdf-parse (via pdfjs-dist) resolves its worker script relative to its
   // own module location at runtime. Webpack/Turbopack normally bundle
   // dependencies into hashed chunk files, which breaks that relative path

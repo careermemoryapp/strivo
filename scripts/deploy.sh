@@ -33,7 +33,23 @@ echo "Done (results visible on the admin dashboard)."
 
 echo ""
 echo "Building..."
-npm run build
+# Build into a scratch directory instead of the live ".next" -- the old
+# server keeps running and answering real requests the whole time this
+# runs, and building straight into ".next" means it's overwriting, file by
+# file, the exact files that live process might be reading from at that
+# exact moment. That's the real cause of the odd one-off "manifest does not
+# exist" / "cannot find module" errors that show up in Sentry right around
+# deploy times. Swapping the whole finished directory in with one instant
+# rename removes that window almost entirely.
+rm -rf .next-build
+NEXT_DIST_DIR=.next-build npm run build
+
+echo ""
+echo "Swapping in the new build..."
+rm -rf .next-previous-build
+[ -d .next ] && mv .next .next-previous-build
+mv .next-build .next
+rm -rf .next-previous-build
 
 echo ""
 echo "Restarting..."

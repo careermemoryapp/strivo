@@ -28,7 +28,17 @@ npm install
 
 echo ""
 echo "Building..."
-npm run build
+# Same scratch-dir-then-swap approach as deploy.sh -- see its comment for
+# why building straight into the live ".next" is worth avoiding.
+rm -rf .next-build
+NEXT_DIST_DIR=.next-build npm run build
+
+echo ""
+echo "Swapping in the build..."
+rm -rf .next-previous-build
+[ -d .next ] && mv .next .next-previous-build
+mv .next-build .next
+rm -rf .next-previous-build
 
 echo ""
 echo "Restarting..."
