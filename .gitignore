@@ -40,3 +40,7 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 data/
+
+# rollback bookkeeping -- written by scripts/deploy.sh on the server, local
+# to whichever machine deployed, never meant to be committed
+.last-known-good
