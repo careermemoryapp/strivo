@@ -31,8 +31,8 @@ describe("getStaticSecurityChecklist", () => {
 
     expect(checklist.find((c) => c.id === "error-monitoring")?.status).toBe("protected");
     expect(checklist.find((c) => c.id === "admin-mfa")?.status).toBe("protected");
-    // Staging is a real, known gap -- always planned, not dynamic.
-    expect(checklist.find((c) => c.id === "staging")?.status).toBe("planned");
+    // Staging environment now exists (staging.strivo.ai) -- always protected.
+    expect(checklist.find((c) => c.id === "staging")?.status).toBe("protected");
   });
 
   it("marks error monitoring and admin MFA as planned when not configured", async () => {

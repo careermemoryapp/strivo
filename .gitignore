@@ -51,3 +51,8 @@ data/
 # by the admin dashboard's Security status panel. Server-generated data,
 # not source, and would go stale the moment it's committed.
 security-audit.json
+
+# Live security check snapshot -- written by scripts/live-security-check.js
+# via cron, read by the admin dashboard's Live security checks panel.
+# Server-generated data, not source.
+live-security-status.json

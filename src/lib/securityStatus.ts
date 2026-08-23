@@ -84,8 +84,9 @@ export function getStaticSecurityChecklist(): SecurityCheck[] {
     {
       id: "staging",
       label: "Staging environment",
-      status: "planned",
-      detail: "Not set up yet -- every change currently goes straight to production.",
+      status: "protected",
+      detail:
+        "A separate EC2 instance running the same app at staging.strivo.ai, with its own database and secrets, lets risky changes get tested before they reach production.",
     },
   ];
 }

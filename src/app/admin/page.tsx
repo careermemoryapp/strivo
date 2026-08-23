@@ -25,6 +25,7 @@ import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
 import type { SentryIssue } from "@/lib/sentry";
 import type { SecurityCheck, DependencyAuditSummary } from "@/lib/securityStatus";
+import type { LiveSecurityStatus } from "@/lib/liveSecurityStatus";
 import type { SupportMessage } from "@/lib/repo/support";
 import type { BlogPost } from "@/lib/repo/blogPosts";
 
@@ -200,6 +201,8 @@ export default function AdminDashboardPage() {
   const [securityChecklist, setSecurityChecklist] = useState<SecurityCheck[] | null>(null);
   const [dependencyAudit, setDependencyAudit] = useState<DependencyAuditSummary | null>(null);
   const [securityError, setSecurityError] = useState(false);
+  const [liveSecurityStatus, setLiveSecurityStatus] = useState<LiveSecurityStatus | null | undefined>(undefined);
+  const [liveSecurityError, setLiveSecurityError] = useState(false);
   const [supportMessages, setSupportMessages] = useState<SupportMessage[] | null>(null);
   const [supportError, setSupportError] = useState(false);
   const [supportActionId, setSupportActionId] = useState<string | null>(null);
@@ -255,6 +258,19 @@ export default function AdminDashboardPage() {
       setSecurityError(false);
     } catch {
       setSecurityError(true);
+    }
+  }, [handleUnauthorized]);
+
+  const loadLiveSecurityStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/live-security-status");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setLiveSecurityError(true);
+      const data = await res.json();
+      setLiveSecurityStatus(data.liveStatus ?? null);
+      setLiveSecurityError(false);
+    } catch {
+      setLiveSecurityError(true);
     }
   }, [handleUnauthorized]);
 
@@ -332,6 +348,7 @@ export default function AdminDashboardPage() {
       loadHealth(),
       loadSentryIssues(),
       loadSecurityStatus(),
+      loadLiveSecurityStatus(),
       loadSupportMessages(),
       loadBlogPosts(),
     ]).finally(() => setCheckedAuth(true));
@@ -640,6 +657,52 @@ export default function AdminDashboardPage() {
                     </p>
                   )}
                 </div>
+              </>
+            )}
+          </div>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Live security checks</p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {liveSecurityError ? (
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t load live security checks.</p>
+              </div>
+            ) : liveSecurityStatus === undefined ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : liveSecurityStatus === null ? (
+              <p className="text-sm text-ink-soft">
+                Not checked yet — run <code className="text-[11px]">node scripts/live-security-check.js</code> on the server (or wait
+                for the scheduled cron run) to see live results here.
+              </p>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {liveSecurityStatus.checks.map((check) => (
+                    <div key={check.id} className="flex items-start gap-2.5 rounded-[12px] border border-[#f5f2fa] p-2.5">
+                      {check.status === "pass" ? (
+                        <ShieldCheck size={15} className="mt-0.5 shrink-0 text-emerald-500" />
+                      ) : check.status === "warn" ? (
+                        <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" />
+                      ) : (
+                        <ShieldAlert size={15} className="mt-0.5 shrink-0 text-red-500" />
+                      )}
+                      <div className="min-w-0">
+                        <p className="text-[12.5px] font-semibold text-ink">{check.label}</p>
+                        <p className="mt-0.5 text-[11px] text-ink-faint">{check.detail}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 border-t border-[#f5f2fa] pt-3 text-[11px] text-ink-faint">
+                  Checked against <code className="text-[10.5px]">{liveSecurityStatus.baseUrl}</code>{" "}
+                  {formatDistanceToNow(new Date(liveSecurityStatus.checkedAt), { addSuffix: true })}. Unlike the checklist above (which
+                  reflects what&apos;s built into the code), these actually hit the live site.
+                </p>
               </>
             )}
           </div>
