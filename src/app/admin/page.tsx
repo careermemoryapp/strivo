@@ -2,7 +2,19 @@
 
 import { useEffect, useState, useCallback, type ReactNode, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { LogOut, Send, Search, Activity, AlertTriangle, ExternalLink, ShieldCheck, ShieldAlert } from "lucide-react";
+import {
+  LogOut,
+  Send,
+  Search,
+  Activity,
+  AlertTriangle,
+  ExternalLink,
+  ShieldCheck,
+  ShieldAlert,
+  Mail,
+  CheckCircle2,
+  Newspaper,
+} from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
@@ -13,6 +25,8 @@ import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
 import type { SentryIssue } from "@/lib/sentry";
 import type { SecurityCheck, DependencyAuditSummary } from "@/lib/securityStatus";
+import type { SupportMessage } from "@/lib/repo/support";
+import type { BlogPost } from "@/lib/repo/blogPosts";
 
 const DARK = "#26213c";
 
@@ -186,6 +200,11 @@ export default function AdminDashboardPage() {
   const [securityChecklist, setSecurityChecklist] = useState<SecurityCheck[] | null>(null);
   const [dependencyAudit, setDependencyAudit] = useState<DependencyAuditSummary | null>(null);
   const [securityError, setSecurityError] = useState(false);
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[] | null>(null);
+  const [supportError, setSupportError] = useState(false);
+  const [supportActionId, setSupportActionId] = useState<string | null>(null);
+  const [blogPosts, setBlogPosts] = useState<BlogPost[] | null>(null);
+  const [blogError, setBlogError] = useState(false);
 
   const handleUnauthorized = useCallback(() => {
     router.replace("/admin/login");
@@ -239,6 +258,49 @@ export default function AdminDashboardPage() {
     }
   }, [handleUnauthorized]);
 
+  const loadSupportMessages = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/support");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setSupportError(true);
+      const data = await res.json();
+      setSupportMessages(data.messages ?? []);
+      setSupportError(false);
+    } catch {
+      setSupportError(true);
+    }
+  }, [handleUnauthorized]);
+
+  const handleSetSupportStatus = useCallback(
+    async (id: string, status: "new" | "resolved") => {
+      setSupportActionId(id);
+      try {
+        const res = await fetch("/api/admin/support", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, status }),
+        });
+        if (res.ok) await loadSupportMessages();
+      } finally {
+        setSupportActionId(null);
+      }
+    },
+    [loadSupportMessages]
+  );
+
+  const loadBlogPosts = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/blog");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setBlogError(true);
+      const data = await res.json();
+      setBlogPosts(data.posts ?? []);
+      setBlogError(false);
+    } catch {
+      setBlogError(true);
+    }
+  }, [handleUnauthorized]);
+
   const loadNudge = useCallback(async () => {
     const res = await fetch("/api/admin/nudge");
     if (res.status === 401) return handleUnauthorized();
@@ -270,6 +332,8 @@ export default function AdminDashboardPage() {
       loadHealth(),
       loadSentryIssues(),
       loadSecurityStatus(),
+      loadSupportMessages(),
+      loadBlogPosts(),
     ]).finally(() => setCheckedAuth(true));
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
@@ -579,6 +643,114 @@ export default function AdminDashboardPage() {
               </>
             )}
           </div>
+        </section>
+
+        <section className="mb-8">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Support messages</p>
+            {supportMessages && supportMessages.some((m) => m.status !== "resolved") && (
+              <span className="rounded-pill bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-600">
+                {supportMessages.filter((m) => m.status !== "resolved").length} open
+              </span>
+            )}
+          </div>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {supportError ? (
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t load support messages.</p>
+              </div>
+            ) : !supportMessages ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : supportMessages.length === 0 ? (
+              <p className="text-sm text-ink-soft">Nothing yet — messages from Help &amp; Support will show up here.</p>
+            ) : (
+              <div className="space-y-2">
+                {supportMessages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={cn(
+                      "rounded-[12px] border p-3",
+                      m.status === "resolved" ? "border-[#f5f2fa] opacity-60" : "border-[#ece5f5] bg-[#faf8fd]"
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 text-[12px] text-ink-faint">
+                          <Mail size={12} />
+                          <span className="truncate">{m.email}</span>
+                          <span>·</span>
+                          <span className="whitespace-nowrap">{formatDistanceToNow(new Date(m.created_at), { addSuffix: true })}</span>
+                        </div>
+                        {m.subject && <p className="mt-1 text-[13px] font-semibold text-ink">{m.subject}</p>}
+                        <p className="mt-0.5 whitespace-pre-wrap text-[13px] text-ink-soft">{m.message}</p>
+                      </div>
+                      <button
+                        onClick={() => handleSetSupportStatus(m.id, m.status === "resolved" ? "new" : "resolved")}
+                        disabled={supportActionId === m.id}
+                        className={cn(
+                          "flex shrink-0 items-center gap-1 whitespace-nowrap rounded-pill px-2.5 py-1 text-[11px] font-semibold disabled:opacity-50",
+                          m.status === "resolved" ? "text-ink-faint" : "bg-emerald-50 text-emerald-600"
+                        )}
+                      >
+                        <CheckCircle2 size={12} />
+                        {m.status === "resolved" ? "Reopen" : "Mark resolved"}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Also emailed to the support inbox when it&apos;s configured — this list is the reliable copy either way.
+          </p>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Recent blog posts</p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {blogError ? (
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t load blog posts.</p>
+              </div>
+            ) : !blogPosts ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : blogPosts.length === 0 ? (
+              <p className="text-sm text-ink-soft">Nothing published yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {blogPosts.map((p) => (
+                  <a
+                    key={p.id}
+                    href={`/blog/${p.slug}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center justify-between gap-3 rounded-[12px] border border-[#f5f2fa] p-2.5 hover:border-[#ece5f5]"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <Newspaper size={14} className="shrink-0 text-[#a8a2bd]" />
+                      <div className="min-w-0">
+                        <p className="truncate text-[13px] font-medium text-ink">{p.title}</p>
+                        <p className="truncate text-[11px] text-ink-faint">
+                          {p.category} · {new Date(p.created_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <ExternalLink size={12} className="shrink-0 text-[#a8a2bd]" />
+                  </a>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Published by the daily writing automation. Most recent 10, newest first.
+          </p>
         </section>
 
         {!metrics ? (
