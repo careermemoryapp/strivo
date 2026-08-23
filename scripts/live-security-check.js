@@ -21,6 +21,7 @@
 //   any code change at all.
 
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const https = require("https");
 const http = require("http");
@@ -230,6 +231,52 @@ function checkDependencyVulnerabilities() {
   }
 }
 
+// Not a security check in the strict sense, but the same "is this actually
+// true on the live server right now" question -- added specifically so an
+// ad campaign or traffic spike doesn't quietly OOM the box between the
+// 6-hourly cron runs without anyone noticing until the site is already
+// down. Reads whole-machine RAM (not just this process's heap -- see
+// /api/admin/health for that) and 1-minute load average, since those are
+// the two numbers that actually predict "is this box about to fall over."
+function checkSystemCapacity() {
+  const totalMem = os.totalmem();
+  const freeMem = os.freemem();
+  const freePercent = Math.round((freeMem / totalMem) * 1000) / 10;
+  const cpuCount = os.cpus().length || 1;
+  const load1 = os.loadavg()[0];
+  const loadPerCpu = Math.round((load1 / cpuCount) * 100) / 100;
+
+  const totalMemMb = Math.round(totalMem / 1024 / 1024);
+  const freeMemMb = Math.round(freeMem / 1024 / 1024);
+
+  let status = "pass";
+  const reasons = [];
+  if (freePercent < 10) {
+    status = "fail";
+    reasons.push(`only ${freePercent}% RAM free`);
+  } else if (freePercent < 20) {
+    status = "warn";
+    reasons.push(`${freePercent}% RAM free`);
+  }
+  if (loadPerCpu > 2) {
+    status = "fail";
+    reasons.push(`1-min load average is ${loadPerCpu}x per-core (sustained overload)`);
+  } else if (loadPerCpu > 1 && status !== "fail") {
+    status = status === "pass" ? "warn" : status;
+    reasons.push(`1-min load average is ${loadPerCpu}x per-core`);
+  }
+
+  return {
+    id: "system-capacity",
+    label: "Server has headroom (RAM + load)",
+    status,
+    detail:
+      status === "pass"
+        ? `${freeMemMb}MB / ${totalMemMb}MB RAM free (${freePercent}%), load average ${loadPerCpu}x per-core. Comfortable headroom for a traffic spike.`
+        : `${freeMemMb}MB / ${totalMemMb}MB RAM free (${freePercent}%), load average ${loadPerCpu}x per-core -- ${reasons.join("; ")}. Worth checking pm2 status and whether a deploy/build is running concurrently before pushing more ad traffic.`,
+  };
+}
+
 async function main() {
   const checks = await Promise.all([
     checkCertificate(),
@@ -239,6 +286,7 @@ async function main() {
     checkAdminRoutesProtected(),
   ]);
   checks.push(checkDependencyVulnerabilities());
+  checks.push(checkSystemCapacity());
 
   const result = { checkedAt: new Date().toISOString(), baseUrl, checks };
   fs.writeFileSync(OUTPUT_FILE, JSON.stringify(result, null, 2));
