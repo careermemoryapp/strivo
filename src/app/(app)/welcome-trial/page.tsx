@@ -152,15 +152,9 @@ export default function WelcomeTrialPage() {
               Start free trial
             </button>
             <p className="mt-3 text-center text-[11px] text-ink-faint">
-              Billed via Google Play after your trial ends, cancel anytime. You won&apos;t be charged today.
+              You won&apos;t be charged today. Cancel anytime before it renews from Google Play → Subscriptions —
+              no need to come back here.
             </p>
-            <button
-              onClick={() => confirm("annual")}
-              disabled={submitting}
-              className="mt-4 w-full text-center text-xs font-medium text-ink-faint underline disabled:opacity-60"
-            >
-              I&apos;ll decide later
-            </button>
           </div>
         </>
       )}

@@ -31,6 +31,15 @@ import type { BlogPost } from "@/lib/repo/blogPosts";
 
 const DARK = "#26213c";
 
+// Appends " · Yearly" / " · Monthly" to a status badge, regardless of
+// whether the user is on trial, expired, or already paid -- so the admin
+// can see which plan someone chose (or would convert to) even after their
+// trial has run out, not just once they're a paying customer.
+function planSuffix(plan: "monthly" | "annual" | null): string {
+  if (!plan) return "";
+  return ` · ${plan === "annual" ? "Yearly" : "Monthly"}`;
+}
+
 const SEGMENT_OPTIONS: { value: NudgeSegment; label: string; hint: string }[] = [
   { value: "all", label: "Everyone", hint: "Every registered device" },
   {
@@ -1079,10 +1088,10 @@ export default function AdminDashboardPage() {
                                 )}
                               >
                                 {u.status === "active"
-                                  ? `Paid${u.preferredPlan ? ` · ${u.preferredPlan === "annual" ? "Yearly" : "Monthly"}` : ""}`
+                                  ? `Paid${planSuffix(u.preferredPlan)}`
                                   : u.status === "trial"
-                                    ? `Trial · ${u.daysLeft}d left`
-                                    : "Expired"}
+                                    ? `Trial · ${u.daysLeft}d left${planSuffix(u.preferredPlan)}`
+                                    : `Expired${planSuffix(u.preferredPlan)}`}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-ink-soft">{u.memoryCount}</td>
