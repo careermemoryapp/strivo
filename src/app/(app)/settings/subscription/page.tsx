@@ -18,6 +18,7 @@ type Subscription = {
   annualPriceLabel: string;
   annualListPriceLabel: string;
   trialMonths: number;
+  preferredPlan: "monthly" | "annual" | null;
 };
 
 const PERKS = [
@@ -31,6 +32,11 @@ export default function SubscriptionPage() {
   const [sub, setSub] = useState<Subscription | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showComingSoon, setShowComingSoon] = useState(false);
+  // Only used before we know their actual preference (first paint / no
+  // preference recorded yet). Once `sub` loads with a preferredPlan, the
+  // effect below syncs this to match it, so the tab reflects what they
+  // actually chose on the welcome-trial screen instead of always resetting
+  // to Annually.
   const [billing, setBilling] = useState<"Monthly" | "Annually">("Annually");
 
   useEffect(() => {
@@ -39,6 +45,35 @@ export default function SubscriptionPage() {
       .then((data) => setSub(data.subscription))
       .catch(() => setError("Couldn't load your subscription details."));
   }, []);
+
+  useEffect(() => {
+    if (sub?.preferredPlan) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-time sync from freshly-fetched server data, not a render loop
+      setBilling(sub.preferredPlan === "monthly" ? "Monthly" : "Annually");
+    }
+  }, [sub?.preferredPlan]);
+
+  // Switching the tab here doesn't just change the local price preview --
+  // it also updates the real stored preference (same field the
+  // welcome-trial screen writes to), so this page doubles as "change your
+  // plan choice" rather than a one-time picker you can never revisit.
+  async function handleBillingChange(next: "Monthly" | "Annually") {
+    setBilling(next);
+    try {
+      const res = await fetch("/api/subscription", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ plan: next === "Monthly" ? "monthly" : "annual" }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setSub(data.subscription);
+      }
+    } catch {
+      // Non-critical -- the price preview above already reflects their tap,
+      // and they can just switch again if the save silently failed.
+    }
+  }
 
   const activePriceLabel = sub ? (billing === "Monthly" ? sub.monthlyPriceLabel : sub.annualPriceLabel) : "";
 
@@ -94,7 +129,11 @@ export default function SubscriptionPage() {
               <div className="flex items-center justify-between gap-3">
                 <p className="font-semibold text-ink">Strivo Plus</p>
                 <div className="w-40">
-                  <Tabs tabs={["Monthly", "Annually"]} active={billing} onChange={(t) => setBilling(t as "Monthly" | "Annually")} />
+                  <Tabs
+                    tabs={["Monthly", "Annually"]}
+                    active={billing}
+                    onChange={(t) => handleBillingChange(t as "Monthly" | "Annually")}
+                  />
                 </div>
               </div>
 
@@ -113,6 +152,11 @@ export default function SubscriptionPage() {
                 {billing === "Annually" ? "Billed annually, cancel anytime" : "Billed monthly, cancel anytime"} via
                 Google Play
               </p>
+              {sub.status !== "active" && sub.preferredPlan && (
+                <p className="mt-1.5 flex items-center gap-1 text-xs font-medium text-[#8b5cf6]">
+                  <CheckCircle2 size={13} /> You&apos;re reserved for the {billing} plan once your trial ends
+                </p>
+              )}
 
               <div className="mt-4 space-y-2.5">
                 {PERKS.map((perk) => (
