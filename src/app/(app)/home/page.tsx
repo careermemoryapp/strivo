@@ -18,6 +18,7 @@ type HomeData = {
   streak: number;
   memoryCount: number;
   recentChats: Chat[];
+  needsPlanChoice: boolean;
 };
 
 // Light keyword match so a chat started from the "ask anything" box still
@@ -58,11 +59,20 @@ export default function HomePage() {
     try {
       const res = await fetch("/api/home");
       if (!res.ok) throw new Error();
-      setData(await res.json());
+      const json: HomeData = await res.json();
+      // First-run, one-time: send them to pick a plan before they see Home
+      // at all, rather than rendering Home and then yanking them away.
+      // welcome-trial redirects back here once a choice is recorded, so
+      // this never loops.
+      if (json.needsPlanChoice) {
+        router.replace("/welcome-trial");
+        return;
+      }
+      setData(json);
     } catch {
       setError("Couldn't load your home screen. Check your connection and try again.");
     }
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional fetch-on-mount

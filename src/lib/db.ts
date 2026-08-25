@@ -239,6 +239,16 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("last_active_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN last_active_at TEXT;`);
   }
+  // Which plan (monthly vs annual) the user picked on the first-run trial
+  // screen (see app/(app)/welcome-trial). Null means they haven't seen that
+  // screen yet -- that's also the flag the Home page checks to decide
+  // whether to show it. Purely a stored preference until Google Play
+  // Billing is wired up (see pricing comments in repo/users.ts): once real
+  // billing goes live, this is what we pre-select in the Play purchase flow
+  // rather than defaulting everyone to monthly.
+  if (!userColumns.includes("preferred_plan")) {
+    db.exec(`ALTER TABLE users ADD COLUMN preferred_plan TEXT;`);
+  }
 
   // English translation/paraphrase of the transcript, generated alongside
   // the rest of the AI metadata (see generateMemoryMetadata in lib/ai.ts)

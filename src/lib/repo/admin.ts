@@ -173,6 +173,10 @@ export type AdminUserRow = {
   // permission (see useAppVersionPing.ts) — null means either a web-only
   // user or someone who hasn't opened the native app since this shipped.
   appVersion: string | null;
+  // Which plan this person is on (their own choice from welcome-trial, or
+  // whatever the admin picked when manually granting Strivo Plus — see
+  // setPreferredPlan). Null just means no preference recorded yet.
+  preferredPlan: "monthly" | "annual" | null;
 };
 
 export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
@@ -201,6 +205,7 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
       memoryCount: count(`SELECT COUNT(*) as c FROM memories WHERE user_id = ?`, u.id),
       chatCount: count(`SELECT COUNT(*) as c FROM chats WHERE user_id = ?`, u.id),
       appVersion: u.app_version,
+      preferredPlan: info.preferredPlan,
     };
   });
 }

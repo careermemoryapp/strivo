@@ -21,5 +21,10 @@ export async function GET() {
     streak,
     memoryCount,
     recentChats,
+    // True until the user has picked Monthly/Annual on the first-run trial
+    // screen (see app/(app)/welcome-trial) -- Home.tsx redirects there once
+    // instead of rendering. Piggybacked on this response rather than a
+    // separate fetch since /api/home already loads the user row.
+    needsPlanChoice: user ? user.preferred_plan === null : false,
   });
 }

@@ -12,6 +12,7 @@ export type User = {
   dismissed_nudge_id: string | null;
   app_version: string | null;
   last_active_at: string | null;
+  preferred_plan: string | null;
   created_at: string;
 };
 
@@ -24,6 +25,7 @@ export type SubscriptionInfo = {
   annualPriceLabel: string;
   annualListPriceLabel: string;
   trialMonths: number;
+  preferredPlan: "monthly" | "annual" | null;
 };
 
 // Single source of truth for pricing. Billed exclusively through Google Play
@@ -36,13 +38,19 @@ export const ANNUAL_PRICE_LABEL = "$41.99/year";
 // to the annual price so the "50% off" framing is self-evident.
 export const ANNUAL_LIST_PRICE_LABEL = "$83.88/year";
 
-export function getSubscriptionInfo(user: Pick<User, "subscription_status" | "trial_ends_at">): SubscriptionInfo {
+export function getSubscriptionInfo(
+  user: Pick<User, "subscription_status" | "trial_ends_at"> & Partial<Pick<User, "preferred_plan">>
+): SubscriptionInfo {
   const shared = {
     priceLabel: ANNUAL_PRICE_LABEL,
     monthlyPriceLabel: MONTHLY_PRICE_LABEL,
     annualPriceLabel: ANNUAL_PRICE_LABEL,
     annualListPriceLabel: ANNUAL_LIST_PRICE_LABEL,
     trialMonths: TRIAL_MONTHS,
+    preferredPlan: (user.preferred_plan === "monthly" || user.preferred_plan === "annual" ? user.preferred_plan : null) as
+      | "monthly"
+      | "annual"
+      | null,
   };
   if (user.subscription_status === "active") {
     return { status: "active", trialEndsAt: user.trial_ends_at, daysLeft: null, ...shared };
@@ -148,5 +156,17 @@ export function setUserAppVersion(id: string, version: string) {
 export function setUserSubscriptionStatus(id: string, status: "trial" | "active") {
   const db = getDb();
   db.prepare(`UPDATE users SET subscription_status = ? WHERE id = ?`).run(status, id);
+  return getUserById(id);
+}
+
+// Records the plan a user picked on the first-run trial screen (see
+// app/(app)/welcome-trial). This doesn't charge anything or start a
+// different trial -- everyone already gets TRIAL_MONTHS free from
+// createUser() above regardless of plan choice. It's purely a stored
+// preference so that once Google Play Billing is wired up, we know which
+// plan to pre-select in the real purchase flow instead of guessing.
+export function setPreferredPlan(id: string, plan: "monthly" | "annual") {
+  const db = getDb();
+  db.prepare(`UPDATE users SET preferred_plan = ? WHERE id = ?`).run(plan, id);
   return getUserById(id);
 }

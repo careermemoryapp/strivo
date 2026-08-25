@@ -405,13 +405,13 @@ export default function AdminDashboardPage() {
     }
   }
 
-  async function handleSetStatus(userId: string, status: "trial" | "active") {
+  async function handleSetStatus(userId: string, status: "trial" | "active", plan?: "monthly" | "annual") {
     setUserActionId(userId);
     try {
       await fetch(`/api/admin/users/${userId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(plan ? { status, plan } : { status }),
       });
       await Promise.all([loadUsers(search), loadMetrics()]);
     } finally {
@@ -1078,7 +1078,11 @@ export default function AdminDashboardPage() {
                                   u.status === "expired" && "bg-red-50 text-red-600"
                                 )}
                               >
-                                {u.status === "active" ? "Paid" : u.status === "trial" ? `Trial · ${u.daysLeft}d left` : "Expired"}
+                                {u.status === "active"
+                                  ? `Paid${u.preferredPlan ? ` · ${u.preferredPlan === "annual" ? "Yearly" : "Monthly"}` : ""}`
+                                  : u.status === "trial"
+                                    ? `Trial · ${u.daysLeft}d left`
+                                    : "Expired"}
                               </span>
                             </td>
                             <td className="px-4 py-3 text-ink-soft">{u.memoryCount}</td>
@@ -1106,13 +1110,22 @@ export default function AdminDashboardPage() {
                                   Revert to trial
                                 </button>
                               ) : (
-                                <button
-                                  onClick={() => handleSetStatus(u.id, "active")}
-                                  disabled={userActionId === u.id}
-                                  className="whitespace-nowrap text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
-                                >
-                                  Grant Strivo Plus
-                                </button>
+                                <div className="flex flex-col items-start gap-1">
+                                  <button
+                                    onClick={() => handleSetStatus(u.id, "active", "annual")}
+                                    disabled={userActionId === u.id}
+                                    className="whitespace-nowrap text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
+                                  >
+                                    Grant Plus · Yearly
+                                  </button>
+                                  <button
+                                    onClick={() => handleSetStatus(u.id, "active", "monthly")}
+                                    disabled={userActionId === u.id}
+                                    className="whitespace-nowrap text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
+                                  >
+                                    Grant Plus · Monthly
+                                  </button>
+                                </div>
                               )}
                             </td>
                           </tr>
