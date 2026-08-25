@@ -155,16 +155,15 @@ export default function SubscriptionPage() {
                 before it renews from Google Play → Subscriptions.
               </p>
               {sub.status !== "active" && sub.preferredPlan && (
-                <div className="mt-1.5">
-                  <p className="flex items-center gap-1 text-xs font-medium text-[#8b5cf6]">
-                    <CheckCircle2 size={13} /> You&apos;re reserved for the {reservedBilling} plan once your trial
-                    ends
+                <div className="mt-3 flex flex-col items-center gap-1.5 rounded-[12px] bg-[#f2effa] px-3 py-2.5 text-center">
+                  <p className="flex items-center gap-1.5 text-xs font-semibold text-[#8b5cf6]">
+                    <CheckCircle2 size={14} /> Reserved: {reservedBilling} plan after trial
                   </p>
                   {isPreviewingDifferentPlan && (
                     <button
                       onClick={() => confirmSwitch(billing)}
                       disabled={switching}
-                      className="mt-1 text-xs font-semibold text-[#8b5cf6] underline disabled:opacity-50"
+                      className="text-xs font-semibold text-[#8b5cf6] underline disabled:opacity-50"
                     >
                       {switching ? "Switching…" : `Switch reservation to ${billing}`}
                     </button>
