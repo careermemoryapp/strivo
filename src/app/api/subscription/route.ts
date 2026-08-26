@@ -23,8 +23,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
   const plan = (body as { plan?: unknown })?.plan;
-  if (plan !== "monthly" && plan !== "annual") {
-    return NextResponse.json({ error: "plan must be 'monthly' or 'annual'" }, { status: 400 });
+  if (plan !== "monthly" && plan !== "annual" && plan !== "later") {
+    return NextResponse.json({ error: "plan must be 'monthly', 'annual', or 'later'" }, { status: 400 });
   }
   const user = setPreferredPlan(userId, plan);
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });

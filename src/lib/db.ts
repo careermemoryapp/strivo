@@ -339,7 +339,7 @@ function migrate(db: DatabaseSync) {
         body: "Hi {{firstName}},\n\nYour free trial won't last forever — but Strivo Plus is **50% off** if you go annual. Unlimited memories, AI chat grounded in your real experience, and interview/resume coaching whenever you need it.\n\nNo pressure, just wanted you to know before it ends.",
         banner_image_url: null,
         button_text: "See plans",
-        button_url: "https://strivo.ai/app/settings/subscription",
+        button_url: "https://strivo.ai/settings/subscription",
         accent_color: "#f97316",
       },
       {
@@ -370,6 +370,52 @@ function migrate(db: DatabaseSync) {
     for (const t of starterTemplates) {
       insertTemplate.run(t.id, t.name, t.subject, t.body, t.banner_image_url, t.button_text, t.button_url, t.accent_color, now, now);
     }
+  }
+
+  // Retroactive fix for a real broken link in the seed above: the
+  // "Promotional / Upgrade" template's button used to point at
+  // /app/settings/subscription, which was never an actual route (no
+  // nested route exists under /app -- see src/app/app/page.tsx, it's a
+  // single redirect-only entry page). Anyone who clicked that button
+  // would have hit a 404. Only touches the row if it still has the exact
+  // broken URL, so it's a no-op on a fresh install (which seeds the
+  // already-fixed URL above) and doesn't clobber an admin's own edits if
+  // they've since changed this template's button themselves.
+  db.prepare(
+    `UPDATE email_templates SET button_url = ?, updated_at = ? WHERE id = ? AND button_url = ?`
+  ).run(
+    "https://strivo.ai/settings/subscription",
+    new Date().toISOString(),
+    "template_starter_promotional",
+    "https://strivo.ai/app/settings/subscription"
+  );
+
+  // Added later than the four above, once the "decide_later" plan choice
+  // shipped -- can't reuse the `templateCount === 0` block, since on any
+  // real deployment that table is already non-empty by the time this runs.
+  // Checked by id instead, so it's added exactly once regardless of what
+  // else is already in the table (including if an admin has since deleted
+  // some of the original four).
+  const hasDecideLaterTemplate = db
+    .prepare(`SELECT 1 FROM email_templates WHERE id = ?`)
+    .get("template_starter_decide_later");
+  if (!hasDecideLaterTemplate) {
+    const now = new Date().toISOString();
+    db.prepare(
+      `INSERT INTO email_templates (id, name, subject, body, banner_image_url, button_text, button_url, accent_color, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    ).run(
+      "template_starter_decide_later",
+      "Nudge: hasn't picked a plan",
+      "{{firstName}}, don't lose what you've built on Strivo",
+      "Hi {{firstName}},\n\nWhen you signed up, you chose to decide on a plan later — no problem, your free trial has been running exactly the same either way.\n\nBut once your trial ends, you'll need to be on a plan to keep using Strivo, or you'll lose access to your memories and everything you've captured so far. Picking one now takes less than a minute, and **Yearly is 50% off** if you want to lock in the better rate.",
+      null,
+      "Choose your plan",
+      "https://strivo.ai/settings/subscription",
+      "#f97316",
+      now,
+      now
+    );
   }
 
   // English translation/paraphrase of the transcript, generated alongside

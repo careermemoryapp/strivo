@@ -39,8 +39,9 @@ const DARK = "#26213c";
 // whether the user is on trial, expired, or already paid -- so the admin
 // can see which plan someone chose (or would convert to) even after their
 // trial has run out, not just once they're a paying customer.
-function planSuffix(plan: "monthly" | "annual" | null): string {
+function planSuffix(plan: "monthly" | "annual" | "later" | null): string {
   if (!plan) return "";
+  if (plan === "later") return " · Deciding";
   return ` · ${plan === "annual" ? "Yearly" : "Monthly"}`;
 }
 
@@ -69,6 +70,7 @@ const EMAIL_SEGMENT_OPTIONS: { value: EmailSegment; label: string; hint: string 
   { value: "paid_monthly", label: "Paid · Monthly", hint: "Active, reserved monthly" },
   { value: "paid_annual", label: "Paid · Yearly", hint: "Active, reserved yearly" },
   { value: "expired", label: "Trial ended", hint: "Ran out, never converted" },
+  { value: "decide_later", label: "Chose: decide later", hint: "Picked 'I'll choose later' at signup" },
 ];
 
 function emailSegmentLabel(segment: EmailSegment): string {

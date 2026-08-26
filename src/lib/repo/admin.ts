@@ -175,8 +175,10 @@ export type AdminUserRow = {
   appVersion: string | null;
   // Which plan this person is on (their own choice from welcome-trial, or
   // whatever the admin picked when manually granting Strivo Plus — see
-  // setPreferredPlan). Null just means no preference recorded yet.
-  preferredPlan: "monthly" | "annual" | null;
+  // setPreferredPlan). "later" means they explicitly deferred rather than
+  // picking a plan; null means they haven't been asked yet (shouldn't
+  // really persist for long now that welcome-trial gates every app route).
+  preferredPlan: "monthly" | "annual" | "later" | null;
 };
 
 export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {

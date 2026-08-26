@@ -10,9 +10,16 @@ import type { User } from "@/lib/repo/users";
 // Play Billing webhooks are wired up (see task tracker #115) -- "expired"
 // (trial ran out, never converted) is the closest real signal available
 // today. Once real billing lands, add "cancelled" here the same way.
-export type EmailSegment = "all" | "trial" | "paid_monthly" | "paid_annual" | "expired";
+export type EmailSegment = "all" | "trial" | "paid_monthly" | "paid_annual" | "expired" | "decide_later";
 
-export const EMAIL_SEGMENTS: EmailSegment[] = ["all", "trial", "paid_monthly", "paid_annual", "expired"];
+export const EMAIL_SEGMENTS: EmailSegment[] = [
+  "all",
+  "trial",
+  "paid_monthly",
+  "paid_annual",
+  "expired",
+  "decide_later",
+];
 
 export type EmailRecipient = { id: string; email: string; firstName: string };
 
@@ -28,6 +35,13 @@ function matchesSegment(segment: EmailSegment, row: CandidateRow): boolean {
   if (segment === "expired") return info.status === "expired";
   if (segment === "paid_monthly") return info.status === "active" && info.preferredPlan === "monthly";
   if (segment === "paid_annual") return info.status === "active" && info.preferredPlan === "annual";
+  // Anyone who explicitly picked "I'll choose later" on welcome-trial and
+  // hasn't since picked a real plan from Settings (which would overwrite
+  // preferredPlan to "monthly"/"annual" and move them out of this segment
+  // automatically). Not restricted to trial/active status -- the point is
+  // reaching people who are using the app without ever having committed to
+  // a plan, whatever their trial state is.
+  if (segment === "decide_later") return info.preferredPlan === "later";
   return false;
 }
 

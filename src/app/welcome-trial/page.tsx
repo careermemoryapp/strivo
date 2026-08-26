@@ -32,7 +32,7 @@ export default function WelcomeTrialPage() {
   const router = useRouter();
   const [sub, setSub] = useState<Subscription | null>(null);
   const [plan, setPlan] = useState<"monthly" | "annual">("annual");
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState<"monthly" | "annual" | "later" | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -42,8 +42,8 @@ export default function WelcomeTrialPage() {
       .catch(() => setError("Couldn't load pricing. Check your connection and try again."));
   }, []);
 
-  async function confirm(chosenPlan: "monthly" | "annual") {
-    setSubmitting(true);
+  async function confirm(chosenPlan: "monthly" | "annual" | "later") {
+    setSubmitting(chosenPlan);
     setError(null);
     try {
       const res = await fetch("/api/subscription", {
@@ -54,13 +54,13 @@ export default function WelcomeTrialPage() {
       if (!res.ok) throw new Error();
       router.replace("/home");
     } catch {
-      setSubmitting(false);
+      setSubmitting(null);
       setError("Couldn't save your choice. Please try again.");
     }
   }
 
   return (
-    <div className="flex min-h-screen flex-col px-5 pb-8 pt-8">
+    <div className="mx-auto flex min-h-screen w-full max-w-md flex-col px-5 pb-8 pt-8">
       <div className="flex items-center gap-2.5">
         <LogoMark size={32} />
         <span className="text-[17px] font-bold tracking-tight text-ink">Strivo</span>
@@ -144,17 +144,29 @@ export default function WelcomeTrialPage() {
           <div className="mt-auto pt-8">
             <button
               onClick={() => confirm(plan)}
-              disabled={submitting}
+              disabled={submitting !== null}
               className="flex w-full items-center justify-center gap-2 rounded-pill py-3.5 text-sm font-semibold text-white disabled:opacity-60"
               style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
             >
-              {submitting ? <Spinner /> : <Sparkles size={16} />}
+              {submitting === "monthly" || submitting === "annual" ? <Spinner /> : <Sparkles size={16} />}
               Start free trial
             </button>
             <p className="mt-3 text-center text-[11px] text-ink-faint">
               You won&apos;t be charged today. Cancel anytime before it renews from Google Play → Subscriptions —
               no need to come back here.
             </p>
+            {/* Not a plan itself -- lets someone into the app to see what
+                it does before committing to either option above, rather
+                than forcing a pick blind. Recorded distinctly (not left
+                null) so the admin can later nudge anyone still sitting
+                here via the "Chose: decide later" email segment. */}
+            <button
+              onClick={() => confirm("later")}
+              disabled={submitting !== null}
+              className="mt-4 w-full text-center text-[13px] font-semibold text-ink-soft underline disabled:opacity-60"
+            >
+              {submitting === "later" ? "One sec…" : "I'll choose later"}
+            </button>
           </div>
         </>
       )}

@@ -26,7 +26,13 @@ export type SubscriptionInfo = {
   annualPriceLabel: string;
   annualListPriceLabel: string;
   trialMonths: number;
-  preferredPlan: "monthly" | "annual" | null;
+  // "later" = explicitly chose "I'll decide later" on the first-run trial
+  // screen, rather than never having visited it (null). Kept distinct from
+  // null so the admin panel and email segmentation can tell "hasn't been
+  // asked yet" apart from "was asked, deliberately deferred" -- the two
+  // call for different treatment (the former shouldn't get a nudge email,
+  // the latter is exactly who that nudge is for).
+  preferredPlan: "monthly" | "annual" | "later" | null;
 };
 
 // Single source of truth for pricing. Billed exclusively through Google Play
@@ -48,10 +54,9 @@ export function getSubscriptionInfo(
     annualPriceLabel: ANNUAL_PRICE_LABEL,
     annualListPriceLabel: ANNUAL_LIST_PRICE_LABEL,
     trialMonths: TRIAL_MONTHS,
-    preferredPlan: (user.preferred_plan === "monthly" || user.preferred_plan === "annual" ? user.preferred_plan : null) as
-      | "monthly"
-      | "annual"
-      | null,
+    preferredPlan: (user.preferred_plan === "monthly" || user.preferred_plan === "annual" || user.preferred_plan === "later"
+      ? user.preferred_plan
+      : null) as "monthly" | "annual" | "later" | null,
   };
   if (user.subscription_status === "active") {
     return { status: "active", trialEndsAt: user.trial_ends_at, daysLeft: null, ...shared };
@@ -161,12 +166,15 @@ export function setUserSubscriptionStatus(id: string, status: "trial" | "active"
 }
 
 // Records the plan a user picked on the first-run trial screen (see
-// app/(app)/welcome-trial). This doesn't charge anything or start a
-// different trial -- everyone already gets TRIAL_MONTHS free from
-// createUser() above regardless of plan choice. It's purely a stored
-// preference so that once Google Play Billing is wired up, we know which
-// plan to pre-select in the real purchase flow instead of guessing.
-export function setPreferredPlan(id: string, plan: "monthly" | "annual") {
+// app/welcome-trial). This doesn't charge anything or start a different
+// trial -- everyone already gets TRIAL_MONTHS free from createUser() above
+// regardless of plan choice. It's purely a stored preference so that once
+// Google Play Billing is wired up, we know which plan to pre-select in the
+// real purchase flow instead of guessing. "later" is a real, distinct
+// choice (see the comment on SubscriptionInfo.preferredPlan) -- someone
+// can pick it now and switch to an actual plan afterward from Settings,
+// which just calls this same function again with "monthly"/"annual".
+export function setPreferredPlan(id: string, plan: "monthly" | "annual" | "later") {
   const db = getDb();
   db.prepare(`UPDATE users SET preferred_plan = ? WHERE id = ?`).run(plan, id);
   return getUserById(id);
