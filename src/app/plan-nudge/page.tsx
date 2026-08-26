@@ -112,9 +112,9 @@ export default function PlanNudgePage() {
               }}
             >
               <div>
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-semibold text-ink">Yearly</p>
-                  <span className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-[10px] font-semibold text-[#8b5cf6]">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <p className="whitespace-nowrap text-sm font-semibold text-ink">Yearly</p>
+                  <span className="shrink-0 whitespace-nowrap rounded-pill bg-[#f2effa] px-2 py-0.5 text-[10px] font-semibold text-[#8b5cf6]">
                     Save 50%
                   </span>
                 </div>

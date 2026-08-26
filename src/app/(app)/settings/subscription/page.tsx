@@ -174,13 +174,19 @@ export default function SubscriptionPage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 flex items-baseline gap-2">
+                  {/* flex-wrap + whitespace-nowrap on each piece: on narrower
+                      phones (e.g. OnePlus 9) there isn't room for the list
+                      price, price, and "Save 50%" pill on one line -- without
+                      these, flexbox shrank the pill itself and wrapped "Save"
+                      and "50%" onto separate lines inside it. Now the whole
+                      pill drops to its own line instead of breaking apart. */}
+                  <div className="mt-4 flex flex-wrap items-baseline gap-x-2 gap-y-1">
                     {billing === "Annually" && (
-                      <p className="text-sm text-ink-faint line-through">{sub.annualListPriceLabel}</p>
+                      <p className="whitespace-nowrap text-sm text-ink-faint line-through">{sub.annualListPriceLabel}</p>
                     )}
-                    <p className="text-2xl font-bold text-ink">{activePriceLabel}</p>
+                    <p className="whitespace-nowrap text-2xl font-bold text-ink">{activePriceLabel}</p>
                     {billing === "Annually" && (
-                      <span className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-xs font-semibold text-[#8b5cf6]">
+                      <span className="shrink-0 whitespace-nowrap rounded-pill bg-[#f2effa] px-2 py-0.5 text-xs font-semibold text-[#8b5cf6]">
                         Save 50%
                       </span>
                     )}
