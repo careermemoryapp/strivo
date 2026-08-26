@@ -23,6 +23,8 @@ import { cn } from "@/lib/utils";
 import type { AdminMetrics, AdminUserRow } from "@/lib/repo/admin";
 import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
+import type { EmailSegment, EmailCampaign } from "@/lib/repo/emailCampaigns";
+import type { EmailTemplate } from "@/lib/repo/emailTemplates";
 import type { SentryIssue } from "@/lib/sentry";
 import type { SecurityCheck, DependencyAuditSummary } from "@/lib/securityStatus";
 import type { LiveSecurityStatus } from "@/lib/liveSecurityStatus";
@@ -53,6 +55,30 @@ const SEGMENT_OPTIONS: { value: NudgeSegment; label: string; hint: string }[] = 
 function segmentLabel(segment: NudgeSegment): string {
   return SEGMENT_OPTIONS.find((s) => s.value === segment)?.label ?? "Everyone";
 }
+
+// "expired" is doing double duty as the closest available proxy for
+// "cancelled" until real Play Billing cancellation webhooks exist (see
+// repo/emailCampaigns.ts's comment on EmailSegment) -- labeled "Trial
+// ended" here rather than "Cancelled" so the admin isn't misled into
+// thinking this is tracking real cancellations yet.
+const EMAIL_SEGMENT_OPTIONS: { value: EmailSegment; label: string; hint: string }[] = [
+  { value: "all", label: "Everyone", hint: "Every registered user" },
+  { value: "trial", label: "On free trial", hint: "Trial hasn't ended" },
+  { value: "paid_monthly", label: "Paid · Monthly", hint: "Active, reserved monthly" },
+  { value: "paid_annual", label: "Paid · Yearly", hint: "Active, reserved yearly" },
+  { value: "expired", label: "Trial ended", hint: "Ran out, never converted" },
+];
+
+function emailSegmentLabel(segment: EmailSegment): string {
+  return EMAIL_SEGMENT_OPTIONS.find((s) => s.value === segment)?.label ?? "Everyone";
+}
+
+// Preset swatches for the accent-color picker -- keeps the composer from
+// needing a full color-picker widget while still covering the common
+// cases (brand purple default, plus a few others for promos/alerts). The
+// hex input next to the swatches covers anything outside this set.
+const ACCENT_SWATCHES = ["#8b5cf6", "#60a5fa", "#f97316", "#10b981", "#ef4444", "#0ea5e9"];
+const DEFAULT_ACCENT_COLOR = "#8b5cf6";
 
 function StatCard({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
@@ -199,6 +225,26 @@ export default function AdminDashboardPage() {
   const [nudgeSegment, setNudgeSegment] = useState<NudgeSegment>("all");
   const [audienceCounts, setAudienceCounts] = useState<Record<NudgeSegment, number> | null>(null);
   const [sendingNudge, setSendingNudge] = useState(false);
+  const [recentCampaigns, setRecentCampaigns] = useState<EmailCampaign[]>([]);
+  const [campaignSubject, setCampaignSubject] = useState("");
+  const [campaignBody, setCampaignBody] = useState("");
+  const [campaignSegment, setCampaignSegment] = useState<EmailSegment>("all");
+  const [campaignAudienceCounts, setCampaignAudienceCounts] = useState<Record<EmailSegment, number> | null>(null);
+  const [campaignSesReady, setCampaignSesReady] = useState(true);
+  const [sendingCampaign, setSendingCampaign] = useState(false);
+  const [confirmingSend, setConfirmingSend] = useState(false);
+  const [testEmail, setTestEmail] = useState("");
+  const [sendingTest, setSendingTest] = useState(false);
+  const [testStatus, setTestStatus] = useState<string | null>(null);
+  const [campaignBannerUrl, setCampaignBannerUrl] = useState("");
+  const [campaignButtonText, setCampaignButtonText] = useState("");
+  const [campaignButtonUrl, setCampaignButtonUrl] = useState("");
+  const [campaignAccentColor, setCampaignAccentColor] = useState(DEFAULT_ACCENT_COLOR);
+  const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
+  const [showSaveTemplateInput, setShowSaveTemplateInput] = useState(false);
+  const [newTemplateName, setNewTemplateName] = useState("");
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const [templateActionId, setTemplateActionId] = useState<string | null>(null);
   const [userActionId, setUserActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkedAuth, setCheckedAuth] = useState(false);
@@ -335,6 +381,24 @@ export default function AdminDashboardPage() {
     setAudienceCounts(data.audienceCounts ?? null);
   }, [handleUnauthorized]);
 
+  const loadCampaigns = useCallback(async () => {
+    const res = await fetch("/api/admin/email-campaign");
+    if (res.status === 401) return handleUnauthorized();
+    if (!res.ok) return;
+    const data = await res.json();
+    setRecentCampaigns(data.recent ?? []);
+    setCampaignAudienceCounts(data.audienceCounts ?? null);
+    setCampaignSesReady(data.sesConfigured ?? false);
+  }, [handleUnauthorized]);
+
+  const loadTemplates = useCallback(async () => {
+    const res = await fetch("/api/admin/email-templates");
+    if (res.status === 401) return handleUnauthorized();
+    if (!res.ok) return;
+    const data = await res.json();
+    setEmailTemplates(data.templates ?? []);
+  }, [handleUnauthorized]);
+
   const loadUsers = useCallback(
     async (term: string) => {
       const params = term ? `?search=${encodeURIComponent(term)}` : "";
@@ -353,6 +417,8 @@ export default function AdminDashboardPage() {
     Promise.all([
       loadMetrics(),
       loadNudge(),
+      loadCampaigns(),
+      loadTemplates(),
       loadUsers(""),
       loadHealth(),
       loadSentryIssues(),
@@ -411,6 +477,137 @@ export default function AdminDashboardPage() {
       await loadNudge();
     } finally {
       setSendingNudge(false);
+    }
+  }
+
+  // Two-tap send: the first submit just flips confirmingSend to true and
+  // relabels the button with the real recipient count, so the admin can't
+  // fire off a broadcast to everyone with one accidental click. Any edit to
+  // subject/body/segment resets confirmingSend back to false (see the
+  // onChange handlers below) so a stale confirmation can't carry over to a
+  // message the admin has since changed.
+  async function handleSendCampaign(e: FormEvent) {
+    e.preventDefault();
+    if (!campaignSubject.trim() || !campaignBody.trim()) return;
+    if (!confirmingSend) {
+      setConfirmingSend(true);
+      return;
+    }
+    setSendingCampaign(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/admin/email-campaign", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subject: campaignSubject.trim(),
+          bodyMarkdown: campaignBody.trim(),
+          segment: campaignSegment,
+          bannerImageUrl: campaignBannerUrl.trim(),
+          buttonText: campaignButtonText.trim(),
+          buttonUrl: campaignButtonUrl.trim(),
+          accentColor: campaignAccentColor.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Couldn't send that campaign.");
+        return;
+      }
+      setCampaignSubject("");
+      setCampaignBody("");
+      setCampaignSegment("all");
+      setCampaignBannerUrl("");
+      setCampaignButtonText("");
+      setCampaignButtonUrl("");
+      setCampaignAccentColor(DEFAULT_ACCENT_COLOR);
+      setTestStatus(null);
+      setShowSaveTemplateInput(false);
+      await loadCampaigns();
+    } finally {
+      setSendingCampaign(false);
+      setConfirmingSend(false);
+    }
+  }
+
+  async function handleSendTestCampaign() {
+    if (!testEmail.trim() || !campaignSubject.trim() || !campaignBody.trim()) return;
+    setSendingTest(true);
+    setTestStatus(null);
+    try {
+      const res = await fetch("/api/admin/email-campaign/test", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          toEmail: testEmail.trim(),
+          subject: campaignSubject.trim(),
+          bodyMarkdown: campaignBody.trim(),
+          bannerImageUrl: campaignBannerUrl.trim(),
+          buttonText: campaignButtonText.trim(),
+          buttonUrl: campaignButtonUrl.trim(),
+          accentColor: campaignAccentColor.trim(),
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      setTestStatus(res.ok ? `Test sent to ${testEmail.trim()}.` : (data.error ?? "Test send failed."));
+    } catch {
+      setTestStatus("Test send failed.");
+    } finally {
+      setSendingTest(false);
+    }
+  }
+
+  // Populates every composer field from a saved/starter template. Doesn't
+  // send or save anything -- just a fast way to start from something
+  // written before instead of a blank subject/body.
+  function handleLoadTemplate(t: EmailTemplate) {
+    setCampaignSubject(t.subject);
+    setCampaignBody(t.body);
+    setCampaignBannerUrl(t.banner_image_url ?? "");
+    setCampaignButtonText(t.button_text ?? "");
+    setCampaignButtonUrl(t.button_url ?? "");
+    setCampaignAccentColor(t.accent_color ?? DEFAULT_ACCENT_COLOR);
+    setConfirmingSend(false);
+    setTestStatus(null);
+  }
+
+  async function handleSaveTemplate() {
+    if (!newTemplateName.trim() || !campaignSubject.trim() || !campaignBody.trim()) return;
+    setSavingTemplate(true);
+    try {
+      const res = await fetch("/api/admin/email-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newTemplateName.trim(),
+          subject: campaignSubject.trim(),
+          body: campaignBody.trim(),
+          bannerImageUrl: campaignBannerUrl.trim(),
+          buttonText: campaignButtonText.trim(),
+          buttonUrl: campaignButtonUrl.trim(),
+          accentColor: campaignAccentColor.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error ?? "Couldn't save that template.");
+        return;
+      }
+      setNewTemplateName("");
+      setShowSaveTemplateInput(false);
+      await loadTemplates();
+    } finally {
+      setSavingTemplate(false);
+    }
+  }
+
+  async function handleDeleteTemplate(id: string) {
+    setTemplateActionId(id);
+    try {
+      const res = await fetch(`/api/admin/email-templates/${id}`, { method: "DELETE" });
+      if (res.ok) await loadTemplates();
+    } finally {
+      setTemplateActionId(null);
     }
   }
 
@@ -1034,6 +1231,331 @@ export default function AdminDashboardPage() {
                 version (before notifications were built in) won&apos;t receive anything regardless of audience.
               </p>
             </section>
+
+            <section className="mt-8">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                Email campaigns
+              </p>
+              {!campaignSesReady && (
+                <div className="mb-2 flex items-center gap-2 rounded-[12px] border border-amber-200 bg-amber-50 px-3.5 py-2.5 text-[12.5px] text-amber-700">
+                  <AlertTriangle size={14} className="shrink-0" />
+                  SES isn&apos;t configured yet (missing AWS credentials) — sends will fail until that&apos;s set up.
+                </div>
+              )}
+              {emailTemplates.length > 0 && (
+                <div className="mb-2">
+                  <p className="mb-1.5 text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                    Templates — click to load into the composer below
+                  </p>
+                  <div className="flex gap-2 overflow-x-auto pb-1">
+                    {emailTemplates.map((t) => (
+                      <div
+                        key={t.id}
+                        className="group relative flex shrink-0 flex-col items-start rounded-[12px] border border-[#ece5f5] bg-surface px-3 py-2"
+                      >
+                        <button type="button" onClick={() => handleLoadTemplate(t)} className="text-left">
+                          <span
+                            className="mb-1 block h-1.5 w-8 rounded-full"
+                            style={{ backgroundColor: t.accent_color ?? DEFAULT_ACCENT_COLOR }}
+                          />
+                          <p className="max-w-[180px] truncate text-[12px] font-semibold text-ink">{t.name}</p>
+                          <p className="max-w-[180px] truncate text-[10.5px] text-ink-faint">{t.subject}</p>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteTemplate(t.id)}
+                          disabled={templateActionId === t.id}
+                          className="absolute right-1.5 top-1.5 text-[10px] text-ink-faint opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 disabled:opacity-50"
+                          title="Delete template"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="rounded-[16px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-4">
+                <form onSubmit={handleSendCampaign} className="space-y-2.5">
+                  <div>
+                    <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                      Subject
+                    </label>
+                    <input
+                      value={campaignSubject}
+                      onChange={(e) => {
+                        setCampaignSubject(e.target.value);
+                        setConfirmingSend(false);
+                      }}
+                      placeholder="e.g. What's new in Strivo this month"
+                      maxLength={150}
+                      className="w-full rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                      Message
+                    </label>
+                    <textarea
+                      value={campaignBody}
+                      onChange={(e) => {
+                        setCampaignBody(e.target.value);
+                        setConfirmingSend(false);
+                      }}
+                      placeholder={
+                        "Hi {{firstName}},\n\nWrite your message here. **Bold** and [links](https://strivo.ai) both work — leave a blank line between paragraphs."
+                      }
+                      maxLength={10000}
+                      rows={6}
+                      className="w-full resize-none rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                    />
+                    <p className="mt-1 text-[10.5px] text-ink-faint">
+                      <code>{"{{firstName}}"}</code> personalizes per recipient, <code>**bold**</code> and{" "}
+                      <code>[text](https://...)</code> both render. Every send gets an unsubscribe footer
+                      automatically.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                      Who gets this
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                      {EMAIL_SEGMENT_OPTIONS.map((opt) => {
+                        const selected = campaignSegment === opt.value;
+                        const count = campaignAudienceCounts?.[opt.value];
+                        return (
+                          <button
+                            key={opt.value}
+                            type="button"
+                            onClick={() => {
+                              setCampaignSegment(opt.value);
+                              setConfirmingSend(false);
+                            }}
+                            className={cn(
+                              "rounded-[12px] border p-2.5 text-left transition-colors",
+                              selected ? "border-[#a78bfa] bg-surface" : "border-[#ece5f5] bg-surface/60"
+                            )}
+                          >
+                            <p className={cn("text-[12.5px] font-semibold", selected ? "text-[#7c3aed]" : "text-ink")}>
+                              {opt.label}
+                            </p>
+                            <p className="mt-0.5 text-[10.5px] text-ink-faint">{opt.hint}</p>
+                            <p className="mt-1 text-[11px] font-medium text-[#8a82a8]">
+                              {count === undefined ? "…" : `${count} recipient${count === 1 ? "" : "s"}`}
+                            </p>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <p className="mt-1.5 text-[10.5px] text-ink-faint">
+                      No real &quot;cancelled&quot; segment yet — that needs Google Play cancellation webhooks,
+                      which aren&apos;t wired up. &quot;Trial ended&quot; is the closest signal available today.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2.5 border-t border-[#ece5f5] pt-2.5 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                        Banner image (optional)
+                      </label>
+                      <input
+                        value={campaignBannerUrl}
+                        onChange={(e) => {
+                          setCampaignBannerUrl(e.target.value);
+                          setConfirmingSend(false);
+                        }}
+                        placeholder="https://... image URL, shown at the top"
+                        className="w-full rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                          Button text (optional)
+                        </label>
+                        <input
+                          value={campaignButtonText}
+                          onChange={(e) => {
+                            setCampaignButtonText(e.target.value);
+                            setConfirmingSend(false);
+                          }}
+                          placeholder="e.g. Open Strivo"
+                          maxLength={40}
+                          className="w-full rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                          Button link
+                        </label>
+                        <input
+                          value={campaignButtonUrl}
+                          onChange={(e) => {
+                            setCampaignButtonUrl(e.target.value);
+                            setConfirmingSend(false);
+                          }}
+                          placeholder="https://strivo.ai/..."
+                          className="w-full rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1.5 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                      Accent color
+                    </label>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {ACCENT_SWATCHES.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          onClick={() => {
+                            setCampaignAccentColor(c);
+                            setConfirmingSend(false);
+                          }}
+                          className={cn(
+                            "h-7 w-7 rounded-full border-2 transition-transform",
+                            campaignAccentColor.toLowerCase() === c ? "scale-110 border-ink" : "border-transparent"
+                          )}
+                          style={{ backgroundColor: c }}
+                          title={c}
+                        />
+                      ))}
+                      <input
+                        value={campaignAccentColor}
+                        onChange={(e) => {
+                          setCampaignAccentColor(e.target.value);
+                          setConfirmingSend(false);
+                        }}
+                        placeholder="#8b5cf6"
+                        maxLength={7}
+                        className="w-24 rounded-pill border border-[#ece5f5] bg-surface px-3 py-1.5 text-xs text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa]"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 border-t border-[#ece5f5] pt-2.5">
+                    <input
+                      value={testEmail}
+                      onChange={(e) => setTestEmail(e.target.value)}
+                      placeholder="you@email.com"
+                      className="w-52 rounded-pill border border-[#ece5f5] bg-surface px-3.5 py-2 text-xs text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa]"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSendTestCampaign}
+                      disabled={!testEmail.trim() || !campaignSubject.trim() || !campaignBody.trim() || sendingTest}
+                      className="whitespace-nowrap rounded-pill border border-[#ece5f5] bg-surface px-3.5 py-2 text-xs font-semibold text-ink-soft disabled:opacity-50"
+                    >
+                      {sendingTest ? "Sending…" : "Send test to this address"}
+                    </button>
+                    {testStatus && <p className="text-[11px] text-ink-faint">{testStatus}</p>}
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!showSaveTemplateInput ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowSaveTemplateInput(true)}
+                        disabled={!campaignSubject.trim() || !campaignBody.trim()}
+                        className="text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
+                      >
+                        Save as template
+                      </button>
+                    ) : (
+                      <>
+                        <input
+                          value={newTemplateName}
+                          onChange={(e) => setNewTemplateName(e.target.value)}
+                          placeholder="Template name, e.g. Monthly update"
+                          maxLength={60}
+                          className="w-56 rounded-pill border border-[#ece5f5] bg-surface px-3.5 py-2 text-xs text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa]"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleSaveTemplate}
+                          disabled={!newTemplateName.trim() || savingTemplate}
+                          className="whitespace-nowrap rounded-pill border border-[#ece5f5] bg-surface px-3.5 py-2 text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
+                        >
+                          {savingTemplate ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowSaveTemplateInput(false);
+                            setNewTemplateName("");
+                          }}
+                          className="text-xs font-semibold text-ink-soft"
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-3 pt-1">
+                    <button
+                      type="submit"
+                      disabled={!campaignSubject.trim() || !campaignBody.trim() || sendingCampaign}
+                      className="flex items-center gap-2 rounded-pill px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+                      style={{
+                        background: confirmingSend
+                          ? "linear-gradient(135deg,#ef4444,#f97316)"
+                          : "linear-gradient(135deg,#a78bfa,#60a5fa)",
+                      }}
+                    >
+                      {sendingCampaign ? (
+                        <Spinner className="h-4 w-4 border-white/40 border-t-white" />
+                      ) : (
+                        <Mail size={14} />
+                      )}
+                      {confirmingSend
+                        ? `Confirm: send to ${campaignAudienceCounts?.[campaignSegment] ?? "…"} people`
+                        : "Send campaign"}
+                    </button>
+                    {confirmingSend && (
+                      <button
+                        type="button"
+                        onClick={() => setConfirmingSend(false)}
+                        className="text-xs font-semibold text-ink-soft"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </form>
+              </div>
+              <p className="mt-2 text-[11px] text-ink-faint">
+                Sends one email per recipient (never batched together), with a short delay between each, via AWS
+                SES. Anyone who&apos;s unsubscribed is automatically excluded from every segment above.
+              </p>
+            </section>
+
+            {recentCampaigns.length > 0 && (
+              <section className="mt-8">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                  Previously sent emails
+                </p>
+                <div className="space-y-2">
+                  {recentCampaigns.map((c) => (
+                    <div key={c.id} className="rounded-[12px] border border-[#f0ecf7] bg-surface p-3">
+                      <p className="text-sm font-medium text-ink">{c.subject}</p>
+                      <p className="line-clamp-2 text-[12.5px] text-ink-soft">{c.body}</p>
+                      <div className="mt-1 flex items-center gap-2">
+                        <span className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-[10px] font-semibold text-[#8b5cf6]">
+                          {emailSegmentLabel(c.segment)}
+                        </span>
+                        <span className="text-[10.5px] text-ink-faint">
+                          {c.recipient_count} recipient{c.recipient_count === 1 ? "" : "s"}
+                        </span>
+                        <p className="text-[10.5px] text-ink-faint">{new Date(c.created_at).toLocaleString()}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
 
             <section className="mt-8">
               <div className="mb-2 flex items-center justify-between">

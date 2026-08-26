@@ -1,5 +1,7 @@
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import * as Sentry from "@sentry/nextjs";
+import { createUnsubscribeToken } from "@/lib/emailUnsubscribe";
+import { personalize, renderMarkdownLiteToHtml, renderMarkdownLiteToText, wrapBrandedEmail } from "@/lib/emailTemplate";
 
 // Sends outbound email via AWS SES. Uses the standard AWS SDK env vars
 // (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) so it picks up
@@ -10,9 +12,17 @@ const REGION = process.env.AWS_REGION || "us-east-1";
 const FROM_EMAIL = process.env.SES_FROM_EMAIL || "hello@strivo.ai";
 const TO_EMAIL = process.env.SES_TO_EMAIL || "hello@strivo.ai";
 
-function sesConfigured(): boolean {
+// Exported so the admin campaign-send route can warn upfront ("SES isn't
+// configured yet") instead of discovering it partway through a send loop.
+export function sesConfigured(): boolean {
   return !!process.env.AWS_ACCESS_KEY_ID && !!process.env.AWS_SECRET_ACCESS_KEY;
 }
+
+// Best-effort origin for building absolute links (unsubscribe) inside
+// campaign emails. Falls back to the production domain if not set --
+// emails are never sent from a preview/staging deploy in practice, but
+// this keeps the link correct even if that ever changes.
+const APP_ORIGIN = process.env.NEXT_PUBLIC_APP_URL || "https://strivo.ai";
 
 let client: SESClient | null = null;
 function getClient(): SESClient {
@@ -86,6 +96,70 @@ export async function sendPasswordResetEmail(params: { toEmail: string; resetUrl
     return true;
   } catch (e) {
     console.error("Failed to send password reset email via SES:", e);
+    Sentry.captureException(e);
+    return false;
+  }
+}
+
+// Sends one marketing/broadcast email to one recipient -- see
+// /api/admin/email-campaign for the loop that calls this once per
+// recipient (never batched into one SES call across real users, both for
+// privacy and because each recipient needs their own unsubscribe link).
+// {{firstName}} in the subject/body markdown is personalized per
+// recipient before rendering. Returns false (never throws) on failure so
+// a single bad address can't abort the rest of a campaign send.
+export async function sendCampaignEmail(params: {
+  toEmail: string;
+  toUserId: string;
+  firstName: string;
+  subject: string;
+  bodyMarkdown: string;
+  bannerImageUrl?: string | null;
+  buttonText?: string | null;
+  buttonUrl?: string | null;
+  accentColor?: string | null;
+}): Promise<boolean> {
+  if (!sesConfigured()) {
+    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping campaign email.");
+    return false;
+  }
+
+  const subject = personalize(params.subject, params.firstName);
+  const bodyMarkdown = personalize(params.bodyMarkdown, params.firstName);
+  const unsubscribeUrl = `${APP_ORIGIN}/api/email/unsubscribe?t=${createUnsubscribeToken(params.toUserId)}`;
+  const html = wrapBrandedEmail({
+    bodyHtml: renderMarkdownLiteToHtml(bodyMarkdown),
+    unsubscribeUrl,
+    accentColor: params.accentColor,
+    bannerImageUrl: params.bannerImageUrl,
+    buttonText: params.buttonText,
+    buttonUrl: params.buttonUrl,
+  });
+  // Plain-text fallback: the banner image has no text equivalent (skipped
+  // entirely), but the button becomes a plain "text — url" line so the
+  // call-to-action still comes through for clients that render Text over
+  // Html.
+  const buttonLine =
+    params.buttonText?.trim() && params.buttonUrl?.trim() ? `\n${params.buttonText.trim()}: ${params.buttonUrl.trim()}\n` : "";
+  const text = `${renderMarkdownLiteToText(bodyMarkdown)}\n${buttonLine}\n---\nUnsubscribe from marketing emails: ${unsubscribeUrl}`;
+
+  try {
+    await getClient().send(
+      new SendEmailCommand({
+        Source: FROM_EMAIL,
+        Destination: { ToAddresses: [params.toEmail] },
+        Message: {
+          Subject: { Data: subject, Charset: "UTF-8" },
+          Body: {
+            Html: { Data: html, Charset: "UTF-8" },
+            Text: { Data: text, Charset: "UTF-8" },
+          },
+        },
+      })
+    );
+    return true;
+  } catch (e) {
+    console.error(`Failed to send campaign email to ${params.toEmail} via SES:`, e);
     Sentry.captureException(e);
     return false;
   }

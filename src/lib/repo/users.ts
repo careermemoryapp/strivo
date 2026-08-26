@@ -13,6 +13,7 @@ export type User = {
   app_version: string | null;
   last_active_at: string | null;
   preferred_plan: string | null;
+  email_opt_out: number;
   created_at: string;
 };
 
@@ -168,5 +169,17 @@ export function setUserSubscriptionStatus(id: string, status: "trial" | "active"
 export function setPreferredPlan(id: string, plan: "monthly" | "annual") {
   const db = getDb();
   db.prepare(`UPDATE users SET preferred_plan = ? WHERE id = ?`).run(plan, id);
+  return getUserById(id);
+}
+
+// Flips the marketing-email opt-out flag. Called only from the public
+// unsubscribe link (see /api/email/unsubscribe + emailUnsubscribe.ts) --
+// once set, this user is excluded from every future campaign audience at
+// the query level (see emailCampaigns.ts's candidateRows). Does not touch
+// transactional email eligibility (password reset, support replies), which
+// isn't gated by this flag at all.
+export function setEmailOptOut(id: string, optOut: boolean) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET email_opt_out = ? WHERE id = ?`).run(optOut ? 1 : 0, id);
   return getUserById(id);
 }

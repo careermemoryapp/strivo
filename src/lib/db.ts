@@ -206,6 +206,40 @@ function migrate(db: DatabaseSync) {
       count INTEGER NOT NULL,
       reset_at TEXT NOT NULL
     );
+
+    -- Broadcast marketing/lifecycle emails sent from the admin panel (see
+    -- lib/repo/emailCampaigns.ts) — a subject/body pair fanned out via SES
+    -- to whichever audience segment the admin picked (all users, free
+    -- trial, paid monthly, paid annual, or trial-ended). Kept as a table
+    -- purely for history/audit, same pattern as nudges above -- there's
+    -- no "active campaign" concept, every send is a one-off, permanent row.
+    CREATE TABLE IF NOT EXISTS email_campaigns (
+      id TEXT PRIMARY KEY,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      segment TEXT NOT NULL,
+      recipient_count INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+
+    -- Reusable, admin-editable starting points for the campaign composer
+    -- (see lib/repo/emailTemplates.ts) -- both the seeded "traditional"
+    -- starter templates (Welcome, Promotional, Re-engagement, Update) and
+    -- anything the admin saves themselves via "Save as template" live in
+    -- this same table. Loading one just fills in the composer fields; it
+    -- doesn't send anything or reference email_campaigns at all.
+    CREATE TABLE IF NOT EXISTS email_templates (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      subject TEXT NOT NULL,
+      body TEXT NOT NULL,
+      banner_image_url TEXT,
+      button_text TEXT,
+      button_url TEXT,
+      accent_color TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---
@@ -248,6 +282,94 @@ function migrate(db: DatabaseSync) {
   // rather than defaulting everyone to monthly.
   if (!userColumns.includes("preferred_plan")) {
     db.exec(`ALTER TABLE users ADD COLUMN preferred_plan TEXT;`);
+  }
+  // Set once someone clicks the unsubscribe link in a broadcast campaign
+  // email (see /api/email/unsubscribe) -- every campaign send excludes
+  // opted-out users automatically (see recipientsForSegment in
+  // lib/repo/emailCampaigns.ts). Does NOT affect transactional email
+  // (password reset, support replies) -- those aren't marketing and keep
+  // sending regardless of this flag.
+  if (!userColumns.includes("email_opt_out")) {
+    db.exec(`ALTER TABLE users ADD COLUMN email_opt_out INTEGER NOT NULL DEFAULT 0;`);
+  }
+
+  // Design fields for campaign emails -- added after email_campaigns
+  // already existed in production, so these are nullable/optional: older
+  // history rows (sent before this feature) simply have no banner/button/
+  // color and render with the plain default template, same as before.
+  const emailCampaignColumns = (db.prepare(`PRAGMA table_info(email_campaigns)`).all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!emailCampaignColumns.includes("banner_image_url")) {
+    db.exec(`ALTER TABLE email_campaigns ADD COLUMN banner_image_url TEXT;`);
+  }
+  if (!emailCampaignColumns.includes("button_text")) {
+    db.exec(`ALTER TABLE email_campaigns ADD COLUMN button_text TEXT;`);
+  }
+  if (!emailCampaignColumns.includes("button_url")) {
+    db.exec(`ALTER TABLE email_campaigns ADD COLUMN button_url TEXT;`);
+  }
+  if (!emailCampaignColumns.includes("accent_color")) {
+    db.exec(`ALTER TABLE email_campaigns ADD COLUMN accent_color TEXT;`);
+  }
+
+  // Seeds four "traditional" starter templates the first time this table
+  // is empty, so the admin has something usable to click into right away
+  // instead of a blank slate. Only runs once ever, in practice -- after
+  // that the table always has at least these four rows (unless the admin
+  // deletes them all, in which case they simply don't come back).
+  const templateCount = (db.prepare(`SELECT COUNT(*) AS n FROM email_templates`).get() as { n: number }).n;
+  if (templateCount === 0) {
+    const now = new Date().toISOString();
+    const starterTemplates = [
+      {
+        id: "template_starter_welcome",
+        name: "Welcome / What's new",
+        subject: "Welcome to Strivo, {{firstName}} — here's how to get started",
+        body: "Hi {{firstName}},\n\nWelcome to Strivo! We built this so you never have to start an interview answer, resume bullet, or performance review from a blank page again.\n\nStart by recording one memory — a project you're proud of, a hard problem you solved, anything. Strivo turns it into something you can pull up whenever you need it.",
+        banner_image_url: null,
+        button_text: "Record your first memory",
+        button_url: "https://strivo.ai/app",
+        accent_color: "#8b5cf6",
+      },
+      {
+        id: "template_starter_promotional",
+        name: "Promotional / Upgrade",
+        subject: "{{firstName}}, lock in Strivo Plus before your trial ends",
+        body: "Hi {{firstName}},\n\nYour free trial won't last forever — but Strivo Plus is **50% off** if you go annual. Unlimited memories, AI chat grounded in your real experience, and interview/resume coaching whenever you need it.\n\nNo pressure, just wanted you to know before it ends.",
+        banner_image_url: null,
+        button_text: "See plans",
+        button_url: "https://strivo.ai/app/settings/subscription",
+        accent_color: "#f97316",
+      },
+      {
+        id: "template_starter_reengagement",
+        name: "Re-engagement (trial ended)",
+        subject: "We kept your memories, {{firstName}}",
+        body: "Hi {{firstName}},\n\nYour Strivo trial ended, but everything you recorded is still there — nothing was deleted. Come back anytime to pick up where you left off.\n\nIf something didn't work for you, just reply and tell us — we read every email.",
+        banner_image_url: null,
+        button_text: "Come back to Strivo",
+        button_url: "https://strivo.ai/app",
+        accent_color: "#60a5fa",
+      },
+      {
+        id: "template_starter_update",
+        name: "Plain update (no banner/button)",
+        subject: "A quick update from Strivo",
+        body: "Hi {{firstName}},\n\nJust a short note — write your update here. This template is intentionally plain text, no banner image or button, for when a simple note fits better than a promotional layout.",
+        banner_image_url: null,
+        button_text: null,
+        button_url: null,
+        accent_color: "#8b5cf6",
+      },
+    ];
+    const insertTemplate = db.prepare(
+      `INSERT INTO email_templates (id, name, subject, body, banner_image_url, button_text, button_url, accent_color, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    for (const t of starterTemplates) {
+      insertTemplate.run(t.id, t.name, t.subject, t.body, t.banner_image_url, t.button_text, t.button_url, t.accent_color, now, now);
+    }
   }
 
   // English translation/paraphrase of the transcript, generated alongside
