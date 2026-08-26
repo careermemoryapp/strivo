@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, type ReactNode, type FormEvent } from "react";
+import { useEffect, useState, useCallback, useMemo, type ReactNode, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   LogOut,
@@ -24,6 +24,10 @@ import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
 import type { EmailSegment, EmailCampaign } from "@/lib/repo/emailCampaigns";
 import type { EmailTemplate } from "@/lib/repo/emailTemplates";
+// Pure string-rendering helpers, no server-only imports (no db, no crypto) --
+// safe to run client-side so the composer can show an exact live preview
+// without a round trip to the server or an actual test send.
+import { renderMarkdownLiteToHtml, wrapBrandedEmail, personalize } from "@/lib/emailTemplate";
 import type { SentryIssue } from "@/lib/sentry";
 import type { SecurityCheck, DependencyAuditSummary } from "@/lib/securityStatus";
 import type { LiveSecurityStatus } from "@/lib/liveSecurityStatus";
@@ -238,6 +242,7 @@ export default function AdminDashboardPage() {
   const [campaignButtonText, setCampaignButtonText] = useState("");
   const [campaignButtonUrl, setCampaignButtonUrl] = useState("");
   const [campaignAccentColor, setCampaignAccentColor] = useState(DEFAULT_ACCENT_COLOR);
+  const [showEmailPreview, setShowEmailPreview] = useState(false);
   const [emailTemplates, setEmailTemplates] = useState<EmailTemplate[]>([]);
   const [showSaveTemplateInput, setShowSaveTemplateInput] = useState(false);
   const [newTemplateName, setNewTemplateName] = useState("");
@@ -588,6 +593,24 @@ export default function AdminDashboardPage() {
       setUserActionId(null);
     }
   }
+
+  // Renders the exact same HTML the recipient will get, using a fake
+  // "there" firstName and a placeholder unsubscribe link (a real one needs
+  // a signed per-user token, which is server-only -- see emailUnsubscribe.ts
+  // -- but the footer text/styling looks identical either way). Recomputes
+  // on every keystroke since it's just string templating, no network call.
+  const emailPreviewHtml = useMemo(() => {
+    const bodyMarkdown = personalize(campaignBody || "_Your message will appear here._", "there");
+    return wrapBrandedEmail({
+      bodyHtml: renderMarkdownLiteToHtml(bodyMarkdown),
+      unsubscribeUrl: "https://strivo.ai/api/email/unsubscribe?t=preview",
+      accentColor: campaignAccentColor,
+      bannerImageUrl: campaignBannerUrl,
+      buttonText: campaignButtonText,
+      buttonUrl: campaignButtonUrl,
+    });
+  }, [campaignBody, campaignAccentColor, campaignBannerUrl, campaignButtonText, campaignButtonUrl]);
+  const emailPreviewSubject = personalize(campaignSubject || "(no subject yet)", "there");
 
   if (!checkedAuth) {
     return (
@@ -1355,6 +1378,14 @@ export default function AdminDashboardPage() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowEmailPreview((v) => !v)}
+                      className="text-xs font-semibold text-[#8b5cf6]"
+                    >
+                      {showEmailPreview ? "Hide preview" : "Preview email"}
+                    </button>
+                    <span className="text-ink-faint">·</span>
                     {!showSaveTemplateInput ? (
                       <button
                         type="button"
@@ -1427,6 +1458,26 @@ export default function AdminDashboardPage() {
                   </div>
                 </form>
               </div>
+
+              {showEmailPreview && (
+                <div className="mt-3 overflow-hidden rounded-[16px] border border-[#ece5f5] bg-[#f5f3fa]">
+                  <div className="border-b border-[#ece5f5] bg-surface px-4 py-2.5">
+                    <p className="text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                      Preview — exactly what recipients will see
+                    </p>
+                    <p className="mt-0.5 truncate text-[12.5px] font-medium text-ink">{emailPreviewSubject}</p>
+                  </div>
+                  <div className="flex justify-center p-4">
+                    <iframe
+                      title="Email preview"
+                      srcDoc={emailPreviewHtml}
+                      sandbox=""
+                      className="h-[560px] w-full max-w-[560px] rounded-[10px] border border-[#ece5f5] bg-white"
+                    />
+                  </div>
+                </div>
+              )}
+
               <p className="mt-2 text-[11px] text-ink-faint">
                 Sends one email per recipient (never batched together), with a short delay between each, via AWS
                 SES. Anyone who&apos;s unsubscribed is automatically excluded from every segment above.
