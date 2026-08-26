@@ -2,6 +2,7 @@ import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import * as Sentry from "@sentry/nextjs";
 import { createUnsubscribeToken } from "@/lib/emailUnsubscribe";
 import { personalize, renderMarkdownLiteToHtml, renderMarkdownLiteToText, wrapBrandedEmail } from "@/lib/emailTemplate";
+import { renderWelcomeEmailHtml, renderWelcomeEmailText } from "@/lib/emailWelcome";
 
 // Sends outbound email via AWS SES. Uses the standard AWS SDK env vars
 // (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) so it picks up
@@ -116,6 +117,46 @@ export async function sendPasswordResetEmail(params: { toEmail: string; resetUrl
 // {{firstName}} in the subject/body markdown is personalized per
 // recipient before rendering. Returns false (never throws) on failure so
 // a single bad address can't abort the rest of a campaign send.
+// Sends the one-time automatic welcome email fired the moment a brand-new
+// user account is created (see the signIn callback in lib/auth.ts, which
+// calls this un-awaited/fire-and-forget right after createUser() so a
+// slow or failed send can never delay or block the sign-in response).
+// Deliberately separate from sendCampaignEmail: this isn't a marketing
+// send (no unsubscribe link, no segment, no admin-composed content) --
+// it's a fixed, transactional message using its own template
+// (renderWelcomeEmailHtml/Text in emailWelcome.ts). Never throws; returns
+// false on any failure so the caller can log without risking the signup
+// flow itself.
+export async function sendWelcomeEmail(params: { toEmail: string; firstName: string }): Promise<boolean> {
+  if (!sesConfigured()) {
+    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping welcome email.");
+    return false;
+  }
+
+  const name = params.firstName.trim() || "there";
+
+  try {
+    await getClient().send(
+      new SendEmailCommand({
+        Source: FROM_EMAIL,
+        Destination: { ToAddresses: [params.toEmail] },
+        Message: {
+          Subject: { Data: "Welcome to Strivo", Charset: "UTF-8" },
+          Body: {
+            Html: { Data: renderWelcomeEmailHtml(name), Charset: "UTF-8" },
+            Text: { Data: renderWelcomeEmailText(name), Charset: "UTF-8" },
+          },
+        },
+      })
+    );
+    return true;
+  } catch (e) {
+    console.error(`Failed to send welcome email to ${params.toEmail} via SES:`, e);
+    Sentry.captureException(e);
+    return false;
+  }
+}
+
 export async function sendCampaignEmail(params: {
   toEmail: string;
   toUserId: string;

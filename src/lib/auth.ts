@@ -2,6 +2,8 @@ import type { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
 import crypto from "node:crypto";
 import { getUserByEmail, createUser, updateUserProfile } from "@/lib/repo/users";
+import { sendWelcomeEmail } from "@/lib/email";
+import * as Sentry from "@sentry/nextjs";
 
 // Strivo is Google-sign-in-only — there's no email/password login,
 // signup, or password-reset flow (those pages/routes were removed; see
@@ -40,6 +42,17 @@ export const authOptions: AuthOptions = {
             lastName: rest.join(" "),
             email,
             passwordHash: placeholderHash,
+          });
+          // Fire-and-forget: this is the one moment we know for certain
+          // it's a brand-new account (dbUser was just created above, not
+          // looked up). Deliberately NOT awaited -- a slow or failed SES
+          // call must never delay or block this sign-in response. The
+          // send function itself never throws (see sendWelcomeEmail in
+          // lib/email.ts), but .catch() is still here as a last-resort
+          // guard against an unhandled promise rejection.
+          sendWelcomeEmail({ toEmail: dbUser.email, firstName: dbUser.first_name }).catch((e) => {
+            console.error("Welcome email failed:", e);
+            Sentry.captureException(e);
           });
         }
         if (user.image && user.image !== dbUser.profile_image) {
