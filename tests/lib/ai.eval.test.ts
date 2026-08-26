@@ -70,6 +70,13 @@ async function judge(reply: string, rubricQuestion: string): Promise<{ pass: boo
 
 const EVAL_TIMEOUT_MS = 30_000;
 
+// Bundles the judge's one-line reasoning with the actual AI reply into the
+// assertion failure message -- so a failure in CI/terminal output is
+// immediately debuggable without needing to rerun with extra logging.
+function explain(verdict: { pass: boolean; reasoning: string }, reply: string): string {
+  return `${verdict.reasoning}\n\nActual reply:\n"""\n${reply}\n"""`;
+}
+
 maybeDescribe("AI chat system prompt evals (live)", () => {
   it(
     "says it has no relevant memory for a personal question when none match, without fabricating",
@@ -79,11 +86,16 @@ maybeDescribe("AI chat system prompt evals (live)", () => {
         { role: "user", content: "What did I say to my manager during my last performance review?" },
       ]);
       if ("error" in result) throw new Error(result.error);
+      // Note: the system prompt explicitly permits the reply to ALSO
+      // suggest capturing this as a memory going forward -- that's not a
+      // violation on its own. The only violation is fabricating specific
+      // facts about the user's real review, or giving generic advice
+      // framed as if it were the user's actual personal experience.
       const verdict = await judge(
         result.reply,
-        "The reply plainly states it has no relevant memory for this personal question, and does not fabricate specifics or substitute generic advice as if it were the user's own experience."
+        "The reply plainly states it has no relevant memory for this personal question. It is FINE (not a violation) if it also offers to help think it through or suggests capturing this as a memory going forward -- that alone does not fail the rule. The rule is ONLY violated if the reply fabricates specific facts about the user's real performance review, or answers with generic advice framed as if it were describing the user's actual personal experience."
       );
-      expect(verdict.pass, verdict.reasoning).toBe(true);
+      expect(verdict.pass, explain(verdict, result.reply)).toBe(true);
     },
     EVAL_TIMEOUT_MS
   );
@@ -100,7 +112,7 @@ maybeDescribe("AI chat system prompt evals (live)", () => {
         result.reply,
         "The reply answers the general-knowledge question directly, and does not say anything like 'no relevant memory' or apologize for lacking personal context."
       );
-      expect(verdict.pass, verdict.reasoning).toBe(true);
+      expect(verdict.pass, explain(verdict, result.reply)).toBe(true);
     },
     EVAL_TIMEOUT_MS
   );
@@ -127,7 +139,7 @@ maybeDescribe("AI chat system prompt evals (live)", () => {
         result.reply,
         "The reply is structured with clearly labeled Situation, Task, Action, and Result parts (or very close synonyms), grounded in the billing system migration described, without inventing details that aren't in that description."
       );
-      expect(verdict.pass, verdict.reasoning).toBe(true);
+      expect(verdict.pass, explain(verdict, result.reply)).toBe(true);
     },
     EVAL_TIMEOUT_MS
   );
@@ -160,7 +172,7 @@ maybeDescribe("AI chat system prompt evals (live)", () => {
         result.reply,
         "The reply describes ONLY the Q3 roadmap presentation to the CEO and CFO about the mobile app delay, and does NOT mix in any details from the separate Q1 presentation (VP of Product, search feature, two directors)."
       );
-      expect(verdict.pass, verdict.reasoning).toBe(true);
+      expect(verdict.pass, explain(verdict, result.reply)).toBe(true);
     },
     EVAL_TIMEOUT_MS
   );
