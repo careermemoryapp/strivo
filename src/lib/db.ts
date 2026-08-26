@@ -283,6 +283,29 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("preferred_plan")) {
     db.exec(`ALTER TABLE users ADD COLUMN preferred_plan TEXT;`);
   }
+  // Stamped every time setPreferredPlan() runs (any value, including
+  // "later"). Exists specifically to power the plan-choice nudge: someone
+  // who picked "later" gets shown a reminder screen again once enough time
+  // has passed since THIS timestamp, not since they first signed up (see
+  // PLAN_NUDGE_AFTER_MS in repo/users.ts and app/plan-nudge). Picking
+  // anything again -- including "later" a second time -- re-stamps this
+  // and pushes the next nudge out another full interval, so it can't
+  // re-appear every single session.
+  if (!userColumns.includes("preferred_plan_chosen_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN preferred_plan_chosen_at TEXT;`);
+  }
+  // True while an admin has manually granted this account free access via
+  // "Grant Strivo Plus" (see PATCH /api/admin/users/[id]) rather than a
+  // real Google Play purchase. Settings/subscription reads this to show
+  // "you were gifted this plan" instead of pricing/a plan picker -- a
+  // distinct flag rather than inferring it from subscription_status ===
+  // "active", because right now that inference would happen to be correct
+  // (there's no real billing yet, so every active account IS a grant) but
+  // would silently become WRONG the moment real Play Billing purchases
+  // start landing, telling a genuine paying customer they got a free gift.
+  if (!userColumns.includes("plan_granted_by_admin")) {
+    db.exec(`ALTER TABLE users ADD COLUMN plan_granted_by_admin INTEGER NOT NULL DEFAULT 0;`);
+  }
   // Set once someone clicks the unsubscribe link in a broadcast campaign
   // email (see /api/email/unsubscribe) -- every campaign send excludes
   // opted-out users automatically (see recipientsForSegment in

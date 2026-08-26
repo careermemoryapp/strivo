@@ -18,7 +18,8 @@ type Subscription = {
   annualPriceLabel: string;
   annualListPriceLabel: string;
   trialMonths: number;
-  preferredPlan: "monthly" | "annual" | null;
+  preferredPlan: "monthly" | "annual" | "later" | null;
+  grantedByAdmin: boolean;
 };
 
 const PERKS = [
@@ -28,8 +29,13 @@ const PERKS = [
   "Interview, resume, leadership & performance-review coaching",
 ];
 
-function planToBilling(plan: "monthly" | "annual" | null): "Monthly" | "Annually" {
-  return plan === "monthly" ? "Monthly" : "Annually";
+// "later" and null both mean "no real plan committed to yet" -- neither
+// should be treated as if the person had reserved Annually. Only a genuine
+// "monthly"/"annual" choice maps to a specific billing tab.
+function planToBilling(plan: "monthly" | "annual" | "later" | null): "Monthly" | "Annually" | null {
+  if (plan === "monthly") return "Monthly";
+  if (plan === "annual") return "Annually";
+  return null;
 }
 
 export default function SubscriptionPage() {
@@ -53,9 +59,13 @@ export default function SubscriptionPage() {
   }, []);
 
   useEffect(() => {
-    if (sub?.preferredPlan) {
+    // Only sync the tab to a real reserved plan -- "later" and null have no
+    // billing tab to reflect, so leave the default (Annually) in place
+    // rather than falsely implying a reservation exists.
+    const reserved = sub ? planToBilling(sub.preferredPlan) : null;
+    if (reserved) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- intentional one-time sync from freshly-fetched server data, not a render loop
-      setBilling(planToBilling(sub.preferredPlan));
+      setBilling(reserved);
     }
   }, [sub?.preferredPlan]);
 
@@ -80,8 +90,8 @@ export default function SubscriptionPage() {
   }
 
   const activePriceLabel = sub ? (billing === "Monthly" ? sub.monthlyPriceLabel : sub.annualPriceLabel) : "";
-  const reservedBilling = sub ? planToBilling(sub.preferredPlan) : "Annually";
-  const isPreviewingDifferentPlan = sub?.preferredPlan != null && billing !== reservedBilling;
+  const reservedBilling = sub ? planToBilling(sub.preferredPlan) : null;
+  const isPreviewingDifferentPlan = reservedBilling != null && billing !== reservedBilling;
 
   return (
     <div className="pb-8">
@@ -132,68 +142,95 @@ export default function SubscriptionPage() {
             </div>
 
             <Card className="border-[#f0ecf7]">
-              <div className="flex items-center justify-between gap-3">
-                <p className="font-semibold text-ink">Strivo Plus</p>
-                <div className="w-40">
-                  <Tabs tabs={["Monthly", "Annually"]} active={billing} onChange={(t) => setBilling(t as "Monthly" | "Annually")} />
-                </div>
-              </div>
+              {sub.grantedByAdmin ? (
+                <>
+                  <div className="flex items-center gap-2">
+                    <Sparkles size={18} className="text-[#8b5cf6]" />
+                    <p className="font-semibold text-ink">Strivo Plus</p>
+                  </div>
+                  <div className="mt-3 flex flex-col items-center gap-1 rounded-[12px] bg-[#f2effa] px-3 py-3 text-center">
+                    <p className="flex items-center gap-1.5 text-sm font-semibold text-[#8b5cf6]">
+                      <CheckCircle2 size={16} /> You&apos;ve been gifted the{" "}
+                      {sub.preferredPlan === "monthly" ? "Monthly" : "Annual"} plan
+                    </p>
+                    <p className="text-xs text-ink-soft">Granted by the Strivo team — no payment needed.</p>
+                  </div>
 
-              <div className="mt-4 flex items-baseline gap-2">
-                {billing === "Annually" && (
-                  <p className="text-sm text-ink-faint line-through">{sub.annualListPriceLabel}</p>
-                )}
-                <p className="text-2xl font-bold text-ink">{activePriceLabel}</p>
-                {billing === "Annually" && (
-                  <span className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-xs font-semibold text-[#8b5cf6]">
-                    Save 50%
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-ink-soft">
-                {billing === "Annually" ? "Billed annually" : "Billed monthly"} via Google Play. Cancel anytime
-                before it renews from Google Play → Subscriptions.
-              </p>
-              {sub.status !== "active" && sub.preferredPlan && (
-                <div className="mt-3 flex flex-col items-center gap-1.5 rounded-[12px] bg-[#f2effa] px-3 py-2.5 text-center">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold text-[#8b5cf6]">
-                    <CheckCircle2 size={14} /> Reserved: {reservedBilling} plan after trial
+                  <div className="mt-4 space-y-2.5">
+                    {PERKS.map((perk) => (
+                      <div key={perk} className="flex items-start gap-2">
+                        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#8b5cf6]" />
+                        <p className="text-sm text-ink-soft">{perk}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-semibold text-ink">Strivo Plus</p>
+                    <div className="w-40">
+                      <Tabs tabs={["Monthly", "Annually"]} active={billing} onChange={(t) => setBilling(t as "Monthly" | "Annually")} />
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-baseline gap-2">
+                    {billing === "Annually" && (
+                      <p className="text-sm text-ink-faint line-through">{sub.annualListPriceLabel}</p>
+                    )}
+                    <p className="text-2xl font-bold text-ink">{activePriceLabel}</p>
+                    {billing === "Annually" && (
+                      <span className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-xs font-semibold text-[#8b5cf6]">
+                        Save 50%
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-ink-soft">
+                    {billing === "Annually" ? "Billed annually" : "Billed monthly"} via Google Play. Cancel anytime
+                    before it renews from Google Play → Subscriptions.
                   </p>
-                  {isPreviewingDifferentPlan && (
+                  {sub.status !== "active" && reservedBilling && (
+                    <div className="mt-3 flex flex-col items-center gap-1.5 rounded-[12px] bg-[#f2effa] px-3 py-2.5 text-center">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold text-[#8b5cf6]">
+                        <CheckCircle2 size={14} /> Reserved: {reservedBilling} plan after trial
+                      </p>
+                      {isPreviewingDifferentPlan && (
+                        <button
+                          onClick={() => confirmSwitch(billing)}
+                          disabled={switching}
+                          className="text-xs font-semibold text-[#8b5cf6] underline disabled:opacity-50"
+                        >
+                          {switching ? "Switching…" : `Switch reservation to ${billing}`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="mt-4 space-y-2.5">
+                    {PERKS.map((perk) => (
+                      <div key={perk} className="flex items-start gap-2">
+                        <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#8b5cf6]" />
+                        <p className="text-sm text-ink-soft">{perk}</p>
+                      </div>
+                    ))}
+                  </div>
+
+                  {sub.status !== "active" && (
                     <button
-                      onClick={() => confirmSwitch(billing)}
-                      disabled={switching}
-                      className="text-xs font-semibold text-[#8b5cf6] underline disabled:opacity-50"
+                      onClick={() => setShowComingSoon(true)}
+                      className="mt-5 flex w-full items-center justify-center gap-2 rounded-pill py-3.5 text-sm font-semibold text-white"
+                      style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
                     >
-                      {switching ? "Switching…" : `Switch reservation to ${billing}`}
+                      <Sparkles size={16} /> Upgrade to Strivo Plus
                     </button>
                   )}
-                </div>
-              )}
 
-              <div className="mt-4 space-y-2.5">
-                {PERKS.map((perk) => (
-                  <div key={perk} className="flex items-start gap-2">
-                    <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-[#8b5cf6]" />
-                    <p className="text-sm text-ink-soft">{perk}</p>
-                  </div>
-                ))}
-              </div>
-
-              {sub.status !== "active" && (
-                <button
-                  onClick={() => setShowComingSoon(true)}
-                  className="mt-5 flex w-full items-center justify-center gap-2 rounded-pill py-3.5 text-sm font-semibold text-white"
-                  style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
-                >
-                  <Sparkles size={16} /> Upgrade to Strivo Plus
-                </button>
-              )}
-
-              {showComingSoon && (
-                <p className="mt-3 text-center text-xs text-ink-soft">
-                  Online payments aren&apos;t set up yet — check back soon.
-                </p>
+                  {showComingSoon && (
+                    <p className="mt-3 text-center text-xs text-ink-soft">
+                      Online payments aren&apos;t set up yet — check back soon.
+                    </p>
+                  )}
+                </>
               )}
             </Card>
 

@@ -13,9 +13,25 @@ export type User = {
   app_version: string | null;
   last_active_at: string | null;
   preferred_plan: string | null;
+  // Stamped every time setPreferredPlan() runs, including for "later". Powers
+  // the plan-choice nudge screen: someone who picked "later" gets reminded
+  // again once PLAN_NUDGE_AFTER_MS has passed since THIS timestamp, not since
+  // they first signed up. Choosing again (even "later" a second time)
+  // re-stamps it and pushes the next nudge out another full interval.
+  preferred_plan_chosen_at: string | null;
+  // 1 if an admin manually granted this account free access via "Grant
+  // Strivo Plus" rather than a real Google Play purchase. Kept as an
+  // explicit flag distinct from subscription_status === "active" so that
+  // once real Play Billing lands, a genuine paying customer isn't shown a
+  // "you were gifted this" message just because they're active.
+  plan_granted_by_admin: number;
   email_opt_out: number;
   created_at: string;
 };
+
+// How long after choosing "I'll decide later" someone should be shown the
+// plan-choice nudge screen again (see /plan-nudge + (app)/layout.tsx).
+export const PLAN_NUDGE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
 
 export type SubscriptionInfo = {
   status: "trial" | "active" | "expired";
@@ -33,6 +49,14 @@ export type SubscriptionInfo = {
   // call for different treatment (the former shouldn't get a nudge email,
   // the latter is exactly who that nudge is for).
   preferredPlan: "monthly" | "annual" | "later" | null;
+  // True if an admin manually granted this person free access (see
+  // plan_granted_by_admin above). Settings/subscription reads this to show a
+  // "you've been gifted this plan" message instead of pricing.
+  grantedByAdmin: boolean;
+  // True once someone who chose "later" is due to see the plan-choice nudge
+  // screen again (PLAN_NUDGE_AFTER_MS since preferred_plan_chosen_at, and
+  // they still haven't picked a real plan or converted to active).
+  needsPlanNudge: boolean;
 };
 
 // Single source of truth for pricing. Billed exclusively through Google Play
@@ -46,17 +70,28 @@ export const ANNUAL_PRICE_LABEL = "$41.99/year";
 export const ANNUAL_LIST_PRICE_LABEL = "$83.88/year";
 
 export function getSubscriptionInfo(
-  user: Pick<User, "subscription_status" | "trial_ends_at"> & Partial<Pick<User, "preferred_plan">>
+  user: Pick<User, "subscription_status" | "trial_ends_at"> &
+    Partial<Pick<User, "preferred_plan" | "preferred_plan_chosen_at" | "plan_granted_by_admin">>
 ): SubscriptionInfo {
+  const preferredPlan = (user.preferred_plan === "monthly" || user.preferred_plan === "annual" || user.preferred_plan === "later"
+    ? user.preferred_plan
+    : null) as "monthly" | "annual" | "later" | null;
+  const grantedByAdmin = user.plan_granted_by_admin === 1;
+  const chosenAtMs = user.preferred_plan_chosen_at ? new Date(user.preferred_plan_chosen_at).getTime() : null;
+  const needsPlanNudge =
+    preferredPlan === "later" &&
+    user.subscription_status !== "active" &&
+    chosenAtMs !== null &&
+    Date.now() - chosenAtMs >= PLAN_NUDGE_AFTER_MS;
   const shared = {
     priceLabel: ANNUAL_PRICE_LABEL,
     monthlyPriceLabel: MONTHLY_PRICE_LABEL,
     annualPriceLabel: ANNUAL_PRICE_LABEL,
     annualListPriceLabel: ANNUAL_LIST_PRICE_LABEL,
     trialMonths: TRIAL_MONTHS,
-    preferredPlan: (user.preferred_plan === "monthly" || user.preferred_plan === "annual" || user.preferred_plan === "later"
-      ? user.preferred_plan
-      : null) as "monthly" | "annual" | "later" | null,
+    preferredPlan,
+    grantedByAdmin,
+    needsPlanNudge,
   };
   if (user.subscription_status === "active") {
     return { status: "active", trialEndsAt: user.trial_ends_at, daysLeft: null, ...shared };
@@ -159,9 +194,17 @@ export function setUserAppVersion(id: string, version: string) {
 // up (see TRIAL_MONTHS/pricing comments above). Only ever sets 'trial' or
 // 'active': "expired" is always computed from trial_ends_at in
 // getSubscriptionInfo, never stored, so it's not a settable value here.
+// Granting "active" also flips plan_granted_by_admin to 1 (this is, today,
+// the ONLY way anyone becomes "active" -- there's no real billing yet) so
+// Settings/subscription can show "you've been gifted this plan" instead of
+// pricing. Reverting to "trial" clears the flag again.
 export function setUserSubscriptionStatus(id: string, status: "trial" | "active") {
   const db = getDb();
-  db.prepare(`UPDATE users SET subscription_status = ? WHERE id = ?`).run(status, id);
+  db.prepare(`UPDATE users SET subscription_status = ?, plan_granted_by_admin = ? WHERE id = ?`).run(
+    status,
+    status === "active" ? 1 : 0,
+    id
+  );
   return getUserById(id);
 }
 
@@ -176,7 +219,11 @@ export function setUserSubscriptionStatus(id: string, status: "trial" | "active"
 // which just calls this same function again with "monthly"/"annual".
 export function setPreferredPlan(id: string, plan: "monthly" | "annual" | "later") {
   const db = getDb();
-  db.prepare(`UPDATE users SET preferred_plan = ? WHERE id = ?`).run(plan, id);
+  db.prepare(`UPDATE users SET preferred_plan = ?, preferred_plan_chosen_at = ? WHERE id = ?`).run(
+    plan,
+    nowIso(),
+    id
+  );
   return getUserById(id);
 }
 

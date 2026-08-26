@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import BottomNav from "@/components/BottomNav";
 import { requireUserId } from "@/lib/serverAuth";
-import { getUserById } from "@/lib/repo/users";
+import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
 
 // Server-rendered gate, not a client-side check: previously the "pick a
 // plan first" redirect only lived inside home/page.tsx's own fetch effect,
@@ -19,12 +19,25 @@ import { getUserById } from "@/lib/repo/users";
 // group specifically so it doesn't inherit this layout or BottomNav --
 // otherwise someone could just tap a nav icon to skip past it, which was
 // the other half of the bug being fixed here.
+//
+// Same reasoning applies to /plan-nudge: someone who picked "I'll choose
+// later" isn't blocked from the app, but once PLAN_NUDGE_AFTER_MS has
+// passed since that choice (see needsPlanNudge in repo/users.ts) they're
+// routed to a reminder screen -- shown here rather than left null so the
+// app doesn't strand people who genuinely can't decide yet without ever
+// re-prompting them.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const userId = await requireUserId();
   if (userId) {
     const user = getUserById(userId);
     if (user && user.preferred_plan === null) {
       redirect("/welcome-trial");
+    }
+    if (user) {
+      const info = getSubscriptionInfo(user);
+      if (info.needsPlanNudge) {
+        redirect("/plan-nudge");
+      }
     }
   }
 
