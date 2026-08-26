@@ -9,8 +9,16 @@ import { personalize, renderMarkdownLiteToHtml, renderMarkdownLiteToText, wrapBr
 // verified SES identity we send from; SES_TO_EMAIL is where inbound
 // inquiries land (both default to hello@strivo.ai — same inbox).
 const REGION = process.env.AWS_REGION || "us-east-1";
-const FROM_EMAIL = process.env.SES_FROM_EMAIL || "hello@strivo.ai";
+const FROM_ADDRESS = process.env.SES_FROM_EMAIL || "hello@strivo.ai";
 const TO_EMAIL = process.env.SES_TO_EMAIL || "hello@strivo.ai";
+
+// Recipients previously saw just the raw address ("hello@strivo.ai") as
+// the sender, which most mail clients render as the literal local-part
+// "hello" with no company name attached. Wrapping it in a display name
+// (RFC 5322 "Name <email>" form, which SES's Source field accepts
+// directly) makes every email -- support replies, password resets, and
+// campaigns alike -- show up as "Strivo" in the inbox instead.
+const FROM_EMAIL = `Strivo <${FROM_ADDRESS}>`;
 
 // Exported so the admin campaign-send route can warn upfront ("SES isn't
 // configured yet") instead of discovering it partway through a send loop.

@@ -121,7 +121,22 @@ export function wrapBrandedEmail(params: {
           </tr>
           <tr>
             <td style="padding:28px 32px 8px;">
-              <p style="margin:0;font-size:18px;font-weight:700;color:#1a1523;">Strivo</p>
+              <table role="presentation" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="padding-right:10px;">
+                    <img
+                      src="https://strivo.ai/logo-email.png"
+                      width="36"
+                      height="36"
+                      alt="Strivo"
+                      style="display:block;width:36px;height:36px;border:0;border-radius:9px;"
+                    />
+                  </td>
+                  <td>
+                    <p style="margin:0;font-size:19px;font-weight:700;color:#1a1523;line-height:36px;">Strivo</p>
+                  </td>
+                </tr>
+              </table>
             </td>
           </tr>
           ${banner}
