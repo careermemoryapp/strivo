@@ -43,6 +43,7 @@ export const authOptions: AuthOptions = {
             email,
             passwordHash: placeholderHash,
           });
+          console.log(`New user created via Google sign-in: ${email} (id=${dbUser.id}) — sending welcome email.`);
           // Fire-and-forget: this is the one moment we know for certain
           // it's a brand-new account (dbUser was just created above, not
           // looked up). Deliberately NOT awaited -- a slow or failed SES

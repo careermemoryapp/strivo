@@ -149,6 +149,7 @@ export async function sendWelcomeEmail(params: { toEmail: string; firstName: str
         },
       })
     );
+    console.log(`Welcome email sent to ${params.toEmail} via SES.`);
     return true;
   } catch (e) {
     console.error(`Failed to send welcome email to ${params.toEmail} via SES:`, e);
