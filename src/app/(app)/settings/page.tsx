@@ -29,7 +29,7 @@ function Row({
     <button
       onClick={onClick}
       disabled={comingSoon}
-      className="flex w-full items-center gap-3 px-4 py-3.5 text-left disabled:opacity-50"
+      className="flex w-full items-center gap-3 px-4 py-3.5 text-left disabled:opacity-50 active:opacity-60 transition-opacity"
     >
       <span className={danger ? "text-red-600" : "text-[#8b5cf6]"}>{icon}</span>
       <span className={`flex-1 text-sm font-medium ${danger ? "text-red-600" : "text-ink"}`}>{label}</span>

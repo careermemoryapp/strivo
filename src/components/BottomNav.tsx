@@ -39,7 +39,7 @@ export default function BottomNav() {
                 <Link
                   href={item.href}
                   aria-label={item.label}
-                  className="flex flex-col items-center justify-center gap-1 py-2"
+                  className="flex flex-col items-center justify-center gap-1 py-2 active:opacity-50 transition-opacity"
                 >
                   <Icon size={21} strokeWidth={2} className={active ? activeColor : inactiveColor} />
                   <span className={cn("text-[10px] font-medium", active ? activeColor : inactiveColor)}>

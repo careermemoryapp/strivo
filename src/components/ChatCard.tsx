@@ -28,7 +28,11 @@ export function ChatCard({ chat, onChanged }: { chat: Chat; onChanged?: () => vo
 
   return (
     <div className="relative">
-      <Link href={`/chats/${chat.id}`} className="block" onClick={() => menuOpen && setMenuOpen(false)}>
+      <Link
+        href={`/chats/${chat.id}`}
+        className="block active:scale-[0.98] active:opacity-80 transition-transform"
+        onClick={() => menuOpen && setMenuOpen(false)}
+      >
         <Card className="hover:border-brand-primary/40 transition-colors">
           <div className="flex gap-3">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f2effa] text-[#8b5cf6]">
