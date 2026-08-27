@@ -2,7 +2,7 @@
 
 import { useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Sparkles, ArrowUp, Mic } from "lucide-react";
+import { ChevronRight, Sparkles, ArrowUp, Mic, Clock } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
@@ -19,7 +19,18 @@ type HomeData = {
   streak: number;
   memoryCount: number;
   recentChats: Chat[];
+  // Only present while status === "trial" (see page.tsx) -- null once
+  // someone is active/expired, since expired is already hard-blocked by
+  // (app)/layout.tsx before Home ever renders, and active has nothing to
+  // remind them of.
+  trial: { daysLeft: number } | null;
 };
+
+// How many days out the reminder starts showing -- chosen so it's a real
+// heads-up (not a surprise on the last day) but doesn't nag for the whole
+// trial. Purely a display threshold; the actual trial-end enforcement lives
+// in getSubscriptionInfo() + (app)/layout.tsx, not here.
+const TRIAL_REMINDER_THRESHOLD_DAYS = 5;
 
 // Light keyword match so a chat started from the "ask anything" box still
 // gets a specific category icon instead of always falling back to "Others" —
@@ -176,6 +187,38 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
       {error && (
         <div className="px-5 pt-4">
           <ErrorBanner message={error} onRetry={load} />
+        </div>
+      )}
+
+      {/* Trial-ending reminder -- only shows in the last few days of the
+          free trial (see TRIAL_REMINDER_THRESHOLD_DAYS above). Real Google
+          Play Billing isn't wired up yet, so this deliberately doesn't
+          promise an in-app upgrade flow -- it points to Settings, which
+          already has the honest "online payments aren't set up yet"
+          messaging (see subscription/page.tsx). This is just the
+          heads-up; the actual trial cutoff is enforced separately by
+          (app)/layout.tsx once the trial genuinely ends. */}
+      {data.trial && data.trial.daysLeft <= TRIAL_REMINDER_THRESHOLD_DAYS && (
+        <div className="px-5 pt-4">
+          <button
+            onClick={() => router.push("/settings/subscription")}
+            className="flex w-full items-center gap-3 rounded-[14px] border border-[#f3d9a8] bg-[#fdf6e8] px-4 py-3 text-left"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f8ecd2] text-[#b3811f]">
+              <Clock size={15} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-semibold text-[#5c4318]">
+                {data.trial.daysLeft <= 0
+                  ? "Your free trial ends today"
+                  : data.trial.daysLeft === 1
+                    ? "Your free trial ends tomorrow"
+                    : `Your free trial ends in ${data.trial.daysLeft} days`}
+              </p>
+              <p className="text-[11px] text-[#8a7550]">Tap to see your plan</p>
+            </div>
+            <ChevronRight size={15} className="shrink-0 text-[#c9ab6c]" />
+          </button>
         </div>
       )}
 

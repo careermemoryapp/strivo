@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUserId } from "@/lib/serverAuth";
-import { getUserById } from "@/lib/repo/users";
+import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
 import { countMemories, listMemoryDates } from "@/lib/repo/memories";
 import { listChats } from "@/lib/repo/chats";
 import { computeStreak } from "@/lib/utils";
@@ -25,6 +25,10 @@ export default async function HomePage() {
   const streak = computeStreak(listMemoryDates(userId));
   const memoryCount = countMemories(userId);
   const recentChats = listChats(userId).slice(0, 3);
+  // Trial-ending banner (see HomeClient.tsx): only meaningful info here is
+  // status + daysLeft, so we don't hand the whole SubscriptionInfo shape
+  // across the Server -> Client boundary for no reason.
+  const subscription = user ? getSubscriptionInfo(user) : null;
 
   return (
     <HomeClient
@@ -38,6 +42,10 @@ export default async function HomePage() {
         // Server -> Client boundary as-is -- see the matching comment in
         // chats/[id]/page.tsx.
         recentChats: recentChats.map((c) => ({ ...c })),
+        trial:
+          subscription && subscription.status === "trial"
+            ? { daysLeft: subscription.daysLeft ?? 0 }
+            : null,
       }}
     />
   );
