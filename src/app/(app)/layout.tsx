@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import BottomNav from "@/components/BottomNav";
 import { requireUserId } from "@/lib/serverAuth";
 import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
+import { CurrentUserProvider } from "@/lib/CurrentUserContext";
 
 // Server-rendered gate, not a client-side check: previously the "pick a
 // plan first" redirect only lived inside home/page.tsx's own fetch effect,
@@ -37,26 +38,34 @@ import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
 // should see the hard stop, not the softer "still deciding" nudge.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const userId = await requireUserId();
-  if (userId) {
-    const user = getUserById(userId);
-    if (user && user.preferred_plan === null) {
+  const user = userId ? getUserById(userId) : undefined;
+  if (user) {
+    if (user.preferred_plan === null) {
       redirect("/welcome-trial");
     }
-    if (user) {
-      const info = getSubscriptionInfo(user);
-      if (info.status === "expired") {
-        redirect("/trial-ended");
-      }
-      if (info.needsPlanNudge) {
-        redirect("/plan-nudge");
-      }
+    const info = getSubscriptionInfo(user);
+    if (info.status === "expired") {
+      redirect("/trial-ended");
+    }
+    if (info.needsPlanNudge) {
+      redirect("/plan-nudge");
     }
   }
 
+  // Same lookup this layout already needs for the gating checks above, so
+  // handing it to every page's header avatar via context is free -- see
+  // CurrentUserContext.tsx for what this fixes (the "?" flash on tab
+  // switches).
+  const currentUser = user
+    ? { firstName: user.first_name, lastName: user.last_name, email: user.email }
+    : null;
+
   return (
-    <div className="flex min-h-screen flex-col bg-bg">
-      <main className="mx-auto w-full max-w-md flex-1 pb-20">{children}</main>
-      <BottomNav />
-    </div>
+    <CurrentUserProvider user={currentUser}>
+      <div className="flex min-h-screen flex-col bg-bg">
+        <main className="mx-auto w-full max-w-md flex-1 pb-20">{children}</main>
+        <BottomNav />
+      </div>
+    </CurrentUserProvider>
   );
 }
