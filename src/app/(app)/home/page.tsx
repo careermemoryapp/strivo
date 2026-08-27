@@ -8,6 +8,7 @@ import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import { HOME_SUBTITLE, QUICK_ACTIONS } from "@/lib/config";
 import { timeOfDayGreeting } from "@/lib/utils";
 import { ACTION_ICON_DEFS, chatCategoryIcon } from "@/lib/categoryIcons";
@@ -49,6 +50,13 @@ const DARK = "#26213c";
 
 export default function HomePage() {
   const router = useRouter();
+  // Instant, not fetched: comes from (app)/layout.tsx's context provider,
+  // which already has the name by the time Home renders. Used only for the
+  // header Avatar, which otherwise flashed "?" on every navigation to Home
+  // while waiting on this page's own /api/home fetch (still used below for
+  // the greeting text and everything else, since that needs the fuller
+  // payload anyway).
+  const currentUser = useCurrentUser();
   const [data, setData] = useState<HomeData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingAction, setPendingAction] = useState<string | null>(null);
@@ -137,7 +145,11 @@ export default function HomePage() {
           <span className="text-[17px] font-bold tracking-tight text-white">Strivo</span>
         </div>
         <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-          <Avatar firstName={data?.user?.firstName} lastName={data?.user?.lastName} size={32} />
+          <Avatar
+            firstName={currentUser?.firstName ?? data?.user?.firstName}
+            lastName={currentUser?.lastName ?? data?.user?.lastName}
+            size={32}
+          />
         </button>
       </div>
 
