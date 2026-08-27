@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/serverAuth";
 import { createMemory, listMemories, updateMemoryMetadata, getMemoryById } from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
+import { isTrialExpired } from "@/lib/repo/users";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -31,6 +32,13 @@ function fallbackTitle(transcript: string): string {
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Backstop for the (app)/layout.tsx page-level redirect, which only
+  // fires on a fresh navigation -- a tab already open when the trial ended
+  // could otherwise keep creating memories via client-side fetch forever.
+  if (isTrialExpired(userId)) {
+    return NextResponse.json({ error: "Your free trial has ended. Please upgrade to continue." }, { status: 402 });
+  }
 
   // Every memory triggers two OpenAI calls (metadata generation + embedding)
   // — cap per-user spend from a runaway client/script, same reasoning as

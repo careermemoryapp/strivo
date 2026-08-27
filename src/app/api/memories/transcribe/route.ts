@@ -3,6 +3,7 @@ import { requireUserId } from "@/lib/serverAuth";
 import { transcribeAudio } from "@/lib/ai";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
+import { isTrialExpired } from "@/lib/repo/users";
 
 // Needs real fetch/File handling talking to OpenAI, not the edge runtime.
 export const runtime = "nodejs";
@@ -12,6 +13,13 @@ const MAX_BYTES = 25 * 1024 * 1024; // OpenAI's own per-file limit for audio tra
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Backstop for the (app)/layout.tsx page-level redirect -- see the same
+  // check in api/memories/route.ts for why this needs to live here too,
+  // not just on the page.
+  if (isTrialExpired(userId)) {
+    return NextResponse.json({ error: "Your free trial has ended. Please upgrade to continue." }, { status: 402 });
+  }
 
   // Admin kill switch (see lib/repo/featureFlags.ts) -- lets the founder
   // pause transcription/upload immediately if OpenAI is down or spending is

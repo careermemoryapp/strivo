@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { requireUserId } from "@/lib/serverAuth";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
+import { isTrialExpired } from "@/lib/repo/users";
 
 // Node-only: pdf-parse/mammoth/jszip/xlsx all need real filesystem/buffer
 // APIs, so this route can't run on the edge runtime.
@@ -104,6 +105,13 @@ class UnsupportedFileTypeError extends Error {}
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Backstop for the (app)/layout.tsx page-level redirect -- see the same
+  // check in api/memories/route.ts for why this needs to live here too,
+  // not just on the page.
+  if (isTrialExpired(userId)) {
+    return NextResponse.json({ error: "Your free trial has ended. Please upgrade to continue." }, { status: 402 });
+  }
 
   // Admin kill switch (see lib/repo/featureFlags.ts) -- same "uploads"
   // switch as voice transcription, since both feed the Record page's file

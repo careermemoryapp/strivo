@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/serverAuth";
 import { createChat, listChats } from "@/lib/repo/chats";
 import { sendUserMessageAndGetReply } from "@/lib/chatService";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
+import { isTrialExpired } from "@/lib/repo/users";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -25,6 +26,13 @@ const createSchema = z.object({
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Backstop for the (app)/layout.tsx page-level redirect -- see the same
+  // check in api/memories/route.ts for why this needs to live here too,
+  // not just on the page.
+  if (isTrialExpired(userId)) {
+    return NextResponse.json({ error: "Your free trial has ended. Please upgrade to continue." }, { status: 402 });
+  }
 
   const body = await req.json().catch(() => null);
   const parsed = createSchema.safeParse(body);

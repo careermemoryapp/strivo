@@ -26,6 +26,15 @@ import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
 // routed to a reminder screen -- shown here rather than left null so the
 // app doesn't strand people who genuinely can't decide yet without ever
 // re-prompting them.
+//
+// /trial-ended is the hard stop: once getSubscriptionInfo computes
+// status === "expired" (trial_ends_at has passed and nobody granted them
+// "active"), every route under (app) redirects here instead of rendering.
+// This is a deliberate product decision (2026-08-27) to actually enforce
+// the trial boundary even though real Google Play Billing isn't wired up
+// yet -- see /trial-ended's own comment for what that means in practice.
+// Checked before needsPlanNudge: someone whose trial has since ended
+// should see the hard stop, not the softer "still deciding" nudge.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const userId = await requireUserId();
   if (userId) {
@@ -35,6 +44,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     }
     if (user) {
       const info = getSubscriptionInfo(user);
+      if (info.status === "expired") {
+        redirect("/trial-ended");
+      }
       if (info.needsPlanNudge) {
         redirect("/plan-nudge");
       }

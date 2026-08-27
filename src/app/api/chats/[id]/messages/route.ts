@@ -4,12 +4,20 @@ import { requireUserId } from "@/lib/serverAuth";
 import { getChatById } from "@/lib/repo/chats";
 import { sendUserMessageAndGetReply } from "@/lib/chatService";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
+import { isTrialExpired } from "@/lib/repo/users";
 
 const schema = z.object({ content: z.string().trim().min(1, "Message can't be empty").max(4000) });
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Backstop for the (app)/layout.tsx page-level redirect -- see the same
+  // check in api/memories/route.ts for why this needs to live here too,
+  // not just on the page.
+  if (isTrialExpired(userId)) {
+    return NextResponse.json({ error: "Your free trial has ended. Please upgrade to continue." }, { status: 402 });
+  }
 
   // Every message triggers an OpenAI chat completion (and often an
   // embedding call) — cap per-user spend from a runaway client/script.

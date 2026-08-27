@@ -233,6 +233,21 @@ export function setPreferredPlan(id: string, plan: "monthly" | "annual" | "later
 // the query level (see emailCampaigns.ts's candidateRows). Does not touch
 // transactional email eligibility (password reset, support replies), which
 // isn't gated by this flag at all.
+// Server-side enforcement companion to the (app)/layout.tsx page-level
+// redirect: that redirect only fires on a fresh page navigation/server
+// render, so a tab that was already open when someone's trial ran out
+// could otherwise keep calling content-creating API routes indefinitely
+// via client-side fetch without ever hitting the redirect. Routes that
+// create new content or spend real OpenAI API cost (new memories, chat
+// messages, transcription, file extraction) call this directly so the
+// block is real regardless of what the client's already-loaded page state
+// looks like.
+export function isTrialExpired(userId: string): boolean {
+  const user = getUserById(userId);
+  if (!user) return false;
+  return getSubscriptionInfo(user).status === "expired";
+}
+
 export function setEmailOptOut(id: string, optOut: boolean) {
   const db = getDb();
   db.prepare(`UPDATE users SET email_opt_out = ? WHERE id = ?`).run(optOut ? 1 : 0, id);
