@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUserId } from "@/lib/serverAuth";
 import { getChatById } from "@/lib/repo/chats";
 import { listMessages } from "@/lib/repo/messages";
-import { getMemoryById } from "@/lib/repo/memories";
+import { getMemoriesByIds } from "@/lib/repo/memories";
 import { safeJsonParse } from "@/lib/utils";
 
 // Returns the memories that informed the most recent AI reply in this
@@ -22,9 +22,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const latest = aiMessages[aiMessages.length - 1];
   const memoryIds = latest ? safeJsonParse<string[]>(latest.retrieved_memories, []) : [];
 
-  const memories = memoryIds
-    .map((mid) => getMemoryById(userId, mid))
-    .filter((m): m is NonNullable<typeof m> => !!m);
+  // Single batched query instead of one getMemoryById() call per id (N+1
+  // pattern) -- then re-sort into the original retrieval order, since a
+  // WHERE...IN query doesn't guarantee row order matches the ids list.
+  const fetched = getMemoriesByIds(userId, memoryIds);
+  const byId = new Map(fetched.map((m) => [m.id, m]));
+  const memories = memoryIds.map((mid) => byId.get(mid)).filter((m): m is NonNullable<typeof m> => !!m);
 
   return NextResponse.json({ chat, memories });
 }

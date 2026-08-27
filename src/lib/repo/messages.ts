@@ -45,12 +45,19 @@ export function getMessageById(userId: string, id: string): Message | undefined 
 }
 
 // Scoped by both chat_id AND user_id so a message list can never leak
-// across users even if a chat id were guessed.
+// across users even if a chat id were guessed. Capped at the most recent
+// 500 messages (same safety-net pattern as listChats in chats.ts) -- fetched
+// newest-first with a LIMIT, then reversed back to the chronological order
+// callers expect. Deliberately DESC-then-reverse rather than a plain
+// ASC+LIMIT: an ASC cap would silently drop the newest messages (the ones
+// actually being read/replied to) off the end of a very long chat instead
+// of the oldest ones, which is the wrong direction to trim.
 export function listMessages(userId: string, chatId: string): Message[] {
   const db = getDb();
-  return db
-    .prepare(`SELECT * FROM messages WHERE chat_id = ? AND user_id = ? ORDER BY created_at ASC`)
+  const rows = db
+    .prepare(`SELECT * FROM messages WHERE chat_id = ? AND user_id = ? ORDER BY created_at DESC LIMIT 500`)
     .all(chatId, userId) as Message[];
+  return rows.reverse();
 }
 
 export function updateMessageStatus(userId: string, id: string, status: Message["status"]) {

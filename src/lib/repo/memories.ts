@@ -46,6 +46,20 @@ export function getMemoryById(userId: string, id: string): Memory | undefined {
     .get(id, userId) as Memory | undefined;
 }
 
+// Batched lookup for a known set of ids, scoped by user_id same as
+// getMemoryById -- used wherever we'd otherwise call getMemoryById once per
+// id in a loop (N+1 pattern). Order is not guaranteed by the query, so
+// callers that care about preserving the original id order re-sort the
+// result themselves (see /api/chats/[id]/memories).
+export function getMemoriesByIds(userId: string, ids: string[]): Memory[] {
+  if (ids.length === 0) return [];
+  const db = getDb();
+  const placeholders = ids.map(() => "?").join(",");
+  return db
+    .prepare(`SELECT * FROM memories WHERE user_id = ? AND id IN (${placeholders})`)
+    .all(userId, ...ids) as Memory[];
+}
+
 // Deliberately unbounded (no LIMIT): this supports both "newest" and
 // "oldest" sort, and a blind LIMIT would silently hide real entries
 // depending on which direction the user is browsing (e.g. LIMIT 500 on an

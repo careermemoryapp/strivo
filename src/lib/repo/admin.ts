@@ -194,6 +194,26 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
       : db.prepare(`SELECT * FROM users ORDER BY created_at DESC LIMIT ?`).all(limit)
   ) as User[];
 
+  // N+1 fix: this used to run two COUNT queries per row inside the .map()
+  // below (up to 100 extra queries for a 50-row page). Instead, grab counts
+  // for every user on this page in two GROUP BY queries and merge by id.
+  const ids = rows.map((u) => u.id);
+  const memoryCounts = new Map<string, number>();
+  const chatCounts = new Map<string, number>();
+  if (ids.length > 0) {
+    const placeholders = ids.map(() => "?").join(",");
+    (
+      db
+        .prepare(`SELECT user_id, COUNT(*) as c FROM memories WHERE user_id IN (${placeholders}) GROUP BY user_id`)
+        .all(...ids) as { user_id: string; c: number }[]
+    ).forEach((r) => memoryCounts.set(r.user_id, r.c));
+    (
+      db
+        .prepare(`SELECT user_id, COUNT(*) as c FROM chats WHERE user_id IN (${placeholders}) GROUP BY user_id`)
+        .all(...ids) as { user_id: string; c: number }[]
+    ).forEach((r) => chatCounts.set(r.user_id, r.c));
+  }
+
   return rows.map((u) => {
     const info = getSubscriptionInfo(u);
     return {
@@ -204,8 +224,8 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
       status: info.status,
       daysLeft: info.daysLeft,
       createdAt: u.created_at,
-      memoryCount: count(`SELECT COUNT(*) as c FROM memories WHERE user_id = ?`, u.id),
-      chatCount: count(`SELECT COUNT(*) as c FROM chats WHERE user_id = ?`, u.id),
+      memoryCount: memoryCounts.get(u.id) ?? 0,
+      chatCount: chatCounts.get(u.id) ?? 0,
       appVersion: u.app_version,
       preferredPlan: info.preferredPlan,
     };
