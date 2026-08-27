@@ -1,8 +1,8 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { motion, useMotionValue, useSpring, type Variants } from "framer-motion";
-import { Check } from "lucide-react";
+import { Check, Plus } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME, PLAY_STORE_URL } from "@/lib/config";
@@ -259,6 +259,34 @@ function ChatScreenMock() {
   );
 }
 
+// A single expand/collapse FAQ row. Animated with a CSS grid-rows trick
+// (0fr -> 1fr) rather than framer-motion's height:auto, which needs to
+// measure the element on every open/close -- the grid trick animates
+// smoothly with plain CSS and no JS measuring at all.
+function FaqItem({ q, a }: { q: string; a: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="border-b border-[#1e1e26] py-5">
+      <button
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-4 text-left"
+      >
+        <span className={`text-[15px] font-semibold ${open ? "text-white" : "text-[#d0d0d8]"}`}>{q}</span>
+        <Plus
+          size={18}
+          className={`shrink-0 text-[#8a8a99] transition-transform duration-300 ${open ? "rotate-45 text-brand-secondary" : ""}`}
+        />
+      </button>
+      <div className={`grid transition-all duration-300 ease-out ${open ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}>
+        <div className="overflow-hidden">
+          <p className="pr-8 pt-3 text-sm leading-relaxed text-[#8a8a99]">{a}</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // --- Content, grounded in the real product -------------------------------
 
 const VALUE_PROPS = [
@@ -293,6 +321,61 @@ export function MarketingHome({
   annualPriceLabel: string;
   annualListPriceLabel: string;
 }) {
+  // Built inside the component (not as a module-level const) because
+  // several answers reference the real, current pricing/trial props
+  // instead of a hardcoded number that could drift out of sync with the
+  // pricing section above.
+  const FAQS = [
+    {
+      q: "What is Strivo?",
+      a: "Strivo is an AI career-memory app. You speak your day-to-day work moments — a project you led, a hard problem you solved, feedback you got — into it, and it remembers so you don't have to reconstruct everything from scratch when an interview, resume, or performance review comes up.",
+    },
+    {
+      q: "How does it actually work?",
+      a: "You record a short voice note (or type one). Strivo transcribes it, tags it automatically — Work, Achievement, Leadership, Review, and more — and saves it as a memory. Later, you can chat with it and ask things like “give me a leadership example” or “write a resume bullet for this,” and it answers using your real history instead of generic advice.",
+    },
+    {
+      q: "Is my data private?",
+      a: "Yes. Your memories are yours — encrypted at rest and in transit, never sold, and never shared with anyone else. See the Privacy Policy for the full details.",
+    },
+    {
+      q: "Does Strivo train AI models on my data?",
+      a: "No. Your recordings and memories are used only to power your own answers inside Strivo, not to train any AI model, and not shared with third parties for marketing or advertising.",
+    },
+    {
+      q: "What happens after the free trial?",
+      a: `You'll be asked to choose a plan — ${monthlyPriceLabel}/month or ${annualPriceLabel}/year (50% off versus monthly). Nothing is charged automatically without you picking a plan first.`,
+    },
+    {
+      q: "Can I cancel or delete my data?",
+      a: "Yes, anytime. You can delete individual memories, or delete your entire account and all its data, right from Settings.",
+    },
+    {
+      q: "Do I have to record something every day?",
+      a: "No. Strivo works best with regular use, but there's no streak to maintain and no penalty for going quiet — everything you've already recorded stays exactly as you left it.",
+    },
+    {
+      q: "Can I type instead of speaking?",
+      a: "Yes. Voice is the fastest way to capture something in the moment, but every screen that accepts a recording also accepts typed text or an uploaded document (PDF, Word, PowerPoint, or Excel).",
+    },
+    {
+      q: "Is there a limit on how long I can record?",
+      a: "Each recording can run up to 2 minutes at a stretch — long enough for a full thought, short enough to stay easy to transcribe and search later. You can record as many times as you like.",
+    },
+    {
+      q: "Is Strivo available on iPhone?",
+      a: "Not yet — Strivo is currently a native Android app on the Google Play Store. iOS is on the roadmap.",
+    },
+    {
+      q: "Is Strivo a therapist or crisis service?",
+      a: "No. Strivo is a career-coaching tool, not a medical, mental-health, or crisis service. If you're in crisis, please reach out to a local crisis line or a mental-health professional — Strivo will point you to those resources rather than try to help directly.",
+    },
+    {
+      q: "How is this different from a notes app?",
+      a: "A notes app remembers what you write down. Strivo remembers what you say, organizes it automatically, and hands the right piece back to you exactly when you need it — for an interview, a resume, or a review — instead of leaving you to scroll through old notes.",
+    },
+  ];
+
   return (
     <div id="marketing-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
       {/* Nav */}
@@ -486,6 +569,23 @@ export function MarketingHome({
               </ul>
             </TiltCard>
           </motion.div>
+        </motion.div>
+      </section>
+
+      {/* FAQ */}
+      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-primary">
+          QUESTIONS
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 mt-2 text-2xl font-bold tracking-tight">
+          Frequently asked questions
+        </motion.h2>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.05 }} variants={stagger} className="mx-auto max-w-2xl">
+          {FAQS.map((item) => (
+            <motion.div key={item.q} variants={fadeUp}>
+              <FaqItem q={item.q} a={item.a} />
+            </motion.div>
+          ))}
         </motion.div>
       </section>
 
