@@ -269,7 +269,7 @@ export function ChatDetailClient({
             }}
             rows={1}
             placeholder={
-              speech.listening ? "Listening…" : speech.transcribing ? "Transcribing…" : "Ask about your career or experiences..."
+              speech.listening ? "Listening…" : speech.transcribing ? "Transcribing…" : "Ask about your experiences..."
             }
             className="flex-1 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm text-ink placeholder:text-ink-faint outline-none"
           />
