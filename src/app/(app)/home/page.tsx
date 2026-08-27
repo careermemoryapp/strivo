@@ -34,7 +34,10 @@ export default async function HomePage() {
           : null,
         streak,
         memoryCount,
-        recentChats,
+        // node:sqlite rows aren't plain objects, so they can't cross the
+        // Server -> Client boundary as-is -- see the matching comment in
+        // chats/[id]/page.tsx.
+        recentChats: recentChats.map((c) => ({ ...c })),
       }}
     />
   );

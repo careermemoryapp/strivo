@@ -22,5 +22,15 @@ export default async function ChatDetailPage({ params }: { params: Promise<{ id:
 
   const messages = listMessages(userId, id);
 
-  return <ChatDetailClient chatId={id} initialChat={chat} initialMessages={messages} />;
+  // node:sqlite rows aren't plain objects (they fail the "only plain
+  // objects can cross the Server -> Client boundary" check Next.js does),
+  // so they can't be handed to a Client Component as-is -- spreading each
+  // one into a fresh object literal fixes that without changing any data.
+  return (
+    <ChatDetailClient
+      chatId={id}
+      initialChat={{ ...chat }}
+      initialMessages={messages.map((m) => ({ ...m }))}
+    />
+  );
 }

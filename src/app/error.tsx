@@ -20,6 +20,18 @@ export default function ErrorBoundary({
     Sentry.captureException(error);
   }, [error]);
 
+  // reset() alone just re-renders the same broken screen in place — for a
+  // deterministic bug (the same error every time, not a one-off glitch) it
+  // hits the identical error again instantly, which looks to someone
+  // tapping the button like it did nothing at all. A real reload instead:
+  // re-fetches the page fresh from the server (picking up a deploy that
+  // just went out, for instance) and gives the button a visible, honest
+  // effect either way, instead of silently failing the same way twice.
+  function handleRetry() {
+    reset();
+    window.location.reload();
+  }
+
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-bg px-6 text-center">
       <LogoMark size={40} />
@@ -28,7 +40,7 @@ export default function ErrorBoundary({
         We&apos;ve been notified. Please try again — your data is safe.
       </p>
       <button
-        onClick={reset}
+        onClick={handleRetry}
         className="mt-6 rounded-pill px-5 py-3 text-sm font-semibold text-white"
         style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
       >

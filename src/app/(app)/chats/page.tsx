@@ -14,5 +14,8 @@ export default async function ChatsPage() {
 
   const chats = listChats(userId, {});
 
-  return <ChatsListClient initialChats={chats} />;
+  // node:sqlite rows aren't plain objects, so they can't cross the
+  // Server -> Client boundary as-is -- see the matching comment in
+  // chats/[id]/page.tsx.
+  return <ChatsListClient initialChats={chats.map((c) => ({ ...c }))} />;
 }

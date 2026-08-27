@@ -12,5 +12,8 @@ export default async function MemoriesPage() {
 
   const memories = listMemories(userId, {});
 
-  return <MemoriesListClient initialMemories={memories} />;
+  // node:sqlite rows aren't plain objects, so they can't cross the
+  // Server -> Client boundary as-is -- see the matching comment in
+  // chats/[id]/page.tsx.
+  return <MemoriesListClient initialMemories={memories.map((m) => ({ ...m }))} />;
 }

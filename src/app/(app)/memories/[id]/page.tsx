@@ -17,5 +17,8 @@ export default async function MemoryDetailPage({ params }: { params: Promise<{ i
   // dead-end error screen for what's a rare, recoverable case.
   if (!memory) redirect("/memories");
 
-  return <MemoryDetailClient memoryId={id} initialMemory={memory} />;
+  // node:sqlite rows aren't plain objects, so they can't cross the
+  // Server -> Client boundary as-is -- see the matching comment in
+  // chats/[id]/page.tsx.
+  return <MemoryDetailClient memoryId={id} initialMemory={{ ...memory }} />;
 }
