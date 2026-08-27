@@ -5,7 +5,7 @@ export const metadata = {
   title: `Terms & Conditions — ${APP_NAME}`,
 };
 
-const LAST_UPDATED = "August 14, 2026";
+const LAST_UPDATED = "August 27, 2026";
 
 export default function TermsPage() {
   return (
@@ -115,12 +115,41 @@ export default function TermsPage() {
           </section>
 
           <section>
+            <h2 className="text-base font-semibold text-ink">Not a crisis or medical service</h2>
+            <p className="mt-3">
+              {APP_NAME} is a career-coaching tool. It is not a medical, mental-health, or crisis
+              service, and its AI is not equipped to help with a safety emergency. If you or
+              someone else is in danger or experiencing a crisis, please contact your local
+              emergency services or a crisis helpline directly (for example, in the US/Canada,
+              call or text 988; in the UK, call 116 123; in India, call 112 or iCall at
+              91-9152987821) rather than relying on {APP_NAME}.
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-base font-semibold text-ink">Disclaimers &amp; limitation of liability</h2>
             <p className="mt-3">
-              {APP_NAME} is provided &quot;as is&quot; without warranties of any kind. We don&apos;t
-              guarantee the app will be uninterrupted, error-free, or that AI responses will
-              always be accurate. To the fullest extent permitted by law, we&apos;re not liable
-              for indirect, incidental, or consequential damages arising from your use of the app.
+              {APP_NAME} is provided &quot;as is&quot; and &quot;as available,&quot; without
+              warranties of any kind, express or implied, including any implied warranty of
+              merchantability, fitness for a particular purpose, or non-infringement. We
+              don&apos;t guarantee the app will be uninterrupted, secure, or error-free, or that AI
+              responses will always be accurate or complete. To the fullest extent permitted by
+              law, {APP_NAME} and its founder won&apos;t be liable for any indirect, incidental,
+              special, consequential, or punitive damages, or any loss of data, profits, or
+              goodwill, arising from your use of (or inability to use) the app. To the fullest
+              extent permitted by law, our total liability for any claim arising from these terms
+              or the app is limited to the amount you paid us, if any, in the 12 months before the
+              claim arose.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-ink">Indemnification</h2>
+            <p className="mt-3">
+              You agree to defend, indemnify, and hold harmless {APP_NAME} and its founder from any
+              claims, damages, losses, or expenses (including reasonable legal fees) arising from
+              your misuse of the app, your violation of these terms, or content you upload or
+              submit that infringes someone else&apos;s rights or violates the law.
             </p>
           </section>
 
@@ -128,7 +157,33 @@ export default function TermsPage() {
             <h2 className="text-base font-semibold text-ink">Termination</h2>
             <p className="mt-3">
               You can stop using {APP_NAME} and delete your account at any time. We may suspend or
-              terminate accounts that violate these terms.
+              terminate accounts that violate these terms, including for abuse, fraud, or attempts
+              to circumvent the app&apos;s security or rate limits. Sections of these terms that by
+              their nature should survive termination (such as limitation of liability,
+              indemnification, and governing law) continue to apply after your account is
+              terminated or deleted.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-ink">Governing law &amp; disputes</h2>
+            <p className="mt-3">
+              These terms are governed by the laws of India, without regard to conflict-of-law
+              principles. Any dispute arising from these terms or your use of {APP_NAME} will be
+              subject to the exclusive jurisdiction of the courts located in India. If you&apos;re
+              a consumer resident in the EU, UK, or another jurisdiction that grants you the
+              benefit of mandatory local consumer-protection law regardless of this clause, this
+              section doesn&apos;t take away those protections.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-ink">General</h2>
+            <p className="mt-3">
+              If any part of these terms is found unenforceable, the rest remains in full effect.
+              Our failure to enforce a provision isn&apos;t a waiver of it. These terms, together
+              with our Privacy Policy, are the entire agreement between you and {APP_NAME}
+              regarding your use of the app.
             </p>
           </section>
 

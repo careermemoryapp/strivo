@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { motion, useMotionValue, useSpring, type Variants } from "framer-motion";
-import { Check, Star } from "lucide-react";
+import { Check } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME, PLAY_STORE_URL } from "@/lib/config";
@@ -276,12 +276,11 @@ const USE_CASES = [
   { title: "Find leadership examples", body: "Discover moments that show your leadership", highlight: true },
 ];
 
-const TESTIMONIALS = [
-  { name: "Riya S.", role: "Product Manager", quote: "I talk to Strivo like a journal, and it actually recalls things I told it weeks ago." },
-  { name: "Arjun K.", role: "Software Engineer", quote: "Faster than writing anything down. It just gets what I mean." },
-  { name: "Meera P.", role: "Job seeker", quote: "Used it to prep for an interview by recalling my own past answers. Wild." },
-  { name: "Dev G.", role: "Sales Lead", quote: "My dad uses it daily now. Simplest app on his phone by far." },
-];
+// Deliberately not fabricated testimonials attributed to made-up people --
+// Strivo is early-stage and doesn't have verified user quotes to publish
+// yet. An honest founder's-note section fills the same spot on the page
+// without inventing social proof (see the "Why I built this" section
+// below, which replaced a TESTIMONIALS array of fictional names/quotes).
 
 export function MarketingHome({
   trialMonths,
@@ -435,39 +434,22 @@ export function MarketingHome({
         </motion.div>
       </section>
 
-      {/* Testimonials */}
+      {/* Why I built this -- an honest founder's note in place of the
+          fabricated-testimonials pattern many AI-built apps ship with
+          (invented names/quotes attributed to people who don't exist is a
+          real deceptive-advertising risk, not just a style choice). */}
       <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.15em] text-brand-primary">
-          LOVED BY EARLY USERS
+          WHY I BUILT THIS
         </motion.p>
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          {TESTIMONIALS.map((t) => (
-            <motion.div key={t.name} variants={fadeUp} className="flex flex-col items-start">
-              <div
-                className="rounded-2xl rounded-bl-sm px-5 py-4 text-sm leading-relaxed text-white"
-                style={{ background: "linear-gradient(135deg,#4f6ef7,#8b5cf6)", boxShadow: "0 12px 30px rgba(124,58,237,0.25)" }}
-              >
-                <div className="mb-2 flex gap-0.5">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} size={12} fill="#fbbf24" color="#fbbf24" />
-                  ))}
-                </div>
-                {t.quote}
-              </div>
-              <div className="ml-2 mt-2.5 flex items-center gap-2">
-                <span
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-                  style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
-                >
-                  {t.name.split(" ").map((p) => p[0]).join("")}
-                </span>
-                <div>
-                  <p className="text-xs font-semibold text-white">{t.name}</p>
-                  <p className="text-[11px] text-[#8a8a99]">{t.role}</p>
-                </div>
-              </div>
-            </motion.div>
-          ))}
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="max-w-2xl">
+          <p className="text-lg leading-relaxed text-white/90">
+            Every time an interview or performance review came up, I&apos;d blank on my own achievements —
+            not because I hadn&apos;t done the work, but because I&apos;d never written any of it down. Strivo
+            is the tool I wished I had: somewhere to capture what I actually did, in the moment, so I never
+            have to reconstruct it from memory under pressure again.
+          </p>
+          <p className="mt-4 text-sm text-[#8a8a99]">— Shikhar, founder</p>
         </motion.div>
       </section>
 
