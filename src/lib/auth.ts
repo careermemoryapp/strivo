@@ -16,7 +16,16 @@ import * as Sentry from "@sentry/nextjs";
 // pure overhead — a dependency to maintain and a blocking CPU-bound call
 // on every signup — for no actual security benefit).
 export const authOptions: AuthOptions = {
-  session: { strategy: "jwt" },
+  // Stateless JWT sessions have no server-side revocation list -- "logging
+  // out" only clears the cookie on that one device, so if a session token
+  // were ever stolen (e.g. a compromised device), it would technically
+  // still work if replayed elsewhere until it naturally expires. next-auth's
+  // own default is 30 days; shortened to 14 here to cut that exposure
+  // window by more than half. This doesn't cost active users anything --
+  // next-auth silently refreshes/extends the session on activity, so it
+  // only actually logs someone out after 14 straight days with no visits,
+  // not 14 days after their last login.
+  session: { strategy: "jwt", maxAge: 14 * 24 * 60 * 60 },
   secret: process.env.NEXTAUTH_SECRET,
   pages: {
     signIn: "/login",
