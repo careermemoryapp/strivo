@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
 import { requireUserId } from "@/lib/serverAuth";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
+import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 
 // Node-only: pdf-parse/mammoth/jszip/xlsx all need real filesystem/buffer
 // APIs, so this route can't run on the edge runtime.
@@ -103,6 +104,16 @@ class UnsupportedFileTypeError extends Error {}
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Admin kill switch (see lib/repo/featureFlags.ts) -- same "uploads"
+  // switch as voice transcription, since both feed the Record page's file
+  // upload flow.
+  if (!isFeatureEnabled("uploads")) {
+    return NextResponse.json(
+      { error: "File uploads are temporarily unavailable. Please try again shortly." },
+      { status: 503 }
+    );
+  }
 
   const limited = rateLimitOrResponse(`extract:${userId}`, 30, 60 * 60 * 1000);
   if (limited) return limited;

@@ -2,6 +2,7 @@ import { createMessage, listMessages, type Message } from "@/lib/repo/messages";
 import { touchChat } from "@/lib/repo/chats";
 import { retrieveRelevantMemories, type RetrievalResult } from "@/lib/retrieval";
 import { buildSystemPrompt, chatCompletion, type ChatMessage } from "@/lib/ai";
+import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 
 const HISTORY_LIMIT = 16;
 
@@ -35,13 +36,28 @@ export async function sendUserMessageAndGetReply(
     content: m.content,
   }));
 
-  const systemPrompt = buildSystemPrompt(retrieval.memories);
-  const result = await chatCompletion(systemPrompt, history);
-
   touchChat(userId, chatId, {
     lastMessage: content,
     memoryCount: retrieval.memories.length,
   });
+
+  // Admin kill switch (see lib/repo/featureFlags.ts) -- checked right
+  // before the OpenAI call so a paused AI chat still saves the user's
+  // message and shows a clear reason, rather than the generic "couldn't
+  // reach the AI" message that's meant for real outages.
+  if (!isFeatureEnabled("ai_chat")) {
+    const aiMessage = createMessage({
+      chatId,
+      userId,
+      sender: "ai",
+      content: "AI chat is temporarily unavailable right now. Your message was saved — please try again shortly.",
+      status: "error",
+    });
+    return { userMessage, aiMessage, retrieval, error: "ai_chat feature disabled" };
+  }
+
+  const systemPrompt = buildSystemPrompt(retrieval.memories);
+  const result = await chatCompletion(systemPrompt, history);
 
   if ("error" in result) {
     const aiMessage = createMessage({

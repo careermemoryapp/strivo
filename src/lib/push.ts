@@ -3,6 +3,7 @@ import { cert, getApps, initializeApp } from "firebase-admin/app";
 import { getMessaging } from "firebase-admin/messaging";
 import * as Sentry from "@sentry/nextjs";
 import { deletePushTokens } from "@/lib/repo/pushTokens";
+import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 
 // Lazily initialized so a deploy without FIREBASE_SERVICE_ACCOUNT_JSON set
 // yet (e.g. before the Firebase setup steps are finished) doesn't crash on
@@ -44,6 +45,15 @@ export async function sendPushToAllDevices(
   input: { title?: string; body: string; route?: string }
 ): Promise<void> {
   if (tokens.length === 0) return;
+  // Admin kill switch (see lib/repo/featureFlags.ts) -- checked here so it
+  // covers every caller (admin nudges, and any future automatic pushes) in
+  // one place. Same best-effort no-op shape as the "Firebase not
+  // configured" branch below: a paused push never breaks whatever
+  // triggered the send.
+  if (!isFeatureEnabled("push_notifications")) {
+    console.warn("Push notifications are turned off via the admin kill switch — skipping push send.");
+    return;
+  }
   const app = getFirebaseApp();
   if (!app) {
     console.warn("Push notifications aren't configured yet (FIREBASE_SERVICE_ACCOUNT_JSON missing) — skipping push send.");

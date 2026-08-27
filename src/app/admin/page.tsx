@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   Mail,
   Newspaper,
+  Power,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { LogoMark } from "@/components/Logo";
@@ -32,6 +33,7 @@ import type { SentryIssue } from "@/lib/sentry";
 import type { SecurityCheck, DependencyAuditSummary } from "@/lib/securityStatus";
 import type { LiveSecurityStatus } from "@/lib/liveSecurityStatus";
 import type { BlogPost } from "@/lib/repo/blogPosts";
+import type { FEATURE_FLAGS } from "@/lib/repo/featureFlags";
 
 const DARK = "#26213c";
 
@@ -265,6 +267,11 @@ export default function AdminDashboardPage() {
   const [liveSecurityError, setLiveSecurityError] = useState(false);
   const [blogPosts, setBlogPosts] = useState<BlogPost[] | null>(null);
   const [blogError, setBlogError] = useState(false);
+  const [featureFlags, setFeatureFlags] = useState<
+    { key: string; label: string; description: string; enabled: number }[] | null
+  >(null);
+  const [featureFlagsError, setFeatureFlagsError] = useState(false);
+  const [togglingFlag, setTogglingFlag] = useState<string | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     router.replace("/admin/login");
@@ -344,6 +351,45 @@ export default function AdminDashboardPage() {
     }
   }, [handleUnauthorized]);
 
+  const loadFeatureFlags = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/feature-flags");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setFeatureFlagsError(true);
+      const data = await res.json();
+      setFeatureFlags(data.flags ?? []);
+      setFeatureFlagsError(false);
+    } catch {
+      setFeatureFlagsError(true);
+    }
+  }, [handleUnauthorized]);
+
+  // Optimistic toggle -- the switch flips immediately on click, then
+  // reconciles with whatever the server actually saved. Kill switches are
+  // meant to feel instant; waiting for a round trip before showing the new
+  // state would undercut the "flip it now" point of the feature.
+  async function toggleFeatureFlag(key: (typeof FEATURE_FLAGS)[number]["key"], enabled: boolean) {
+    setTogglingFlag(key);
+    setFeatureFlags((prev) => (prev ? prev.map((f) => (f.key === key ? { ...f, enabled: enabled ? 1 : 0 } : f)) : prev));
+    try {
+      const res = await fetch("/api/admin/feature-flags", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, enabled }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setFeatureFlags(data.flags ?? []);
+      } else {
+        loadFeatureFlags();
+      }
+    } catch {
+      loadFeatureFlags();
+    } finally {
+      setTogglingFlag(null);
+    }
+  }
+
   const loadNudge = useCallback(async () => {
     const res = await fetch("/api/admin/nudge");
     if (res.status === 401) return handleUnauthorized();
@@ -397,6 +443,7 @@ export default function AdminDashboardPage() {
       loadSecurityStatus(),
       loadLiveSecurityStatus(),
       loadBlogPosts(),
+      loadFeatureFlags(),
     ]).finally(() => setCheckedAuth(true));
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
@@ -701,6 +748,60 @@ export default function AdminDashboardPage() {
           <p className="mt-2 text-[11px] text-ink-faint">
             Refreshes automatically every 30s. Public, minimal version at{" "}
             <code className="text-[10.5px]">/api/health</code> for external uptime monitors.
+          </p>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+            Kill switches
+          </p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {featureFlagsError ? (
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} className="text-red-600" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t load kill switches.</p>
+              </div>
+            ) : !featureFlags ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : (
+              <div className="divide-y divide-[#f0ecf7]">
+                {featureFlags.map((flag) => (
+                  <div key={flag.key} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+                    <div className="flex items-start gap-2.5">
+                      <Power size={15} className={cn("mt-0.5 shrink-0", flag.enabled ? "text-emerald-500" : "text-red-500")} />
+                      <div>
+                        <p className="text-sm font-semibold text-ink">{flag.label}</p>
+                        <p className="text-[11px] text-ink-faint">{flag.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      role="switch"
+                      aria-checked={flag.enabled === 1}
+                      aria-label={`${flag.label} ${flag.enabled ? "on" : "off"}`}
+                      disabled={togglingFlag === flag.key}
+                      onClick={() => toggleFeatureFlag(flag.key as (typeof FEATURE_FLAGS)[number]["key"], flag.enabled !== 1)}
+                      className={cn(
+                        "relative h-6 w-11 shrink-0 rounded-pill transition-colors disabled:opacity-60",
+                        flag.enabled ? "bg-emerald-500" : "bg-[#d8d2e6]"
+                      )}
+                    >
+                      <span
+                        className={cn(
+                          "absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform",
+                          flag.enabled ? "translate-x-[22px]" : "translate-x-0.5"
+                        )}
+                      />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Turning one off takes effect immediately for every user — no redeploy needed. Use these to pause a
+            feature that&apos;s misbehaving or costing too much, not for routine maintenance.
           </p>
         </section>
 

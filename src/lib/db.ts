@@ -240,6 +240,18 @@ function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    -- Admin-controlled "kill switches" for the app's riskiest/most
+    -- expensive external calls (AI chat, file/voice uploads, push sends) --
+    -- see lib/repo/featureFlags.ts for the fixed set of keys. Flipping a row
+    -- to disabled makes the relevant code path fail gracefully with a
+    -- friendly message immediately (no redeploy needed), for when something
+    -- is misbehaving or costing too much and needs to be paused right away.
+    CREATE TABLE IF NOT EXISTS feature_flags (
+      key TEXT PRIMARY KEY,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---
@@ -439,6 +451,22 @@ function migrate(db: DatabaseSync) {
       now,
       now
     );
+  }
+
+  // Seed the three feature-flag rows the first time each is missing (not
+  // gated on the table being empty, so adding a fourth flag later just
+  // needs its own `if (!hasFlag)` block here rather than reworking this
+  // one). Everyone starts enabled -- this table only ever turns something
+  // OFF deliberately from the admin panel, never ships pre-disabled.
+  const seedFlags: { key: string }[] = [{ key: "ai_chat" }, { key: "uploads" }, { key: "push_notifications" }];
+  for (const f of seedFlags) {
+    const exists = db.prepare(`SELECT 1 FROM feature_flags WHERE key = ?`).get(f.key);
+    if (!exists) {
+      db.prepare(`INSERT INTO feature_flags (key, enabled, updated_at) VALUES (?, 1, ?)`).run(
+        f.key,
+        new Date().toISOString()
+      );
+    }
   }
 
   // English translation/paraphrase of the transcript, generated alongside
