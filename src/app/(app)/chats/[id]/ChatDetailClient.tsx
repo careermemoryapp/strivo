@@ -11,6 +11,10 @@ import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 import type { Chat } from "@/lib/repo/chats";
 import type { Message } from "@/lib/repo/messages";
 
+// Roughly 6 lines of text before the input box stops growing and scrolls
+// internally instead -- see the auto-grow effect below.
+const MAX_TEXTAREA_HEIGHT = 160;
+
 // Seeded with data page.tsx (a Server Component) already fetched during the
 // initial render, instead of fetching it again here on mount. The old
 // version of this file fetched `/api/chats/${id}` itself in a useEffect,
@@ -39,11 +43,28 @@ export function ChatDetailClient({
   const [lastFailedContent, setLastFailedContent] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const speech = useSpeechRecognition();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
+
+  // Auto-grow the textarea with its content (like Claude/ChatGPT's input),
+  // instead of staying pinned at rows={1} and scrolling internally. Runs on
+  // every `input` change -- both typing and the speech-transcript mirror
+  // effect below -- so the box always matches what's actually in it. Resets
+  // itself back to one line automatically once `input` is cleared after
+  // sending, since that's just another `input` change through this same
+  // effect. Caps out at MAX_TEXTAREA_HEIGHT and lets the textarea's own
+  // scrollbar take over past that, rather than growing indefinitely and
+  // pushing the send button off-screen.
+  useEffect(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, MAX_TEXTAREA_HEIGHT)}px`;
+  }, [input]);
 
   // Mirror the transcribed speech into the text box once it's ready. The
   // recording is sent to the server to be transcribed (OpenAI's Whisper —
@@ -237,6 +258,7 @@ export function ChatDetailClient({
             </button>
           )}
           <textarea
+            ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -247,9 +269,9 @@ export function ChatDetailClient({
             }}
             rows={1}
             placeholder={
-              speech.listening ? "Listening…" : speech.transcribing ? "Transcribing…" : "Ask your AI about your career or experiences..."
+              speech.listening ? "Listening…" : speech.transcribing ? "Transcribing…" : "Ask about your career or experiences..."
             }
-            className="flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink placeholder:text-ink-faint outline-none max-h-28"
+            className="flex-1 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm text-ink placeholder:text-ink-faint outline-none"
           />
           <button
             type="submit"
