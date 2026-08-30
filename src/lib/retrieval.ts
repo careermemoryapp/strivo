@@ -62,28 +62,45 @@ function isLatinScript(text: string): boolean {
 // for a single-market product.
 const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
+// UTC instant for IST midnight of a given (year, month0, day) — the shared
+// primitive both istDayStartUtc (relative days) and the specific-calendar-
+// date branch below build on.
+function istMidnightUtc(year: number, month0: number, day: number): Date {
+  return new Date(Date.UTC(year, month0, day) - IST_OFFSET_MS);
+}
+
 // Start-of-IST-day, expressed as the equivalent UTC instant, for the day
-// `daysAgo` days before `now` (0 = today).
+// `daysAgo` days before `now` (0 = today). Date.UTC normalizes day
+// under/overflow itself (day 0 -> last day of previous month, etc.), so
+// subtracting daysAgo directly is safe across month/year boundaries.
 function istDayStartUtc(now: Date, daysAgo: number): Date {
   const shifted = new Date(now.getTime() + IST_OFFSET_MS);
-  const istMidnightAsUtcFields = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() - daysAgo);
-  return new Date(istMidnightAsUtcFields - IST_OFFSET_MS);
+  const target = new Date(Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() - daysAgo));
+  return istMidnightUtc(target.getUTCFullYear(), target.getUTCMonth(), target.getUTCDate());
 }
+
+const MONTH_NAMES: Record<string, number> = {
+  jan: 0, january: 0, feb: 1, february: 1, mar: 2, march: 2, apr: 3, april: 3,
+  may: 4, jun: 5, june: 5, jul: 6, july: 6, aug: 7, august: 7,
+  sep: 8, sept: 8, september: 8, oct: 9, october: 9, nov: 10, november: 10, dec: 11, december: 11,
+};
+const MONTH_NAME_PATTERN = Object.keys(MONTH_NAMES).sort((a, b) => b.length - a.length).join("|");
 
 export type DateRange = { startUtcIso: string; endUtcIso: string };
 
-// Detects "what did I do today/yesterday/this week/last week/this month"
+// Detects "what did I do today/yesterday/3 days ago/on August 25th...?"
 // style questions in an (already English-translated, see translateToEnglish)
 // query, and resolves them to a literal date window. These questions are a
 // recap of a time period, not a search for particular content — a pure
 // semantic/keyword match structurally can't serve them well, because after
 // stopword-filtering there's often nothing left to match on but the date
-// word itself ("What did I do today?" -> just "today"), and that date word
-// essentially never appears verbatim inside the memory it should match.
-// Detecting the intent and doing a literal date-range lookup instead sidesteps
-// that rather than trying to tune similarity thresholds around it.
+// reference itself ("What did I do today?" -> just "today"), and that
+// reference essentially never appears verbatim inside the memory it should
+// match. Detecting the intent and doing a literal date-range lookup instead
+// sidesteps that rather than trying to tune similarity thresholds around it.
 export function detectDateRange(englishQuery: string, now: Date = new Date()): DateRange | null {
   const q = englishQuery.toLowerCase();
+
   if (/\byesterday\b/.test(q)) {
     return { startUtcIso: istDayStartUtc(now, 1).toISOString(), endUtcIso: istDayStartUtc(now, 0).toISOString() };
   }
@@ -102,6 +119,76 @@ export function detectDateRange(englishQuery: string, now: Date = new Date()): D
   if (/\bthis month\b/.test(q)) {
     return { startUtcIso: istDayStartUtc(now, 30).toISOString(), endUtcIso: istDayStartUtc(now, -1).toISOString() };
   }
+
+  // "N days/weeks/months ago" (and "N days back", common in Indian English
+  // phrasing). A single day for "days ago" (that exact day); a rolling
+  // window for weeks/months, same convention as "last week" above, since
+  // "3 weeks ago" means the week around that point, not one literal instant.
+  const relative = q.match(/\b(\d{1,3})\s*(day|week|month)s?\s*(?:ago|back)\b/);
+  if (relative) {
+    const n = parseInt(relative[1], 10);
+    const unit = relative[2];
+    if (unit === "day") {
+      return { startUtcIso: istDayStartUtc(now, n).toISOString(), endUtcIso: istDayStartUtc(now, n - 1).toISOString() };
+    }
+    if (unit === "week") {
+      return { startUtcIso: istDayStartUtc(now, n * 7).toISOString(), endUtcIso: istDayStartUtc(now, (n - 1) * 7).toISOString() };
+    }
+    // "month" here means a rough 30-day block, not a calendar month — good
+    // enough for a recall query and avoids calendar-month edge cases (Feb
+    // being short, etc.) that don't actually matter for this purpose.
+    return { startUtcIso: istDayStartUtc(now, n * 30).toISOString(), endUtcIso: istDayStartUtc(now, (n - 1) * 30).toISOString() };
+  }
+
+  // A specific calendar date: "August 25", "Aug 25th", "25 August", "25th
+  // of August", optionally with a year. Built from MONTH_NAMES so both
+  // word orders share one source of truth for month spelling/abbreviation.
+  const monthDayRe = new RegExp(`\\b(${MONTH_NAME_PATTERN})\\.?\\s+(\\d{1,2})(?:st|nd|rd|th)?\\b(?:\\s*,?\\s*(\\d{4}))?`);
+  const dayMonthRe = new RegExp(`\\b(\\d{1,2})(?:st|nd|rd|th)?\\s+(?:of\\s+)?(${MONTH_NAME_PATTERN})\\.?\\b(?:\\s*,?\\s*(\\d{4}))?`);
+  const dateMatch = q.match(monthDayRe) ?? q.match(dayMonthRe);
+  if (dateMatch) {
+    const isMonthFirst = MONTH_NAMES[dateMatch[1]] !== undefined;
+    const monthName = isMonthFirst ? dateMatch[1] : dateMatch[2];
+    const day = parseInt(isMonthFirst ? dateMatch[2] : dateMatch[1], 10);
+    const explicitYear = dateMatch[3] ? parseInt(dateMatch[3], 10) : null;
+    const month0 = MONTH_NAMES[monthName];
+    if (month0 !== undefined && day >= 1 && day <= 31) {
+      const nowIst = new Date(now.getTime() + IST_OFFSET_MS);
+      let year = explicitYear ?? nowIst.getUTCFullYear();
+      let start = istMidnightUtc(year, month0, day);
+      // No year given and the date would fall in the future: they must mean
+      // last year (nobody's asking about a memory from next month).
+      if (!explicitYear && start.getTime() > now.getTime()) {
+        year -= 1;
+        start = istMidnightUtc(year, month0, day);
+      }
+      const end = istMidnightUtc(year, month0, day + 1);
+      return { startUtcIso: start.toISOString(), endUtcIso: end.toISOString() };
+    }
+  }
+
+  // A bare month name with no day attached ("last November", "in November",
+  // just "November") -- resolves to the whole calendar month rather than
+  // one day, since there's nothing more specific to narrow to. This is
+  // intentionally approximate ("sometime around November"), which is the
+  // point: not every memory a person wants back gets recalled to the day.
+  const bareMonthMatch = q.match(new RegExp(`\\b(last|this|in)?\\s*(${MONTH_NAME_PATTERN})\\b`));
+  if (bareMonthMatch) {
+    const qualifier = bareMonthMatch[1];
+    const month0 = MONTH_NAMES[bareMonthMatch[2]];
+    const nowIst = new Date(now.getTime() + IST_OFFSET_MS);
+    let year = nowIst.getUTCFullYear();
+    if (qualifier !== "this" && month0 > nowIst.getUTCMonth()) {
+      // A month that hasn't happened yet this year -- "last November" or a
+      // bare "November" asked in August must mean last year's, since this is
+      // a recall query and there's no memory from the future to find.
+      year -= 1;
+    }
+    const start = istMidnightUtc(year, month0, 1);
+    const end = istMidnightUtc(year, month0 + 1, 1);
+    return { startUtcIso: start.toISOString(), endUtcIso: end.toISOString() };
+  }
+
   return null;
 }
 
