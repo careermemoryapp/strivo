@@ -244,9 +244,34 @@ Rules you must always follow:
 - IMPORTANT — ask before you search: if the user's request is broad or missing key details you'd need to give a good answer (for example: which role or company they're interviewing for, what role or focus their resume/promotion case should target, what kind of leadership example they're after, what period their performance review covers, or what specifically they want advice on), do NOT immediately dive into their memories or give a full answer. Instead, ask one short, specific clarifying question first. Only search their memories and give a substantive answer once you understand exactly what they need. Skip the clarifying question only if the user has already given you enough specifics.
 - SAFETY — this overrides every rule above: Strivo is a career-coaching tool, not a crisis or mental-health service, and you are not equipped to help with a safety emergency. If a message expresses intent or a plan to harm themselves or someone else, describes a crisis in progress, or otherwise signals they may be in danger right now, do NOT continue with career coaching, STAR answers, or memory retrieval. Respond with brief, warm concern, and clearly encourage them to reach out to a crisis line or emergency services in their country right now (for example, in the US/Canada call or text 988; in the UK call 116 123 (Samaritans); in India call 91-9152987821 (iCall) or 112; elsewhere, encourage them to search "crisis helpline" plus their country, or contact local emergency services). Do not attempt to counsel them yourself, do not diagnose, and do not treat this as a one-off aside before returning to the original question -- stop there. This takes priority over answering the user's actual question.`;
 
-export function buildSystemPrompt(memories: Memory[]): string {
+// Strivo's target market is India (matches the IST convention used for
+// "today"/"yesterday" resolution in lib/retrieval.ts).
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// Today's date in IST, spelled out for the model (e.g. "Saturday, August
+// 30, 2026"). Without this the model has NO reference point for what day it
+// actually is -- it only sees each memory's raw ISO date. That's what was
+// causing a real bug: retrieval could correctly narrow to "today"'s memory
+// (see detectDateRange), the memory would be sitting right there in the
+// prompt, and the model would *still* say "I don't have a relevant memory
+// for that" -- because it had no way to confirm that memory's date was
+// actually today, so it hedged rather than assert something it couldn't
+// verify. Giving it today's date directly closes that gap.
+function todayIstLabel(now: Date = new Date()): string {
+  const ist = new Date(now.getTime() + IST_OFFSET_MS);
+  return ist.toLocaleDateString("en-IN", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    timeZone: "UTC", // ist's fields already represent IST wall-clock time (shifted above); UTC here means "don't shift again"
+  });
+}
+
+export function buildSystemPrompt(memories: Memory[], now: Date = new Date()): string {
+  const dateContext = `\n\nToday's date is ${todayIstLabel(now)} (India Standard Time). Use this to correctly judge date-relative questions ("today," "yesterday," "this week," a specific date, etc.) against each memory's Date field below. If a memory's date genuinely falls in the period the user is asking about, treat it as relevant with confidence -- do not hedge or claim "no relevant memory" out of uncertainty about what day it is; you now know.`;
   if (memories.length === 0) {
-    return `${SYSTEM_PROMPT_BASE}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.`;
+    return `${SYSTEM_PROMPT_BASE}${dateContext}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.`;
   }
   const context = memories
     .map((m, i) => {
@@ -254,7 +279,7 @@ export function buildSystemPrompt(memories: Memory[]): string {
       return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
 }
 
 function safeParseTags(tags: string | null): string[] {

@@ -1,6 +1,6 @@
 import {
   Briefcase, Users, Award, Lightbulb, TrendingUp, GraduationCap, Trophy, Heart, FileText,
-  Target, Sparkles, MoreHorizontal,
+  Target, Sparkles, MoreHorizontal, MessageCircle,
 } from "lucide-react";
 import { ComponentType } from "react";
 
@@ -40,12 +40,15 @@ export function memoryCategoryIcon(category?: string | null) {
 }
 
 // Chat categories — mirrors the 5 home quick actions (plus "All" as a filter-only value).
+// Others uses MessageCircle rather than MoreHorizontal (three dots) — the
+// dots read as an empty/placeholder icon at the size the Chats list renders
+// it, not as a meaningful "general conversation" symbol.
 export const CHAT_CATEGORIES_DEF: Record<string, IconDef> = {
   Interview: { icon: Target, bg: "bg-indigo-50", text: "text-indigo-500" },
   Resume: { icon: FileText, bg: "bg-blue-50", text: "text-blue-500" },
   Leadership: { icon: Users, bg: "bg-violet-50", text: "text-violet-500" },
   "Performance Review": { icon: Award, bg: "bg-amber-50", text: "text-amber-500" },
-  Others: { icon: MoreHorizontal, bg: "bg-slate-100", text: "text-slate-500" },
+  Others: { icon: MessageCircle, bg: "bg-slate-100", text: "text-slate-500" },
 };
 
 export function chatCategoryDef(category?: string | null): IconDef {
