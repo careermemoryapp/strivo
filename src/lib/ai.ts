@@ -128,6 +128,48 @@ export async function translateToEnglish(text: string): Promise<string> {
   }
 }
 
+// Short (3-5 word) chat title generated from the first message in a chat —
+// the same idea as ChatGPT/Claude auto-titling a new conversation. Without
+// this, every chat started from the same quick action ("Interview
+// Preparation", "General Chat", ...) keeps that literal template name as
+// its title forever, so the Chats list becomes a wall of identical labels
+// and the only way to tell conversations apart is opening each one. Called
+// once, for the first message only (see chatService.ts) — the chat keeps
+// this title from then on rather than re-titling on every message, same as
+// ChatGPT. The starting category (Interview/Resume/etc.) is tracked
+// separately on chat.category and unaffected by this — it's shown as its
+// own small badge in the UI instead of being baked into the title text.
+// Returns null on any failure so the caller just keeps the template title
+// rather than erroring the message send over a cosmetic feature.
+export async function generateChatTitle(firstMessage: string): Promise<string | null> {
+  const openai = getClient();
+  if (!openai) return null;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.3,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Generate a short chat title, 3-5 words, summarizing what this conversation is actually about, in the SAME language as the message. " +
+            "Be specific to the real content -- never output a generic label like 'General Chat', 'New Chat', or 'Interview Preparation'. " +
+            "No quotes, no trailing punctuation. Respond with ONLY the title, nothing else.",
+        },
+        { role: "user", content: firstMessage },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content?.trim();
+    if (!raw) return null;
+    // Strip wrapping quotes the model sometimes adds despite the instruction.
+    return raw.replace(/^["'“”]+|["'“”]+$/g, "").slice(0, 80);
+  } catch (err) {
+    console.error("generateChatTitle failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
 // Returns null on failure — callers must fall back to keyword retrieval.
 export async function embedText(text: string): Promise<number[] | null> {
   const openai = getClient();

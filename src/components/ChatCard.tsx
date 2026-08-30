@@ -9,7 +9,7 @@ import { chatCategoryDef } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 
 export function ChatCard({ chat, onChanged }: { chat: Chat; onChanged?: () => void }) {
-  const { icon: Icon } = chatCategoryDef(chat.category);
+  const { icon: Icon, bg, text } = chatCategoryDef(chat.category);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -35,17 +35,28 @@ export function ChatCard({ chat, onChanged }: { chat: Chat; onChanged?: () => vo
       >
         <Card className="hover:border-brand-primary/40 transition-colors">
           <div className="flex gap-3">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#f2effa] text-[#8b5cf6]">
+            <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${bg} ${text}`}>
               <Icon size={20} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-start justify-between gap-2">
+                {/* Title is an AI-generated 3-5 word summary of the chat's
+                    first message (see generateChatTitle in lib/ai.ts), not
+                    the quick-action name it started from -- otherwise every
+                    "General Chat" or "Interview Preparation" card looks
+                    identical in this list and you can't tell them apart
+                    without opening each one. The category it started under
+                    is shown separately as the small pill below, not baked
+                    into this title. */}
                 <h3 className="font-semibold text-ink truncate pr-6">{chat.title}</h3>
                 <span className="shrink-0 text-xs text-ink-faint pr-6">
                   {formatDistanceToNowStrict(new Date(chat.updated_at), { addSuffix: true })}
                 </span>
               </div>
-              <p className="mt-0.5 text-sm text-ink-soft line-clamp-1">
+              <span className={`mt-1 inline-block rounded-pill px-2 py-0.5 text-[10px] font-semibold ${bg} ${text}`}>
+                {chat.category}
+              </span>
+              <p className="mt-1 text-sm text-ink-soft line-clamp-1">
                 {chat.last_message || "No messages yet"}
               </p>
             </div>

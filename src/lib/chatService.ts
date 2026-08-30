@@ -1,7 +1,7 @@
 import { createMessage, listMessages, type Message } from "@/lib/repo/messages";
 import { touchChat } from "@/lib/repo/chats";
 import { retrieveRelevantMemories, type RetrievalResult } from "@/lib/retrieval";
-import { buildSystemPrompt, chatCompletion, type ChatMessage } from "@/lib/ai";
+import { buildSystemPrompt, chatCompletion, generateChatTitle, type ChatMessage } from "@/lib/ai";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 
 const HISTORY_LIMIT = 16;
@@ -30,7 +30,18 @@ export async function sendUserMessageAndGetReply(
     .map((m) => m.content)
     .join("\n");
 
-  const retrieval = await retrieveRelevantMemories(userId, retrievalQuery || content);
+  // Only the very first message in a chat gets a generated title (see
+  // generateChatTitle in lib/ai.ts) -- after that the chat keeps whatever
+  // title it has, same as ChatGPT/Claude. priorMessages already includes
+  // the userMessage just created above, so "1" means nothing existed before
+  // it. Run this alongside retrieval rather than after it -- it doesn't
+  // depend on retrieval's result, and serializing two OpenAI calls here
+  // would double the wait on every brand-new chat for no reason.
+  const isFirstMessage = priorMessages.length === 1;
+  const [retrieval, generatedTitle] = await Promise.all([
+    retrieveRelevantMemories(userId, retrievalQuery || content),
+    isFirstMessage ? generateChatTitle(content) : Promise.resolve(null),
+  ]);
   const history: ChatMessage[] = priorMessages.map((m) => ({
     role: m.sender === "user" ? "user" : "assistant",
     content: m.content,
@@ -39,6 +50,7 @@ export async function sendUserMessageAndGetReply(
   touchChat(userId, chatId, {
     lastMessage: content,
     memoryCount: retrieval.memories.length,
+    ...(generatedTitle ? { title: generatedTitle } : {}),
   });
 
   // Admin kill switch (see lib/repo/featureFlags.ts) -- checked right
