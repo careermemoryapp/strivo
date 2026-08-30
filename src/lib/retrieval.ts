@@ -1,4 +1,4 @@
-import { listMemories, listMemoriesWithEmbeddings, type Memory } from "@/lib/repo/memories";
+import { listMemories, listMemoriesWithEmbeddings, listMemoriesByDateRange, type Memory } from "@/lib/repo/memories";
 import { embedText, translateToEnglish } from "@/lib/ai";
 
 // ---------------------------------------------------------------------------
@@ -53,6 +53,58 @@ function isLatinScript(text: string): boolean {
   return nonLatin / letters.length < 0.3; // mostly-Latin counts as Latin
 }
 
+// Strivo's target market is India (see product docs), and created_at is
+// stored as UTC (see nowIso in lib/db.ts) — so "today" has to be resolved
+// against IST wall-clock time, not server UTC, or a question asked between
+// 12:00am-5:30am IST would compute the wrong day (still "yesterday" in UTC).
+// There's no per-user timezone stored today, so a fixed IST offset is the
+// right call for now rather than over-building per-user timezone support
+// for a single-market product.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// Start-of-IST-day, expressed as the equivalent UTC instant, for the day
+// `daysAgo` days before `now` (0 = today).
+function istDayStartUtc(now: Date, daysAgo: number): Date {
+  const shifted = new Date(now.getTime() + IST_OFFSET_MS);
+  const istMidnightAsUtcFields = Date.UTC(shifted.getUTCFullYear(), shifted.getUTCMonth(), shifted.getUTCDate() - daysAgo);
+  return new Date(istMidnightAsUtcFields - IST_OFFSET_MS);
+}
+
+export type DateRange = { startUtcIso: string; endUtcIso: string };
+
+// Detects "what did I do today/yesterday/this week/last week/this month"
+// style questions in an (already English-translated, see translateToEnglish)
+// query, and resolves them to a literal date window. These questions are a
+// recap of a time period, not a search for particular content — a pure
+// semantic/keyword match structurally can't serve them well, because after
+// stopword-filtering there's often nothing left to match on but the date
+// word itself ("What did I do today?" -> just "today"), and that date word
+// essentially never appears verbatim inside the memory it should match.
+// Detecting the intent and doing a literal date-range lookup instead sidesteps
+// that rather than trying to tune similarity thresholds around it.
+export function detectDateRange(englishQuery: string, now: Date = new Date()): DateRange | null {
+  const q = englishQuery.toLowerCase();
+  if (/\byesterday\b/.test(q)) {
+    return { startUtcIso: istDayStartUtc(now, 1).toISOString(), endUtcIso: istDayStartUtc(now, 0).toISOString() };
+  }
+  if (/\btoday\b|\bthis morning\b|\btonight\b/.test(q)) {
+    return { startUtcIso: istDayStartUtc(now, 0).toISOString(), endUtcIso: istDayStartUtc(now, -1).toISOString() };
+  }
+  if (/\blast week\b/.test(q)) {
+    return { startUtcIso: istDayStartUtc(now, 14).toISOString(), endUtcIso: istDayStartUtc(now, 7).toISOString() };
+  }
+  if (/\bthis week\b/.test(q)) {
+    // Rolling 7-day window rather than calendar Mon-Sun: simpler, and closer
+    // to what someone means by "this week" mid-week than a hard reset every
+    // Monday would be.
+    return { startUtcIso: istDayStartUtc(now, 7).toISOString(), endUtcIso: istDayStartUtc(now, -1).toISOString() };
+  }
+  if (/\bthis month\b/.test(q)) {
+    return { startUtcIso: istDayStartUtc(now, 30).toISOString(), endUtcIso: istDayStartUtc(now, -1).toISOString() };
+  }
+  return null;
+}
+
 function keywordScore(queryTokens: string[], memory: Memory): number {
   // search_text (an always-English gloss, see generateMemoryMetadata in
   // lib/ai.ts) is included here so an English-translated query can still
@@ -81,7 +133,7 @@ function cosineSimilarity(a: number[], b: number[]): number {
 
 export type RetrievalResult = {
   memories: Memory[];
-  method: "semantic" | "keyword" | "none";
+  method: "semantic" | "keyword" | "date" | "none";
 };
 
 export async function retrieveRelevantMemories(
@@ -101,6 +153,20 @@ export async function retrieveRelevantMemories(
   // breaks retrieval — it just loses the cross-language boost for that one
   // request if translation is unavailable.
   const translatedQuery = await translateToEnglish(query);
+
+  // 0. "What did I do today/yesterday/this week...?" is a date recap, not a
+  // content search -- see detectDateRange's comment for why semantic/keyword
+  // matching structurally can't serve it. Resolve it as a literal date-range
+  // lookup first. If nothing was recorded in that window we deliberately
+  // fall through to the normal search below instead of returning empty,
+  // in case the date word was incidental to an otherwise-matchable question.
+  const dateRange = detectDateRange(translatedQuery);
+  if (dateRange) {
+    const inRange = listMemoriesByDateRange(userId, dateRange.startUtcIso, dateRange.endUtcIso);
+    if (inRange.length > 0) {
+      return { memories: inRange.slice(0, topK), method: "date" };
+    }
+  }
 
   // 1. Try semantic retrieval.
   const withEmbeddings = listMemoriesWithEmbeddings(userId);

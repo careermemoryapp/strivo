@@ -90,6 +90,20 @@ export function listMemories(
     .all(userId) as Memory[];
 }
 
+// Half-open range [startUtcIso, endUtcIso) — used by the "what did I do
+// today/yesterday/this week" retrieval path in lib/retrieval.ts, which needs
+// a literal date-window lookup rather than semantic/keyword content
+// matching (see the comment there for why). Bounds are computed by the
+// caller so this stays a dumb SQL range query.
+export function listMemoriesByDateRange(userId: string, startUtcIso: string, endUtcIso: string): Memory[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT * FROM memories WHERE user_id = ? AND created_at >= ? AND created_at < ? ORDER BY created_at DESC`
+    )
+    .all(userId, startUtcIso, endUtcIso) as Memory[];
+}
+
 export function listMemoriesWithEmbeddings(userId: string): Memory[] {
   const db = getDb();
   return db
