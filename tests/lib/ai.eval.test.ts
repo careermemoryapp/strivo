@@ -30,6 +30,7 @@ function mockMemory(overrides: Partial<Memory> & Pick<Memory, "id" | "title" | "
     embedding: null,
     search_text: null,
     competencies: null,
+    praise: null,
     metadata_status: "ready",
     source: "text",
     key_points: null,

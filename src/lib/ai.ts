@@ -38,6 +38,15 @@ export type MemoryMetadata = {
   // unless something tells them. 0-3 entries, empty when nothing genuinely
   // fits -- not every memory should get tagged.
   competencies: string[];
+  // A short (1-2 sentence), specific, warm compliment grounded in an actual
+  // detail from the transcript -- the "human angle" layer on top of
+  // competencies. Only generated when competencies is non-empty (praising
+  // something that isn't actually there feels fake and trains people to
+  // ignore it). Shown as a one-time popup right after saving (see
+  // app/(app)/record/page.tsx) rather than baked into the summary, so it
+  // reads as a genuine reaction in the moment rather than permanent UI
+  // chrome. Null when competencies is empty.
+  praise: string | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -96,6 +105,7 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
             "Include a competency ONLY if the transcript genuinely demonstrates it through a specific action the person took or decision they made -- not because the topic is loosely related. " +
             "Most people telling a casual, everyday story have no idea it happens to be a strong example of something like Leadership or Problem-Solving -- your job here is to spot that for them even though they never used that word themselves and may not think of it that way. " +
             "Equally, don't force a fit: an empty array is correct and expected for a large share of memories (e.g. a plain status update or a memory with no clear personal action in it). " +
+            "praise (string or null): ONLY when competencies is non-empty, write one short (1-2 sentence) warm, specific compliment to the person, SAME language as the transcript, in second person, that names the concrete thing they actually did (referencing a real detail, decision, or number from the transcript -- not a vague restatement) and briefly notes it could make a strong interview or resume story. Sound like a genuine reaction from a supportive coach who actually read the story, never like a generic template ('Great job!', 'Well done!') -- it should be obvious it was written about THIS story specifically and would sound wrong attached to a different one. When competencies is empty, praise MUST be null. " +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -105,6 +115,12 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (!parsed.title || !parsed.summary) return null;
+    // Computed once, ahead of the return object, since `praise` below needs
+    // to check against the FILTERED list, not the model's raw (possibly
+    // hallucinated) competencies array.
+    const filteredCompetencies: string[] = Array.isArray(parsed.competencies)
+      ? parsed.competencies.filter((c: unknown) => COMPETENCY_OPTIONS.includes(String(c))).slice(0, 3)
+      : [];
     return {
       title: String(parsed.title).slice(0, 120),
       summary: String(parsed.summary).slice(0, 2000),
@@ -122,9 +138,11 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
       // badge styling and retrieval keyword-matching in lib/retrieval.ts
       // can rely on exact values) even if the model paraphrases or
       // hallucinates an item outside the list.
-      competencies: Array.isArray(parsed.competencies)
-        ? parsed.competencies.filter((c: unknown) => COMPETENCY_OPTIONS.includes(String(c))).slice(0, 3)
-        : [],
+      competencies: filteredCompetencies,
+      // Only trust praise text if a competency actually survived the
+      // filter above -- enforces the "never praise something that isn't
+      // there" rule at the code level too, not just via the prompt.
+      praise: filteredCompetencies.length > 0 && typeof parsed.praise === "string" ? parsed.praise.slice(0, 400) : null,
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);

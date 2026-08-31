@@ -78,6 +78,11 @@ export async function POST(req: Request) {
       // See COMPETENCY_OPTIONS in lib/ai.ts -- surfaced back to the user on
       // the Record success screen and shown on the memory detail page.
       competencies: JSON.stringify(metadata.competencies),
+      // Short warm compliment paired with the competencies above -- shown
+      // as a one-time popup on the Record success screen (see
+      // savedPraise in app/(app)/record/page.tsx). Always null when
+      // competencies is empty.
+      praise: metadata.praise,
       metadata_status: "ready",
     });
   } else {

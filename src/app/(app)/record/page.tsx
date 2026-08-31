@@ -57,6 +57,14 @@ export default function RecordPage() {
   // right here, the moment it's saved, is what makes that visible instead
   // of it sitting undiscovered until someone happens to open the memory.
   const [savedCompetencies, setSavedCompetencies] = useState<string[]>([]);
+  // Short, specific, warm compliment paired with the competencies above
+  // (see the `praise` field in generateMemoryMetadata, lib/ai.ts) — the
+  // "human angle" layer. Shown as a one-time popup (see showPraisePopup)
+  // rather than a permanent inline card, so it reads as a genuine reaction
+  // in the moment instead of decorative UI chrome. Always null when no
+  // competency was detected.
+  const [savedPraise, setSavedPraise] = useState<string | null>(null);
+  const [showPraisePopup, setShowPraisePopup] = useState(false);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
@@ -135,6 +143,9 @@ export default function RecordPage() {
     setHitLimit(false);
     setMode("voice");
     setStage("capture");
+    setSavedCompetencies([]);
+    setSavedPraise(null);
+    setShowPraisePopup(false);
   }
 
   async function createMemory() {
@@ -154,8 +165,16 @@ export default function RecordPage() {
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       setSavedMemoryId(data.memory.id);
       setAiGenerated(!!data.aiMetadataGenerated);
-      setSavedCompetencies(safeJsonParse<string[]>(data.memory.competencies, []));
+      const competencies = safeJsonParse<string[]>(data.memory.competencies, []);
+      setSavedCompetencies(competencies);
+      setSavedPraise(data.memory.praise ?? null);
       setStage("success");
+      // Small delay so the popup lands a beat after the success screen
+      // appears, instead of both flashing in at once — reads as a genuine
+      // reaction to what was just recorded rather than a loading artifact.
+      if (competencies.length > 0 && data.memory.praise) {
+        setTimeout(() => setShowPraisePopup(true), 450);
+      }
     } catch (e) {
       setSaveError(
         e instanceof Error
@@ -182,30 +201,6 @@ export default function RecordPage() {
               : "We saved your transcript. AI summary generation didn't complete, but your words are safe — you can still view and search this memory."}
           </p>
 
-          {/* The actual point of competency detection: most people telling
-              a normal, casual story have no reason to know it happens to
-              be a strong interview example -- so tell them, right here,
-              the moment it's saved, instead of leaving it to surface only
-              if they happen to reopen this memory later. See
-              COMPETENCY_OPTIONS in lib/ai.ts. */}
-          {savedCompetencies.length > 0 && (
-            <div className="mt-5 w-full rounded-[14px] border border-amber-200 bg-amber-50 px-4 py-3.5 text-left">
-              <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
-                <SparklesIcon size={15} /> Nice — this is a strong example of:
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {savedCompetencies.map((c) => (
-                  <span key={c} className="rounded-pill bg-white px-2.5 py-1 text-xs font-semibold text-amber-700">
-                    {c}
-                  </span>
-                ))}
-              </div>
-              <p className="mt-2 text-xs text-amber-700/80">
-                You may not have thought of it that way, but this could make a great interview or performance-review answer. Just ask your AI for it later.
-              </p>
-            </div>
-          )}
-
           <div className="mt-8 w-full space-y-3">
             {savedMemoryId && (
               <button
@@ -224,6 +219,51 @@ export default function RecordPage() {
             </Button>
           </div>
         </div>
+
+        {/* The actual point of competency detection: most people telling a
+            normal, casual story have no reason to know it happens to be a
+            strong interview example -- so tell them, in the moment, with an
+            actual reaction rather than a permanent inline box they might
+            skim past. Auto-opens (see the setTimeout in createMemory) and
+            only appears when the AI genuinely found something to praise --
+            see the `praise` field in generateMemoryMetadata (lib/ai.ts),
+            which is only ever non-null when competencies is non-empty. */}
+        {showPraisePopup && savedPraise && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-5 pb-5 sm:items-center sm:pb-0"
+            onClick={() => setShowPraisePopup(false)}
+          >
+            <div
+              className="w-full max-w-sm rounded-[22px] bg-surface p-6 text-center"
+              style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.28)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div
+                className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-500"
+                style={{ boxShadow: "0 8px 20px rgba(245,158,11,0.2)" }}
+              >
+                <SparklesIcon size={26} />
+              </div>
+              {savedCompetencies.length > 0 && (
+                <div className="flex flex-wrap justify-center gap-1.5">
+                  {savedCompetencies.map((c) => (
+                    <span key={c} className="rounded-pill bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                      {c}
+                    </span>
+                  ))}
+                </div>
+              )}
+              <p className="mt-3 text-[15px] leading-relaxed text-ink">{savedPraise}</p>
+              <button
+                onClick={() => setShowPraisePopup(false)}
+                className="mt-5 w-full rounded-pill py-3 text-sm font-semibold text-white"
+                style={{ background: "linear-gradient(135deg,#fbbf24,#f97316)" }}
+              >
+                Got it
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }

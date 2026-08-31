@@ -190,7 +190,7 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
                 ))}
               </div>
               <p className="mt-1.5 text-[11px] text-amber-700/80">
-                Worth reusing in an interview or performance review — just ask your AI for it.
+                {memory.praise || "Worth reusing in an interview or performance review — just ask your AI for it."}
               </p>
             </div>
           )}

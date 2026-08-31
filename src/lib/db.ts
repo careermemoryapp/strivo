@@ -74,6 +74,7 @@ function migrate(db: DatabaseSync) {
       summary_feedback TEXT,
       search_text TEXT,
       competencies TEXT,
+      praise TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -496,6 +497,17 @@ function migrate(db: DatabaseSync) {
   // memories created before this existed.
   if (!memoryColumns.includes("competencies")) {
     db.exec(`ALTER TABLE memories ADD COLUMN competencies TEXT;`);
+  }
+
+  // A short, specific, warm compliment generated alongside competencies
+  // above (see generateMemoryMetadata in lib/ai.ts) -- the "human angle"
+  // feature: shown as a one-time popup right after a memory is saved (see
+  // app/(app)/record/page.tsx), praising the person for the specific thing
+  // they described rather than a generic "nice job." Always null when
+  // competencies is empty -- praising something that isn't genuinely there
+  // would feel fake. Null for memories created before this existed.
+  if (!memoryColumns.includes("praise")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN praise TEXT;`);
   }
 
   // The app's versionName (e.g. "1.5.1"), sent by the client on push-token
