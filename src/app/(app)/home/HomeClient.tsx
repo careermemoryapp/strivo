@@ -2,7 +2,7 @@
 
 import { useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays } from "lucide-react";
+import { ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
@@ -28,6 +28,10 @@ type HomeData = {
   // page.tsx) -- a secondary surface for the "Your Week in Stories" feature
   // (see app/(app)/recap), whose primary delivery is a push notification.
   recap: { headline: string } | null;
+  // Present only when a recent growth narrative exists (see
+  // GROWTH_VISIBLE_MS in page.tsx) -- the "How You've Grown" feature (see
+  // app/(app)/growth), whose primary delivery is also a push notification.
+  growth: { text: string } | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -246,6 +250,30 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
               <p className="truncate text-[11px] text-indigo-700/70">{data.recap.headline}</p>
             </div>
             <ChevronRight size={15} className="shrink-0 text-indigo-300" />
+          </button>
+        </div>
+      )}
+
+      {/* Growth narrative teaser -- secondary surface for anyone who opens
+          the app without tapping the push notification (see /growth and
+          GROWTH_VISIBLE_MS in page.tsx). Violet, matching the /growth
+          page's own card, and deliberately distinct from both the amber
+          trial banner and the indigo recap card above -- this is meant to
+          read as the "biggest" of the three, not just another chip. */}
+      {data.growth && (
+        <div className="px-5 pt-4">
+          <button
+            onClick={() => router.push("/growth")}
+            className="flex w-full items-center gap-3 rounded-[14px] border border-[#e6e2f7] bg-[#f5f3fd] px-4 py-3 text-left"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#7c6ff0]">
+              <TrendingUp size={15} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-semibold text-[#4a4270]">How you&apos;ve grown</p>
+              <p className="truncate text-[11px] text-[#4a4270]/70">{data.growth.text}</p>
+            </div>
+            <ChevronRight size={15} className="shrink-0 text-[#c3bce3]" />
           </button>
         </div>
       )}

@@ -4,6 +4,7 @@ import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
 import { countMemories, listMemoryDates } from "@/lib/repo/memories";
 import { listChats } from "@/lib/repo/chats";
 import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
+import { getRecentGrowthNarrative } from "@/lib/repo/growthNarratives";
 import { computeStreak } from "@/lib/utils";
 import { HomeClient } from "./HomeClient";
 
@@ -16,6 +17,13 @@ import { HomeClient } from "./HomeClient";
 // primary way people are meant to discover a new recap — this is just a
 // secondary surface for anyone who opens the app without tapping the push.
 const RECAP_VISIBLE_MS = 8 * 24 * 60 * 60 * 1000;
+
+// Growth narratives are generated far less often than weekly recaps (see
+// shouldGenerateGrowthNarrative in lib/repo/growthNarratives.ts -- roughly
+// monthly at most), so it gets a longer visibility window on Home to match
+// -- otherwise most people would never see it here at all between one
+// generation and the next.
+const GROWTH_VISIBLE_MS = 21 * 24 * 60 * 60 * 1000;
 
 // Server Component: fetches everything Home needs here, before anything is
 // sent to the browser, instead of shipping an empty client component that
@@ -42,6 +50,7 @@ export default async function HomePage() {
   const subscription = user ? getSubscriptionInfo(user) : null;
 
   const recentRecap = getRecentWeeklyRecap(userId, RECAP_VISIBLE_MS);
+  const recentGrowth = getRecentGrowthNarrative(userId, GROWTH_VISIBLE_MS);
 
   return (
     <HomeClient
@@ -62,6 +71,9 @@ export default async function HomePage() {
         // Only the headline, not the full stories -- Home just needs enough
         // to tease the card; tapping it goes to /recap for the rest.
         recap: recentRecap ? { headline: recentRecap.headline } : null,
+        // Just the narrative text -- tapping the teaser goes to /growth for
+        // the full framing (date range compared, etc.).
+        growth: recentGrowth ? { text: recentGrowth.narrative_text } : null,
       }}
     />
   );

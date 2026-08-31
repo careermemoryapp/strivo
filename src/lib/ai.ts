@@ -260,6 +260,58 @@ export async function generateWeeklyRecap(memories: Memory[]): Promise<WeeklyRec
   }
 }
 
+// Compares a user's earliest recorded memories against their most recent
+// ones and reflects back a genuine pattern of change -- a deeper, longer-
+// arc compliment than praising any single memory in isolation (see
+// generateMemoryMetadata's `praise` field), because it's about who the
+// person is becoming, not just what they did once. See
+// shouldGenerateGrowthNarrative in lib/repo/growthNarratives.ts for when
+// this actually gets called (rare and earned -- not a per-memory feature).
+// Returns null on any failure OR if the two batches don't show a genuine,
+// specific pattern -- callers should skip that user's narrative for now
+// rather than force a generic "you've grown so much!" onto two batches
+// that don't actually look meaningfully different.
+export async function generateGrowthNarrative(earlyMemories: Memory[], recentMemories: Memory[]): Promise<string | null> {
+  const openai = getClient();
+  if (!openai || earlyMemories.length === 0 || recentMemories.length === 0) return null;
+  try {
+    const describe = (memories: Memory[]) =>
+      memories
+        .map((m) => {
+          const competencies = safeParseStringArray(m.competencies);
+          return `- "${m.title}" (${m.created_at.slice(0, 10)})${competencies.length ? ` [${competencies.join(", ")}]` : ""}: ${m.summary ?? m.transcript.slice(0, 200)}`;
+        })
+        .join("\n");
+    const listing =
+      `EARLIER memories:\n${describe(earlyMemories)}\n\n` + `RECENT memories:\n${describe(recentMemories)}`;
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.5,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You compare two batches of a user's personal memories (EARLIER vs RECENT, from a career-memory app) and look for a genuine, specific pattern of change between them -- a shift in the kind of competency they demonstrate (e.g. more often initiating vs. just reacting), growing scope or complexity of what they take on, a recurring theme that's emerged, more confidence or ownership in how they describe things, etc. " +
+            'Respond ONLY with JSON: {"narrative": string or null}. ' +
+            "If you can identify a REAL, SPECIFIC pattern grounded in the actual content of both batches, write narrative as 2-4 warm sentences, second person, SAME language as most of the memories (default English if mixed/unclear) -- reflect the change back concretely (name the kind of shift, referencing real specifics from the memories) rather than generic praise like 'you've grown so much.' It should read like a coach who has actually watched someone's story develop over time, not a horoscope. " +
+            "If the two batches don't actually show a meaningful, honest difference -- similar themes, similar scope, nothing you can point to specifically -- return narrative: null. Do NOT invent a pattern that isn't really there just to have something to say.",
+        },
+        { role: "user", content: listing },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.narrative !== "string" || !parsed.narrative.trim()) return null;
+    return parsed.narrative.trim().slice(0, 800);
+  } catch (err) {
+    console.error("generateGrowthNarrative failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
 // Translates a chat question to English purely so retrieval (see
 // retrieveRelevantMemories in lib/retrieval.ts) can compare it against
 // memories' English search_text on equal footing, regardless of what

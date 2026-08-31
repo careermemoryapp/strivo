@@ -128,6 +128,19 @@ export function listMemoriesByDateRange(userId: string, startUtcIso: string, end
     .all(userId, startUtcIso, endUtcIso) as Memory[];
 }
 
+// Cheap count-only version of listMemoriesByDateRange's lower bound -- used
+// by the growth narrative eligibility check (see
+// shouldGenerateGrowthNarrative in lib/repo/growthNarratives.ts) to see how
+// many NEW memories have accumulated since the last narrative, without
+// pulling full rows just to count them.
+export function countMemoriesSince(userId: string, sinceUtcIso: string): number {
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT COUNT(*) as c FROM memories WHERE user_id = ? AND created_at >= ?`)
+    .get(userId, sinceUtcIso) as { c: number };
+  return row.c;
+}
+
 // Every distinct user who has recorded at least one memory since the given
 // UTC instant -- the candidate list for the weekly recap automation (see
 // app/api/weekly-recap/run): no point generating/checking a recap for
@@ -235,6 +248,28 @@ export function countMemories(userId: string): number {
     .prepare(`SELECT COUNT(*) as c FROM memories WHERE user_id = ?`)
     .get(userId) as { c: number };
   return row.c;
+}
+
+// The user's very first N memories -- the "earlier" side of the growth
+// narrative comparison (see app/api/growth-narrative/run and
+// generateGrowthNarrative in lib/ai.ts). Bounded by `limit` on purpose,
+// unlike listMemories -- this is specifically "the earliest handful," not
+// "everything before some date."
+export function listOldestMemories(userId: string, limit: number): Memory[] {
+  const db = getDb();
+  return db
+    .prepare(`SELECT * FROM memories WHERE user_id = ? ORDER BY created_at ASC LIMIT ?`)
+    .all(userId, limit) as Memory[];
+}
+
+// The user's most recent N memories -- the "recent" side of the growth
+// narrative comparison. See listOldestMemories above for why this is
+// bounded rather than reusing listMemories.
+export function listNewestMemories(userId: string, limit: number): Memory[] {
+  const db = getDb();
+  return db
+    .prepare(`SELECT * FROM memories WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`)
+    .all(userId, limit) as Memory[];
 }
 
 // Tallies how many memories demonstrate each competency (see

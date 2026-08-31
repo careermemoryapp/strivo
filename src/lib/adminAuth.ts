@@ -124,3 +124,13 @@ export function checkWeeklyRecapSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea again, for the monthly growth-narrative automation (see
+// /api/growth-narrative/run) — its own credential, separate from
+// ADMIN_PASSWORD, BLOG_AUTOMATION_SECRET, and WEEKLY_RECAP_SECRET. Checked
+// via a request header (`x-growth-narrative-secret`).
+export function checkGrowthNarrativeSecret(secret: string | null): boolean {
+  const expected = process.env.GROWTH_NARRATIVE_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}
