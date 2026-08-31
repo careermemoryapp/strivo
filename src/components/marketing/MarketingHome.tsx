@@ -2,7 +2,9 @@
 
 import { useRef, useState } from "react";
 import { motion, useMotionValue, useSpring, type Variants } from "framer-motion";
-import { Check, Plus } from "lucide-react";
+import {
+  Check, Plus, Sparkles, Copy, MessageCircleQuestion, Award, LayoutGrid, CalendarDays, TrendingUp, Scale, ArrowRight,
+} from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME, PLAY_STORE_URL } from "@/lib/config";
@@ -287,6 +289,70 @@ function FaqItem({ q, a }: { q: string; a: string }) {
   );
 }
 
+// The animated "left becomes right" connector between the two human-angle
+// columns below -- traveling dots read as something actively flowing/
+// happening rather than a static divider, which is the whole point of that
+// section (in-the-moment reactions turning into things that build up over
+// time). Two versions in one component rather than a `vertical` prop
+// switched by JS, since the layout itself flips from side-by-side to
+// stacked at the `sm` breakpoint via Tailwind, and each orientation needs
+// its own dot-travel axis (left↔right vs. top↔bottom).
+function FlowConnector() {
+  const dots = [0, 0.7, 1.4];
+  return (
+    <>
+      <div className="relative hidden h-full min-h-[140px] w-full items-center justify-center sm:flex">
+        <div
+          className="relative h-[2px] w-full overflow-hidden rounded-full"
+          style={{ background: "linear-gradient(90deg, rgba(139,92,246,0.5), rgba(52,211,153,0.5))" }}
+        >
+          {dots.map((delay, i) => (
+            <motion.span
+              key={i}
+              className="absolute top-1/2 h-2 w-2 -translate-y-1/2 rounded-full"
+              style={{
+                background: i % 2 === 0 ? "#c4b5fd" : "#6ee7b7",
+                boxShadow: `0 0 8px ${i % 2 === 0 ? "#8b5cf6" : "#34d399"}`,
+              }}
+              animate={{ left: ["0%", "100%"] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear", delay }}
+            />
+          ))}
+        </div>
+        <ArrowRight
+          size={18}
+          className="absolute text-[#34d399]"
+          style={{ filter: "drop-shadow(0 0 6px rgba(52,211,153,0.6))" }}
+        />
+      </div>
+      <div className="relative flex h-14 w-full items-center justify-center sm:hidden">
+        <div
+          className="relative h-full w-[2px] overflow-hidden rounded-full"
+          style={{ background: "linear-gradient(180deg, rgba(139,92,246,0.5), rgba(52,211,153,0.5))" }}
+        >
+          {dots.map((delay, i) => (
+            <motion.span
+              key={i}
+              className="absolute left-1/2 h-2 w-2 -translate-x-1/2 rounded-full"
+              style={{
+                background: i % 2 === 0 ? "#c4b5fd" : "#6ee7b7",
+                boxShadow: `0 0 8px ${i % 2 === 0 ? "#8b5cf6" : "#34d399"}`,
+              }}
+              animate={{ top: ["0%", "100%"] }}
+              transition={{ duration: 2, repeat: Infinity, ease: "linear", delay }}
+            />
+          ))}
+        </div>
+        <ArrowRight
+          size={18}
+          className="absolute rotate-90 text-[#34d399]"
+          style={{ filter: "drop-shadow(0 0 6px rgba(52,211,153,0.6))" }}
+        />
+      </div>
+    </>
+  );
+}
+
 // --- Content, grounded in the real product -------------------------------
 
 const VALUE_PROPS = [
@@ -302,6 +368,24 @@ const USE_CASES = [
   { title: "Update my resume", body: "Create strong bullet points and impact" },
   { title: "Prepare for performance review", body: "Highlight your achievements and growth" },
   { title: "Find leadership examples", body: "Discover moments that show your leadership", highlight: true },
+];
+
+// The "human angle" features, mirrored from the real in-app Features page
+// (see app/(app)/settings/features) -- split the same way that page splits
+// them: what happens the instant you record something, vs. what builds up
+// automatically the more you use Strivo, with zero extra effort.
+const MOMENT_FEATURES = [
+  { icon: Sparkles, title: "A real reaction, not just a save", body: "Notices genuine Leadership, Problem-Solving, or grit in your story — even the struggle, not just the clean win." },
+  { icon: Copy, title: "A resume line, already written", body: "A polished bullet, numbers pulled straight from what you actually said." },
+  { icon: MessageCircleQuestion, title: "One good question back", body: "Short, genuinely curious, optional — answer it and the memory gets richer." },
+  { icon: Award, title: "Small, earned milestones", body: "First story in a new strength, first real number. No streaks to babysit." },
+];
+
+const OVER_TIME_FEATURES = [
+  { icon: LayoutGrid, title: "Story Bank", when: "from day one", body: "Which strengths you've got real stories for — and which are still thin." },
+  { icon: CalendarDays, title: "Your Week in Stories", when: "weekly", body: "Your best 2-3 moments from the week, recapped for you automatically." },
+  { icon: TrendingUp, title: "How You've Grown", when: "~monthly", body: "Your earliest stories vs. your latest — a real pattern, reflected back." },
+  { icon: Scale, title: "You vs. You", when: "every quarter", body: "An honest check-in against your own last quarter. No scoreboard, no games." },
 ];
 
 // Deliberately not fabricated testimonials attributed to made-up people --
@@ -514,6 +598,108 @@ export function MarketingHome({
               </TiltCard>
             </motion.div>
           ))}
+        </motion.div>
+      </section>
+
+      {/* Human angle -- the real differentiator vs. a plain notes app or a
+          generic chatbot: some of this reacts to you the instant you
+          record, and some of it quietly builds up the more you use
+          Strivo, with zero extra effort. The connecting FlowConnector
+          (traveling dots) is what turns "here are two lists" into "here's
+          a system that keeps working on your behalf." */}
+      <section
+        className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 sm:px-12"
+        style={{ background: "linear-gradient(180deg,#0a0a0f,#0d0d16 50%,#0a0a0f)" }}
+      >
+        <div
+          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
+          style={{ width: 800, height: 320, background: "radial-gradient(ellipse at center, rgba(124,58,237,0.18), transparent 70%)" }}
+        />
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative text-center text-xs font-semibold tracking-[0.15em] text-brand-primary">
+          THE HUMAN SIDE
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mx-auto mb-3 mt-2 max-w-xl text-center text-2xl font-bold tracking-tight sm:text-3xl">
+          It doesn&apos;t just store what you say — it notices
+        </motion.h2>
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mx-auto mb-14 max-w-lg text-center text-sm leading-relaxed text-[#8a8a99]">
+          Some of it happens the second you hit save. The rest builds up quietly, the more you use it — until it hands you back something no notes app or generic chatbot ever could.
+        </motion.p>
+
+        <motion.div
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.1 }}
+          variants={stagger}
+          className="relative mx-auto grid max-w-5xl grid-cols-1 items-stretch gap-0 sm:grid-cols-[1fr,90px,1fr]"
+        >
+          {/* Left: in the moment */}
+          <motion.div
+            variants={fadeUp}
+            className="rounded-2xl border border-[#2a2a35] p-6 sm:p-7"
+            style={{ background: "linear-gradient(160deg,#181022,#0d0d14)" }}
+          >
+            <div className="mb-5 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full" style={{ background: "#a78bfa", boxShadow: "0 0 8px #a78bfa" }} />
+              <p className="text-xs font-bold uppercase tracking-wide text-[#c4b5fd]">Right when you record</p>
+            </div>
+            <div className="space-y-4">
+              {MOMENT_FEATURES.map((f) => (
+                <div key={f.title} className="flex items-start gap-3">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: "rgba(139,92,246,0.15)", color: "#c4b5fd" }}
+                  >
+                    <f.icon size={16} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">{f.title}</p>
+                    <p className="mt-0.5 text-xs leading-relaxed text-[#8a8a99]">{f.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Connector */}
+          <motion.div variants={fadeUp} className="flex items-center justify-center py-6 sm:py-0">
+            <FlowConnector />
+          </motion.div>
+
+          {/* Right: over time */}
+          <motion.div
+            variants={fadeUp}
+            className="rounded-2xl border border-[#2a2a35] p-6 sm:p-7"
+            style={{ background: "linear-gradient(160deg,#0d1a16,#0d0d14)" }}
+          >
+            <div className="mb-5 flex items-center gap-2">
+              <span className="h-2 w-2 rounded-full" style={{ background: "#34d399", boxShadow: "0 0 8px #34d399" }} />
+              <p className="text-xs font-bold uppercase tracking-wide text-[#6ee7b7]">Builds automatically, over time</p>
+            </div>
+            <div className="space-y-4">
+              {OVER_TIME_FEATURES.map((f) => (
+                <div key={f.title} className="flex items-start gap-3">
+                  <div
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+                    style={{ background: "rgba(52,211,153,0.15)", color: "#6ee7b7" }}
+                  >
+                    <f.icon size={16} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <p className="text-sm font-bold text-white">{f.title}</p>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
+                        style={{ background: "rgba(52,211,153,0.15)", color: "#6ee7b7" }}
+                      >
+                        {f.when}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs leading-relaxed text-[#8a8a99]">{f.body}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </motion.div>
         </motion.div>
       </section>
 
