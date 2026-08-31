@@ -13,6 +13,7 @@ import {
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired, getUserById } from "@/lib/repo/users";
+import { createPendingCheckin, countOpenCheckins } from "@/lib/repo/pendingCheckins";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -42,6 +43,12 @@ function fallbackTitle(transcript: string): string {
 // 10th memory forever, so it stays a genuine one-time moment instead of
 // becoming background noise.
 const MEMORY_COUNT_MILESTONES = [10, 25, 50, 100, 250, 500];
+
+// Soft cap on how many check-ins (see futureCheckin in generateMemoryMetadata,
+// lib/ai.ts) can be open for one user at a time -- see countOpenCheckins in
+// lib/repo/pendingCheckins.ts. Keeps a run of memories that each mention
+// something upcoming from turning into a pile of nags that all land at once.
+const MAX_OPEN_CHECKINS = 3;
 
 export async function POST(req: Request) {
   const userId = await requireUserId();
@@ -133,6 +140,21 @@ export async function POST(req: Request) {
       reflective_question: metadata.reflectiveQuestion,
       metadata_status: "ready",
     });
+
+    // "Proactive check-ins" -- see futureCheckin in generateMemoryMetadata
+    // (lib/ai.ts) and app/api/checkins/run for the daily automation that
+    // actually surfaces this later. Only fires on the small share of
+    // memories that mention a specific upcoming event, and only if the user
+    // isn't already sitting on several unresolved ones (see
+    // MAX_OPEN_CHECKINS above).
+    if (metadata.futureCheckin && countOpenCheckins(userId) < MAX_OPEN_CHECKINS) {
+      createPendingCheckin({
+        userId,
+        sourceMemoryId: memory.id,
+        question: metadata.futureCheckin.question,
+        targetDate: metadata.futureCheckin.targetDate,
+      });
+    }
   } else {
     updateMemoryMetadata(userId, memory.id, { metadata_status: "failed" });
   }

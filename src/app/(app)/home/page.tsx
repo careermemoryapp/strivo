@@ -6,6 +6,7 @@ import { listChats } from "@/lib/repo/chats";
 import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
 import { getRecentGrowthNarrative } from "@/lib/repo/growthNarratives";
 import { getRecentQuarterlyBenchmark } from "@/lib/repo/quarterlyBenchmarks";
+import { getActiveCheckinForUser } from "@/lib/repo/pendingCheckins";
 import { computeStreak } from "@/lib/utils";
 import { HomeClient } from "./HomeClient";
 
@@ -59,6 +60,11 @@ export default async function HomePage() {
   const recentRecap = getRecentWeeklyRecap(userId, RECAP_VISIBLE_MS);
   const recentGrowth = getRecentGrowthNarrative(userId, GROWTH_VISIBLE_MS);
   const recentBenchmark = getRecentQuarterlyBenchmark(userId, BENCHMARK_VISIBLE_MS);
+  // No visibility-window constant here unlike recap/growth/benchmark above
+  // -- an active check-in isn't a time-boxed digest, it stays on Home until
+  // the user actually answers or dismisses it (see /api/checkins/run, which
+  // is what flips a row to 'active' in the first place).
+  const activeCheckin = getActiveCheckinForUser(userId);
 
   return (
     <HomeClient
@@ -87,6 +93,9 @@ export default async function HomePage() {
         benchmark: recentBenchmark
           ? { text: recentBenchmark.reflection_text, quarterLabel: recentBenchmark.quarter_label }
           : null,
+        // Just the question -- tapping the teaser goes to /check-in/[id]
+        // for the actual answer flow.
+        checkin: activeCheckin ? { id: activeCheckin.id, question: activeCheckin.question } : null,
       }}
     />
   );

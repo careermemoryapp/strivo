@@ -144,3 +144,12 @@ export function checkQuarterlyBenchmarkSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea again, for the daily "proactive check-ins" automation (see
+// /api/checkins/run) -- its own credential, separate from every other secret
+// above. Checked via a request header (`x-checkin-secret`).
+export function checkCheckinSecret(secret: string | null): boolean {
+  const expected = process.env.CHECKIN_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

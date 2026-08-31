@@ -76,6 +76,19 @@ export type MemoryMetadata = {
   // memory can have something worth asking about. Null when the memory is
   // too thin/trivial to meaningfully follow up on.
   reflectiveQuestion: string | null;
+  // "Proactive check-ins" -- the layer that lets Strivo follow up on its
+  // own, unprompted, days or weeks later ("How did the interview go?"),
+  // which is specifically the thing neither ChatGPT nor Claude can do since
+  // they forget the moment a chat ends. Only set when the transcript names
+  // a SPECIFIC upcoming event with an identifiable timeframe that hasn't
+  // happened yet (an interview, a hard conversation, a deadline, a
+  // decision). targetDate is the model's best estimate (YYYY-MM-DD, IST) of
+  // when that event happens or resolves -- validated and re-checked in code
+  // (see the caller in generateMemoryMetadata below) before ever being
+  // trusted, since date arithmetic is exactly the kind of thing a language
+  // model can get subtly wrong. null for the large majority of memories,
+  // which don't mention anything upcoming at all.
+  futureCheckin: { question: string; targetDate: string } | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -132,9 +145,14 @@ export const COMPETENCY_OPTIONS = [
 // Generates title/summary/category/tags for a raw transcript. Returns null
 // on ANY failure — callers must still keep the raw transcript saved either
 // way (the user's words matter more than the AI metadata).
-export async function generateMemoryMetadata(transcript: string, firstName?: string | null): Promise<MemoryMetadata | null> {
+export async function generateMemoryMetadata(
+  transcript: string,
+  firstName?: string | null,
+  now: Date = new Date()
+): Promise<MemoryMetadata | null> {
   const openai = getClient();
   if (!openai) return null;
+  const todayIso = istDateString(now);
   // Same "occasionally, never forced" name guidance as buildSystemPrompt's
   // nameContext -- only given to the model when a name is actually
   // available, and phrased as a light option for praise/reflectiveQuestion
@@ -171,6 +189,7 @@ export async function generateMemoryMetadata(transcript: string, firstName?: str
             "resumeLine (string or null): ONLY when competencies is non-empty, write ONE polished resume bullet line for this story, ALWAYS IN ENGLISH regardless of the transcript's language. Standard resume conventions: start with a strong past-tense action verb (Led, Reduced, Built, Launched, Resolved, etc.), be a single line with no trailing period, and if the transcript mentions ANY concrete number, percentage, time saved, or scale (team size, users, revenue, duration), work it in naturally -- if the transcript has no numbers, write a strong qualitative bullet instead rather than inventing a fake metric. Never fabricate a number, outcome, or detail that isn't in the transcript. When competencies is empty, resumeLine MUST be null. " +
             "hasMetric (boolean): true ONLY if the transcript states at least one concrete, quantifiable metric reflecting real impact or scale -- a percentage, a money amount, a count of people/users/items, a duration saved, a clear before/after number. A date, someone's age, a phone number, or another incidental number does NOT count. false otherwise -- most memories should be false. " +
             "reflectiveQuestion (string or null): one short, genuinely curious follow-up question about THIS specific memory, SAME language as the transcript, the kind a thoughtful friend or coach would actually wonder after hearing this story -- grounded in a specific real detail from the transcript (name what happened, don't ask generically). Examples of the RIGHT kind of specificity: 'What made you decide to split it into two phases instead of pushing back the whole deadline?' -- NOT a generic template like 'How did that make you feel?' that could be pasted onto any memory. Return null if the memory is too thin or routine to meaningfully follow up on (e.g. a one-line status note with nothing left to explore) -- don't force a question onto everything. " +
+            `futureCheckin (object or null): today's date is ${todayIso} (IST). ONLY when the transcript clearly mentions a SPECIFIC upcoming event that hasn't happened yet, with an identifiable timeframe -- an interview, a hard conversation, a performance review, a deadline, a decision, a result coming back. Examples: "I have my performance review next month", "talking to my manager about this on Friday", "we find out the results in two weeks". If so, return { question: string (SAME language as the transcript, short, specific, naming the actual event, phrased as something to ask AFTER it happens -- e.g. "How did the conversation with your manager go?", not "How do you feel about Friday?"), targetDate: string in YYYY-MM-DD format, your best-effort resolution of the relative timeframe against today's date -- e.g. "next Friday" or "in two weeks" becomes an actual calendar date. If only a vague timeframe is given (e.g. "sometime next month"), pick a single reasonable date within it rather than returning null over it. } Return null if there's no clear upcoming event, if the event already happened or is happening today, or if there's truly no timeframe at all to anchor a date to. This is rare -- most memories are about something already done, not something still coming, so null is the right answer far more often than not. Never invent an event that isn't actually mentioned. ` +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -214,6 +233,12 @@ export async function generateMemoryMetadata(transcript: string, firstName?: str
           : null,
       hasMetric: parsed.hasMetric === true,
       reflectiveQuestion: typeof parsed.reflectiveQuestion === "string" ? parsed.reflectiveQuestion.slice(0, 300) : null,
+      // Re-validated in code rather than trusted verbatim, same principle as
+      // the competencies filter above -- a model estimating "next Friday"
+      // relative to today is exactly the kind of date arithmetic that's
+      // occasionally subtly wrong, and a check-in with a bad date (already
+      // past, or absurdly far out) is worse than no check-in at all.
+      futureCheckin: validateFutureCheckin(parsed.futureCheckin, todayIso),
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
@@ -577,6 +602,46 @@ const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 // for that" -- because it had no way to confirm that memory's date was
 // actually today, so it hedged rather than assert something it couldn't
 // verify. Giving it today's date directly closes that gap.
+// YYYY-MM-DD in IST wall-clock terms -- used both to tell the model what
+// "today" is when it's estimating a futureCheckin targetDate (see
+// generateMemoryMetadata above; this function declaration is hoisted, so
+// it's callable there even though it's defined later in the file, same as
+// every other helper here) and to validate that estimate in code afterward.
+function istDateString(now: Date = new Date()): string {
+  const ist = new Date(now.getTime() + IST_OFFSET_MS);
+  return ist.toISOString().slice(0, 10);
+}
+
+// How far out a futureCheckin targetDate is allowed to be -- generous enough
+// to cover "next quarter's review" without letting a model hallucination (or
+// a genuinely ambiguous transcript) create a check-in that would surface,
+// unexplained, six months from now.
+const MAX_CHECKIN_HORIZON_DAYS = 120;
+
+// Validates the model's raw futureCheckin guess against today's actual date
+// (see the todayIso context given in the prompt above) rather than trusting
+// it verbatim -- discards it (returns null) rather than clamping to some
+// nearby date, since a check-in whose date got silently "corrected" could
+// end up asking about the wrong thing entirely.
+function validateFutureCheckin(raw: unknown, todayIso: string): { question: string; targetDate: string } | null {
+  if (!raw || typeof raw !== "object") return null;
+  const obj = raw as Record<string, unknown>;
+  const question = typeof obj.question === "string" ? obj.question.trim().slice(0, 300) : "";
+  const targetDate = typeof obj.targetDate === "string" ? obj.targetDate.trim() : "";
+  if (!question || !/^\d{4}-\d{2}-\d{2}$/.test(targetDate)) return null;
+  // Compare as plain date strings (both already YYYY-MM-DD) rather than
+  // parsing to Date objects -- avoids any timezone-shift surprises, since
+  // these are meant to be IST calendar dates, not instants.
+  if (targetDate < todayIso) return null;
+  const horizonIso = new Date(
+    new Date(`${todayIso}T00:00:00Z`).getTime() + MAX_CHECKIN_HORIZON_DAYS * 24 * 60 * 60 * 1000
+  )
+    .toISOString()
+    .slice(0, 10);
+  if (targetDate > horizonIso) return null;
+  return { question, targetDate };
+}
+
 function todayIstLabel(now: Date = new Date()): string {
   const ist = new Date(now.getTime() + IST_OFFSET_MS);
   return ist.toLocaleDateString("en-IN", {

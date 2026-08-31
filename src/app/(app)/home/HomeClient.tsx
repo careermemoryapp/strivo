@@ -2,7 +2,9 @@
 
 import { useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale } from "lucide-react";
+import {
+  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion,
+} from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
@@ -37,6 +39,13 @@ type HomeData = {
   // app/(app)/benchmark), whose primary delivery is also a push
   // notification.
   benchmark: { text: string; quarterLabel: string } | null;
+  // Present whenever the user has an unresolved proactive check-in (see
+  // getActiveCheckinForUser in page.tsx) -- unlike recap/growth/benchmark
+  // above, this isn't a time-boxed digest with a visibility window; it just
+  // stays here until answered or dismissed at /check-in/[id]. Primary
+  // delivery is still a push notification (see app/api/checkins/run) -- this
+  // is the secondary surface for anyone who opens the app without tapping it.
+  checkin: { id: string; question: string } | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -231,6 +240,30 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
               <p className="text-[11px] text-[#8a7550]">Tap to see your plan</p>
             </div>
             <ChevronRight size={15} className="shrink-0 text-[#c9ab6c]" />
+          </button>
+        </div>
+      )}
+
+      {/* Proactive check-in teaser -- "Strivo remembered." Deliberately
+          placed first among the teaser cards (and its own rose accent,
+          distinct from every other one below) since this is the one thing
+          that reaches OUT unprompted about something real, rather than a
+          digest the user comes looking for -- see /check-in/[id] and
+          app/api/checkins/run. */}
+      {data.checkin && (
+        <div className="px-5 pt-4">
+          <button
+            onClick={() => router.push(`/check-in/${data.checkin!.id}`)}
+            className="flex w-full items-center gap-3 rounded-[14px] border border-rose-100 bg-rose-50 px-4 py-3 text-left"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-rose-500">
+              <MessageCircleQuestion size={15} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-semibold text-rose-800">One more thing —</p>
+              <p className="truncate text-[11px] text-rose-800/70">{data.checkin.question}</p>
+            </div>
+            <ChevronRight size={15} className="shrink-0 text-rose-300" />
           </button>
         </div>
       )}

@@ -329,6 +329,35 @@ function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_quarterly_benchmarks_user ON quarterly_benchmarks(user_id, created_at);
+
+    -- "Proactive check-ins" -- the thing neither ChatGPT nor Claude can do:
+    -- follow up, unprompted, on something the user mentioned was coming up.
+    -- Extracted at memory-creation time (see futureCheckin in
+    -- generateMemoryMetadata, lib/ai.ts) whenever a transcript names a
+    -- specific upcoming event with an identifiable timeframe ("interview
+    -- next Friday," "hard conversation with my manager next week"). A daily
+    -- external automation (see /api/checkins/run, CHECKIN_SECRET in
+    -- lib/adminAuth.ts) activates rows once target_date arrives and pushes
+    -- a notification; answering (see /api/checkins/[id]/answer) creates a
+    -- brand-new linked memory rather than editing the original one, since
+    -- the follow-up is itself a genuinely new moment in time.
+    -- status: pending (waiting for target_date) -> active (surfaced via
+    -- push + Home banner, waiting on the user) -> answered | dismissed |
+    -- expired (target_date passed by too long without the user acting --
+    -- see CHECKIN_STALE_DAYS in the run route).
+    CREATE TABLE IF NOT EXISTS pending_checkins (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      source_memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      question TEXT NOT NULL,
+      target_date TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      resolved_memory_id TEXT REFERENCES memories(id) ON DELETE SET NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_pending_checkins_user ON pending_checkins(user_id, status);
+    CREATE INDEX IF NOT EXISTS idx_pending_checkins_due ON pending_checkins(status, target_date);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

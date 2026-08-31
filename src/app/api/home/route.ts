@@ -6,6 +6,7 @@ import { listChats } from "@/lib/repo/chats";
 import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
 import { getRecentGrowthNarrative } from "@/lib/repo/growthNarratives";
 import { getRecentQuarterlyBenchmark } from "@/lib/repo/quarterlyBenchmarks";
+import { getActiveCheckinForUser } from "@/lib/repo/pendingCheckins";
 import { computeStreak } from "@/lib/utils";
 
 // Kept in sync with the identical constants in page.tsx (the Server
@@ -26,6 +27,7 @@ export async function GET() {
   const recentRecap = getRecentWeeklyRecap(userId, RECAP_VISIBLE_MS);
   const recentGrowth = getRecentGrowthNarrative(userId, GROWTH_VISIBLE_MS);
   const recentBenchmark = getRecentQuarterlyBenchmark(userId, BENCHMARK_VISIBLE_MS);
+  const activeCheckin = getActiveCheckinForUser(userId);
 
   return NextResponse.json({
     user: user
@@ -39,6 +41,7 @@ export async function GET() {
     benchmark: recentBenchmark
       ? { text: recentBenchmark.reflection_text, quarterLabel: recentBenchmark.quarter_label }
       : null,
+    checkin: activeCheckin ? { id: activeCheckin.id, question: activeCheckin.question } : null,
     // True until the user has picked Monthly/Annual on the first-run trial
     // screen (see app/welcome-trial -- deliberately outside the (app) route
     // group/layout, see the comment there). The authoritative redirect now
