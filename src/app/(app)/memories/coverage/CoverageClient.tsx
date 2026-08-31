@@ -1,7 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trophy, Sparkles, Plus, ArrowRight } from "lucide-react";
+import { Trophy, Sparkles, Plus, ArrowRight, ChevronDown } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 
 type CoverageEntry = { name: string; count: number };
@@ -23,6 +24,7 @@ const GAP_DISPLAY_LIMIT = 6;
 // invitation ("even a small example counts"), never as a red/urgent warning.
 export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
   const router = useRouter();
+  const [gapsExpanded, setGapsExpanded] = useState(false);
 
   const covered = coverage.filter((c) => c.count > 0).sort((a, b) => b.count - a.count);
   const empty = coverage.filter((c) => c.count === 0);
@@ -110,7 +112,7 @@ export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
           <div>
             <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">Worth building up</p>
             <div className="space-y-2.5">
-              {empty.slice(0, GAP_DISPLAY_LIMIT).map((c) => (
+              {(gapsExpanded ? empty : empty.slice(0, GAP_DISPLAY_LIMIT)).map((c) => (
                 <button
                   key={c.name}
                   onClick={() => router.push("/record")}
@@ -128,11 +130,15 @@ export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
                 </button>
               ))}
             </div>
-            {empty.length > GAP_DISPLAY_LIMIT && (
-              <p className="mt-2.5 px-1 text-xs text-ink-faint">
+            {empty.length > GAP_DISPLAY_LIMIT && !gapsExpanded && (
+              <button
+                onClick={() => setGapsExpanded(true)}
+                className="mt-2.5 flex items-center gap-1 px-1 text-xs font-semibold text-[#8b5cf6]"
+              >
                 +{empty.length - GAP_DISPLAY_LIMIT} more competenc{empty.length - GAP_DISPLAY_LIMIT === 1 ? "y" : "ies"} to
-                explore as you keep recording.
-              </p>
+                explore
+                <ChevronDown size={13} />
+              </button>
             )}
           </div>
         )}
