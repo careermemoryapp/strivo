@@ -630,7 +630,7 @@ export function MarketingHome({
           whileInView="show"
           viewport={{ once: true, amount: 0.1 }}
           variants={stagger}
-          className="relative mx-auto grid max-w-5xl grid-cols-1 items-stretch gap-0 sm:grid-cols-[1fr,90px,1fr]"
+          className="relative mx-auto grid max-w-5xl grid-cols-1 items-stretch gap-0 sm:grid-cols-[1fr_90px_1fr]"
         >
           {/* Left: in the moment */}
           <motion.div
