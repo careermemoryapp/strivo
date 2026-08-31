@@ -90,10 +90,20 @@ const CATEGORY_OPTIONS = [
   "General",
 ];
 
-// Standard behavioral-interview competency taxonomy (the kind of thing STAR
-// answers and "tell me about a time..." questions are built around).
+// Behavioral-interview + modern-work competency taxonomy (the kind of thing
+// STAR answers and "tell me about a time..." questions are built around).
 // Deliberately broad/role-agnostic rather than corporate-leadership-only,
 // since Strivo's users span many kinds of roles, not just management.
+// Grown from an original 12-item soft-skills-only list to 22, adding a
+// second tier of more modern, execution- and technical-flavored
+// competencies (AI & Tools Fluency, Technical & Hard Skills, Data-Driven
+// Decision Making, etc.) -- the earlier list under-served anyone whose
+// strongest stories are about what they BUILT or SHIPPED rather than a
+// purely interpersonal moment. "Technical & Hard Skills" in particular is
+// deliberately a broad catch-all (see its usage note in
+// generateMemoryMetadata's prompt below) rather than narrowly scoped to one
+// discipline, since Strivo's users span everything from engineering to
+// design to operations to sales.
 export const COMPETENCY_OPTIONS = [
   "Leadership",
   "Ownership & Initiative",
@@ -107,6 +117,16 @@ export const COMPETENCY_OPTIONS = [
   "Strategic Thinking",
   "Stakeholder Focus",
   "Results & Impact",
+  "Technical & Hard Skills",
+  "AI & Tools Fluency",
+  "Data-Driven Decision Making",
+  "Product & Business Thinking",
+  "Negotiation & Influence",
+  "Time & Priority Management",
+  "Crisis Management",
+  "Learning Agility",
+  "Customer & User Empathy",
+  "Risk & Quality Management",
 ];
 
 // Generates title/summary/category/tags for a raw transcript. Returns null
@@ -146,6 +166,7 @@ export async function generateMemoryMetadata(transcript: string, firstName?: str
             "Most people telling a casual, everyday story have no idea it happens to be a strong example of something like Leadership or Problem-Solving -- your job here is to spot that for them even though they never used that word themselves and may not think of it that way. " +
             "A story does NOT need a clean, successful outcome to count. Someone who tried several different approaches before one worked, or who kept going on something frustrating instead of giving up, is genuinely demonstrating Problem-Solving, Adaptability & Resilience, or Ownership & Initiative through that persistence itself -- even if the transcript ends before it's fully resolved or the result was mixed or unresolved. Don't reserve competencies for tidy wins; the struggle is often the more impressive part. " +
             "Equally, don't force a fit: an empty array is correct and expected for a large share of memories (e.g. a plain status update or a memory with no clear personal action in it). " +
+            "Two items on the list deserve extra note: 'Technical & Hard Skills' is a deliberately broad catch-all for any concrete technical, domain, or craft skill actually applied -- writing code, designing something, running an analysis, operating equipment, using a specialized tool -- regardless of field, so don't skip it just because the transcript isn't about software specifically. 'AI & Tools Fluency' is narrower: use it only when the person specifically used AI, automation, or a notable tool/software to get something done (not just 'used a computer'). " +
             "praise (string or null): ONLY when competencies is non-empty, write one short (1-2 sentence) warm, specific compliment to the person, SAME language as the transcript, in second person, that names the concrete thing they actually did (referencing a real detail, decision, or number from the transcript -- not a vague restatement) and briefly notes it could make a strong interview or resume story. If the story is really about effort or persistence rather than a clean win -- trying multiple approaches, sticking with something frustrating, not giving up -- praise THAT specifically (the persistence itself, the willingness to keep trying) instead of only ever praising results; a genuine struggle is just as praiseworthy as a tidy success, and pretending it isn't makes this feel like a highlight reel instead of someone who actually noticed the effort. Sound like a genuine reaction from a supportive coach who actually read the story, never like a generic template ('Great job!', 'Well done!') -- it should be obvious it was written about THIS story specifically and would sound wrong attached to a different one. When competencies is empty, praise MUST be null. " +
             "resumeLine (string or null): ONLY when competencies is non-empty, write ONE polished resume bullet line for this story, ALWAYS IN ENGLISH regardless of the transcript's language. Standard resume conventions: start with a strong past-tense action verb (Led, Reduced, Built, Launched, Resolved, etc.), be a single line with no trailing period, and if the transcript mentions ANY concrete number, percentage, time saved, or scale (team size, users, revenue, duration), work it in naturally -- if the transcript has no numbers, write a strong qualitative bullet instead rather than inventing a fake metric. Never fabricate a number, outcome, or detail that isn't in the transcript. When competencies is empty, resumeLine MUST be null. " +
             "hasMetric (boolean): true ONLY if the transcript states at least one concrete, quantifiable metric reflecting real impact or scale -- a percentage, a money amount, a count of people/users/items, a duration saved, a clear before/after number. A date, someone's age, a phone number, or another incidental number does NOT count. false otherwise -- most memories should be false. " +

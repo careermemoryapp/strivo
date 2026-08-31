@@ -304,15 +304,15 @@ function FlowConnector() {
       <div className="relative hidden h-full min-h-[140px] w-full items-center justify-center sm:flex">
         <div
           className="relative h-[2px] w-full overflow-hidden rounded-full"
-          style={{ background: "linear-gradient(90deg, rgba(139,92,246,0.5), rgba(52,211,153,0.5))" }}
+          style={{ background: "linear-gradient(90deg, rgba(139,92,246,0.5), rgba(96,165,250,0.5))" }}
         >
           {dots.map((delay, i) => (
             <motion.span
               key={i}
               className="absolute top-1/2 h-2 w-2 -translate-y-1/2 rounded-full"
               style={{
-                background: i % 2 === 0 ? "#c4b5fd" : "#6ee7b7",
-                boxShadow: `0 0 8px ${i % 2 === 0 ? "#8b5cf6" : "#34d399"}`,
+                background: i % 2 === 0 ? "#c4b5fd" : "#93c5fd",
+                boxShadow: `0 0 8px ${i % 2 === 0 ? "#8b5cf6" : "#60a5fa"}`,
               }}
               animate={{ left: ["0%", "100%"] }}
               transition={{ duration: 2, repeat: Infinity, ease: "linear", delay }}
@@ -321,22 +321,22 @@ function FlowConnector() {
         </div>
         <ArrowRight
           size={18}
-          className="absolute text-[#34d399]"
-          style={{ filter: "drop-shadow(0 0 6px rgba(52,211,153,0.6))" }}
+          className="absolute text-[#60a5fa]"
+          style={{ filter: "drop-shadow(0 0 6px rgba(96,165,250,0.6))" }}
         />
       </div>
       <div className="relative flex h-14 w-full items-center justify-center sm:hidden">
         <div
           className="relative h-full w-[2px] overflow-hidden rounded-full"
-          style={{ background: "linear-gradient(180deg, rgba(139,92,246,0.5), rgba(52,211,153,0.5))" }}
+          style={{ background: "linear-gradient(180deg, rgba(139,92,246,0.5), rgba(96,165,250,0.5))" }}
         >
           {dots.map((delay, i) => (
             <motion.span
               key={i}
               className="absolute left-1/2 h-2 w-2 -translate-x-1/2 rounded-full"
               style={{
-                background: i % 2 === 0 ? "#c4b5fd" : "#6ee7b7",
-                boxShadow: `0 0 8px ${i % 2 === 0 ? "#8b5cf6" : "#34d399"}`,
+                background: i % 2 === 0 ? "#c4b5fd" : "#93c5fd",
+                boxShadow: `0 0 8px ${i % 2 === 0 ? "#8b5cf6" : "#60a5fa"}`,
               }}
               animate={{ top: ["0%", "100%"] }}
               transition={{ duration: 2, repeat: Infinity, ease: "linear", delay }}
@@ -345,8 +345,8 @@ function FlowConnector() {
         </div>
         <ArrowRight
           size={18}
-          className="absolute rotate-90 text-[#34d399]"
-          style={{ filter: "drop-shadow(0 0 6px rgba(52,211,153,0.6))" }}
+          className="absolute rotate-90 text-[#60a5fa]"
+          style={{ filter: "drop-shadow(0 0 6px rgba(96,165,250,0.6))" }}
         />
       </div>
     </>
@@ -672,15 +672,15 @@ export function MarketingHome({
             style={{ background: "linear-gradient(160deg,#0d1a16,#0d0d14)" }}
           >
             <div className="mb-5 flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full" style={{ background: "#34d399", boxShadow: "0 0 8px #34d399" }} />
-              <p className="text-xs font-bold uppercase tracking-wide text-[#6ee7b7]">Builds automatically, over time</p>
+              <span className="h-2 w-2 rounded-full" style={{ background: "#60a5fa", boxShadow: "0 0 8px #60a5fa" }} />
+              <p className="text-xs font-bold uppercase tracking-wide text-[#93c5fd]">Builds automatically, over time</p>
             </div>
             <div className="space-y-4">
               {OVER_TIME_FEATURES.map((f) => (
                 <div key={f.title} className="flex items-start gap-3">
                   <div
                     className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
-                    style={{ background: "rgba(52,211,153,0.15)", color: "#6ee7b7" }}
+                    style={{ background: "rgba(96,165,250,0.15)", color: "#93c5fd" }}
                   >
                     <f.icon size={16} />
                   </div>
@@ -689,7 +689,7 @@ export function MarketingHome({
                       <p className="text-sm font-bold text-white">{f.title}</p>
                       <span
                         className="rounded-full px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide"
-                        style={{ background: "rgba(52,211,153,0.15)", color: "#6ee7b7" }}
+                        style={{ background: "rgba(96,165,250,0.15)", color: "#93c5fd" }}
                       >
                         {f.when}
                       </span>
@@ -707,11 +707,11 @@ export function MarketingHome({
           fabricated-testimonials pattern many AI-built apps ship with
           (invented names/quotes attributed to people who don't exist is a
           real deceptive-advertising risk, not just a style choice). */}
-      <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>
+      <section className="border-t border-[#1e1e26] px-8 py-16 text-center sm:px-12" style={{ background: "#0a0a0f" }}>
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.15em] text-brand-primary">
           WHY I BUILT THIS
         </motion.p>
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="max-w-2xl">
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="mx-auto max-w-2xl">
           <p className="text-lg leading-relaxed text-white/90">
             Every time an interview or performance review came up, I&apos;d blank on my own achievements —
             not because I hadn&apos;t done the work, but because I&apos;d never written any of it down. Strivo

@@ -6,6 +6,14 @@ import { DarkHeader } from "@/components/DarkHeader";
 
 type CoverageEntry = { name: string; count: number };
 
+// With the competency taxonomy now 20+ items (see COMPETENCY_OPTIONS in
+// lib/ai.ts), showing every single empty one as its own amber card would
+// turn "worth building up" into a wall of prompts -- exactly the nagging-
+// checklist feeling this page is designed to avoid. Capping the visible
+// list keeps it a short, inviting nudge; the remainder are summarized in
+// one line instead of disappearing silently.
+const GAP_DISPLAY_LIMIT = 6;
+
 // "Story Bank" — the point of this page is to turn "you might not realize
 // this is a good example" (see the praise popup on the Record page) into
 // something the user can look at on their own terms: which behavioral
@@ -102,7 +110,7 @@ export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
           <div>
             <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">Worth building up</p>
             <div className="space-y-2.5">
-              {empty.map((c) => (
+              {empty.slice(0, GAP_DISPLAY_LIMIT).map((c) => (
                 <button
                   key={c.name}
                   onClick={() => router.push("/record")}
@@ -120,6 +128,12 @@ export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
                 </button>
               ))}
             </div>
+            {empty.length > GAP_DISPLAY_LIMIT && (
+              <p className="mt-2.5 px-1 text-xs text-ink-faint">
+                +{empty.length - GAP_DISPLAY_LIMIT} more competenc{empty.length - GAP_DISPLAY_LIMIT === 1 ? "y" : "ies"} to
+                explore as you keep recording.
+              </p>
+            )}
           </div>
         )}
 
