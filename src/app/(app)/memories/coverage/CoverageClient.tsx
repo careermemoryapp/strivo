@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Trophy, Sparkles, Plus, ArrowRight, ChevronDown } from "lucide-react";
+import { Trophy, Sparkles, Plus, ArrowRight, ChevronDown, ChevronRight } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 
 type StoryRef = { id: string; title: string };
@@ -16,18 +16,23 @@ type CoverageEntry = { name: string; count: number; stories: StoryRef[] };
 // one line instead of disappearing silently (see the expand button below).
 const GAP_DISPLAY_LIMIT = 6;
 
-// How many actual story chips to show per covered competency before
+// How many actual story rows to show per covered competency before
 // collapsing the rest into a "+N more" note -- keeps a competency with a
 // dozen stories from turning its card into its own scroll region.
-const STORY_CHIP_LIMIT = 4;
+const STORY_DISPLAY_LIMIT = 4;
 
-// Six colors, cycled by index (index % 6) across BOTH the "strongest
-// stories" and "worth building up" lists -- what was previously a flat wall
-// of identical amber cards now reads as a real spread of distinct
-// strengths/gaps at a glance, not a monotone checklist. Colors are the same
-// accent palette already used elsewhere in the app (Features page, Home
-// teasers) rather than new ones invented just for this page.
-const PALETTE = ["#8b5cf6", "#3b82f6", "#f59e0b", "#14b8a6", "#f43f5e", "#6366f1"];
+// Three colors, not six -- amber/teal/rose read as "warning/success/error"
+// at a glance, which fights the page's own "this is growth, not a red flag"
+// framing, and six distinct hues on one screen was just noisy. All three
+// are shades already in the app's own brand palette (violet/blue, plus
+// indigo as the mid-tone) rather than a new accent invented for this page.
+// Cycled by a STABLE index derived from the competency's position in the
+// full COMPETENCY_OPTIONS order (see colorFor below) -- so a given
+// competency is always the same color everywhere it appears, and the
+// sequence starts from the 1st color for the 1st competency rather than
+// restarting separately inside the "strongest stories" and "worth building
+// up" sections.
+const PALETTE = ["#8b5cf6", "#3b82f6", "#6366f1"];
 
 // One short, concrete example per competency (see COMPETENCY_OPTIONS in
 // lib/ai.ts) -- shown in place of the old flat "No stories yet" line so an
@@ -80,6 +85,14 @@ export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
   const coveredCount = covered.length;
   const totalCount = coverage.length;
 
+  // One continuous color assignment across the FULL list (both covered and
+  // gap competencies), keyed by name -- see the PALETTE comment above for
+  // why this isn't just `index % 3` inside each filtered/sorted section.
+  const colorFor = (name: string): string => {
+    const idx = coverage.findIndex((c) => c.name === name);
+    return PALETTE[(idx < 0 ? 0 : idx) % PALETTE.length];
+  };
+
   return (
     <div className="pb-10">
       <DarkHeader back inlineTitle="Story Bank" inlineSubtitle="Your interview-ready stories, by competency" />
@@ -124,19 +137,20 @@ export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
         {/* Strongest stories — sorted by count so the user sees their
             biggest strengths first, like a leaderboard of their own
             experience rather than a flat alphabetical list. Each
-            competency gets its own color (see PALETTE) and its actual
-            stories as clickable chips underneath, same idea as "Relevant
-            Memories" in chat -- tapping one goes straight to that memory
-            instead of just showing a number. */}
+            competency gets its own color (see PALETTE/colorFor) and its
+            actual stories listed as full clickable rows underneath, same
+            pattern as the "Relevant Memories" list in chat (a row + a
+            chevron, not a bare badge) -- tapping one goes straight to that
+            memory instead of just showing a number. */}
         {covered.length > 0 && (
           <div>
             <p className="mb-2.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">
               <Sparkles size={13} className="text-[#8b5cf6]" /> Your strongest stories
             </p>
             <div className="space-y-2.5">
-              {covered.map((c, i) => {
-                const color = PALETTE[i % PALETTE.length];
-                const shown = c.stories.slice(0, STORY_CHIP_LIMIT);
+              {covered.map((c) => {
+                const color = colorFor(c.name);
+                const shown = c.stories.slice(0, STORY_DISPLAY_LIMIT);
                 const extra = c.stories.length - shown.length;
                 return (
                   <div
@@ -162,24 +176,21 @@ export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
                       />
                     </div>
                     {shown.length > 0 && (
-                      <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      <div className="mt-2.5 space-y-1.5">
                         {shown.map((s) => (
                           <button
                             key={s.id}
                             onClick={() => router.push(`/memories/${s.id}`)}
-                            className="max-w-[220px] truncate rounded-full px-2.5 py-1 text-[10.5px] font-medium"
-                            style={{ background: "rgba(255,255,255,0.75)", color }}
+                            className="flex w-full items-center justify-between gap-2 rounded-[9px] bg-white/80 px-3 py-2 text-left"
                           >
-                            {s.title}
+                            <span className="min-w-0 flex-1 truncate text-xs font-medium text-ink">{s.title}</span>
+                            <ChevronRight size={13} className="shrink-0" style={{ color }} />
                           </button>
                         ))}
                         {extra > 0 && (
-                          <span
-                            className="flex items-center px-1.5 text-[10.5px] font-medium"
-                            style={{ color: `${color}99` }}
-                          >
-                            +{extra} more
-                          </span>
+                          <p className="px-1 text-[10.5px] font-medium" style={{ color: `${color}99` }}>
+                            +{extra} more {extra === 1 ? "story" : "stories"}
+                          </p>
                         )}
                       </div>
                     )}
@@ -200,8 +211,8 @@ export function CoverageClient({ coverage }: { coverage: CoverageEntry[] }) {
           <div>
             <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-ink-faint">Worth building up</p>
             <div className="space-y-2.5">
-              {(gapsExpanded ? empty : empty.slice(0, GAP_DISPLAY_LIMIT)).map((c, i) => {
-                const color = PALETTE[i % PALETTE.length];
+              {(gapsExpanded ? empty : empty.slice(0, GAP_DISPLAY_LIMIT)).map((c) => {
+                const color = colorFor(c.name);
                 return (
                   <button
                     key={c.name}
