@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, ChevronDown, Brain } from "lucide-react";
+import { Search, ChevronDown, Brain, Trophy, ChevronRight } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { useCurrentUser } from "@/lib/useCurrentUser";
@@ -71,6 +71,21 @@ export function MemoriesListClient({ initialMemories }: { initialMemories: Memor
           <h1 className="text-[21px] font-bold text-white">All Memories</h1>
           <p className="mt-1 text-[12px] text-white/55">Your experiences, insights and moments that matter.</p>
         </div>
+
+        {/* Entry point to the Story Bank coverage view (see
+            /memories/coverage) — which competencies the user has strong
+            stories for and which are still gaps worth filling. */}
+        <button
+          onClick={() => router.push("/memories/coverage")}
+          className="relative mt-4 flex w-full items-center justify-between rounded-[13px] border border-white/10 bg-white/8 px-3.5 py-3 text-left"
+        >
+          <span className="flex items-center gap-2 text-sm font-medium text-white">
+            <Trophy size={16} className="text-amber-300" /> Story Bank
+          </span>
+          <span className="flex items-center gap-1 text-xs text-white/55">
+            See your coverage <ChevronRight size={14} />
+          </span>
+        </button>
 
         <div className="relative mt-4 flex items-center gap-2">
           <div className="flex flex-1 min-w-0 items-center gap-2 rounded-[13px] border border-white/10 bg-white/8 px-3.5 py-3">

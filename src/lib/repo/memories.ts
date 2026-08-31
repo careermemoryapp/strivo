@@ -202,6 +202,37 @@ export function countMemories(userId: string): number {
   return row.c;
 }
 
+// Tallies how many memories demonstrate each competency (see
+// COMPETENCY_OPTIONS in lib/ai.ts) -- backs the "Story Bank" coverage view
+// (app/(app)/memories/coverage), which shows the user which behavioral
+// interview competencies they have strong stories for and which are thin,
+// so gaps read as something to go fill rather than a hidden blind spot.
+// `competencies` is stored as a JSON string array per memory rather than a
+// normalized join table (same as `tags`), so this tallies in JS rather than
+// SQL -- fine at the per-user memory counts this app deals with. Rows with
+// malformed JSON are skipped rather than throwing, same defensiveness as
+// the client-side safeJsonParse helper.
+export function countMemoriesByCompetency(userId: string): Record<string, number> {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT competencies FROM memories WHERE user_id = ? AND competencies IS NOT NULL`)
+    .all(userId) as { competencies: string }[];
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    try {
+      const parsed = JSON.parse(row.competencies);
+      if (!Array.isArray(parsed)) continue;
+      for (const c of parsed) {
+        if (typeof c === "string") counts[c] = (counts[c] ?? 0) + 1;
+      }
+    } catch {
+      // Malformed JSON on an old/corrupted row -- skip it rather than
+      // failing the whole coverage view over one bad row.
+    }
+  }
+  return counts;
+}
+
 // Distinct creation dates (YYYY-MM-DD, local to server) for streak calc.
 export function listMemoryDates(userId: string): string[] {
   const db = getDb();
