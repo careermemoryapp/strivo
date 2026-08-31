@@ -701,6 +701,53 @@ export function MarketingHome({
             </div>
           </motion.div>
         </motion.div>
+
+        {/* Proactive check-ins -- deliberately NOT a third grid column.
+            Everything in the two lists above reacts to something that
+            already happened; this is the one thing that reaches out
+            UNPROMPTED about something still coming, which is specifically
+            what neither ChatGPT nor Claude can do (both forget the moment
+            a chat ends). Its own rose accent, full-width, and placed right
+            below the grid so it reads as the payoff of "in the moment +
+            over time" rather than a peer to either column. */}
+        <motion.div
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, amount: 0.4 }}
+          variants={fadeUp}
+          className="relative mx-auto mt-6 max-w-5xl overflow-hidden rounded-2xl border border-rose-500/20 p-6 sm:p-7"
+          style={{ background: "linear-gradient(135deg,#241017,#170d12)" }}
+        >
+          <div
+            className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(244,63,94,0.18), transparent 70%)" }}
+          />
+          <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
+              style={{ background: "rgba(244,63,94,0.15)", color: "#fb7185" }}
+            >
+              <MessageCircleQuestion size={22} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-base font-bold text-white">And it follows up — completely unprompted</p>
+                <span
+                  className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
+                  style={{ background: "rgba(244,63,94,0.18)", color: "#fb7185" }}
+                >
+                  Only on Strivo
+                </span>
+              </div>
+              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[#8a8a99]">
+                Mention an interview next week or a hard conversation coming up, and Strivo remembers on
+                its own — no chat to keep open, nothing to set a reminder for yourself. Days later, it
+                asks how it went, and turns your answer into a story you can actually use. ChatGPT and
+                Claude forget the moment the conversation ends; Strivo doesn&apos;t.
+              </p>
+            </div>
+          </div>
+        </motion.div>
       </section>
 
       {/* Why I built this -- an honest founder's note in place of the

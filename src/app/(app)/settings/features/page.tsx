@@ -126,6 +126,42 @@ export default function FeaturesPage() {
           </p>
         </motion.div>
 
+        {/* Proactive check-ins -- the spotlight card, deliberately not just
+            another row in either list below. Everything in "Right when you
+            record" and "Builds automatically" reacts to something already
+            said; this is the one thing that reaches out UNPROMPTED about
+            something still coming -- see /check-in/[id] and
+            app/api/checkins/run. Rose accent, matching the Home teaser and
+            the check-in answer page itself, so it reads as the same feature
+            wherever it shows up. */}
+        <motion.div
+          initial="hidden"
+          animate="show"
+          variants={fadeUp}
+          className="relative overflow-hidden rounded-[18px] border border-rose-100 p-5"
+          style={{ background: "linear-gradient(135deg,#fff1f2,#fdf1f3)" }}
+        >
+          <div className="flex items-center gap-2">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-rose-500" style={{ boxShadow: "0 4px 12px rgba(244,63,94,0.15)" }}>
+              <MessageCircleQuestion size={18} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <p className="text-sm font-bold text-rose-900">It follows up, unprompted</p>
+                <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-rose-600">
+                  Only on Strivo
+                </span>
+              </div>
+            </div>
+          </div>
+          <p className="mt-2.5 text-xs leading-relaxed text-rose-900/70">
+            Mention an interview, a deadline, or a hard conversation coming up, and Strivo remembers on
+            its own -- no reminder to set, nothing to keep open. When the time comes, it asks how it went
+            and turns your answer into a real memory. ChatGPT and Claude forget the moment a chat ends;
+            Strivo doesn&apos;t.
+          </p>
+        </motion.div>
+
         <motion.div initial="hidden" animate="show" variants={stagger}>
           <div className="mb-2.5 flex items-center gap-2 px-1">
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: "#a78bfa", boxShadow: "0 0 6px #a78bfa" }} />
