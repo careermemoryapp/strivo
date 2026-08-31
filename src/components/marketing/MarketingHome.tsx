@@ -773,19 +773,25 @@ export function MarketingHome({
           variants={stagger}
           className="mx-auto grid max-w-3xl gap-4"
         >
-          {COMPARISON_POINTS.map((c, i) => (
+          {COMPARISON_POINTS.map((c, i) => {
+            const accent = i % 2 === 0 ? "#8b5cf6" : "#60a5fa";
+            const accentSoft = i % 2 === 0 ? "#c4b5fd" : "#93c5fd";
+            return (
             <motion.div
               key={c.title}
               variants={fadeUp}
-              className="rounded-2xl border border-[#2a2a35] p-5 sm:p-6"
-              style={{ background: i % 2 === 0 ? "linear-gradient(160deg,#181022,#0d0d14)" : "linear-gradient(160deg,#0d1a22,#0d0d14)" }}
+              className="rounded-2xl border-y border-r border-[#2a2a35] p-5 sm:p-6"
+              style={{
+                background: i % 2 === 0 ? "linear-gradient(160deg,#1c1029,#0d0d14)" : "linear-gradient(160deg,#0d1a2c,#0d0d14)",
+                borderLeft: `3px solid ${accent}`,
+              }}
             >
               <div className="flex items-start gap-3">
                 <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                  style={{ background: i % 2 === 0 ? "rgba(139,92,246,0.18)" : "rgba(96,165,250,0.18)", color: i % 2 === 0 ? "#c4b5fd" : "#93c5fd" }}
+                  className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: `${accent}33`, color: accentSoft, boxShadow: `0 0 14px ${accent}40` }}
                 >
-                  <Check size={14} strokeWidth={3} />
+                  <Check size={15} strokeWidth={3.5} />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-white sm:text-base">{c.title}</p>
@@ -802,7 +808,8 @@ export function MarketingHome({
                 </div>
               </div>
             </motion.div>
-          ))}
+            );
+          })}
         </motion.div>
       </section>
 
