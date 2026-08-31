@@ -3,7 +3,7 @@
 import { useRef, useState } from "react";
 import { motion, useMotionValue, useSpring, type Variants } from "framer-motion";
 import {
-  Check, Plus, Sparkles, Copy, MessageCircleQuestion, Award, LayoutGrid, CalendarDays, TrendingUp, Scale, ArrowRight,
+  Check, X, Plus, Sparkles, Copy, MessageCircleQuestion, Award, LayoutGrid, CalendarDays, TrendingUp, Scale, ArrowRight,
 } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
@@ -388,6 +388,44 @@ const OVER_TIME_FEATURES = [
   { icon: Scale, title: "You vs. You", when: "every quarter", body: "An honest check-in against your own last quarter. No scoreboard, no games." },
 ];
 
+// The direct differentiator section -- deliberately scoped to things that
+// are concretely TRUE and BUILT, not marketing puffery ("smarter AI",
+// "better memory"). Every line here maps to a real, shipped feature (see
+// the automations in app/api/checkins, weekly-recap, growth-narrative,
+// quarterly-benchmark, and the praise/resumeLine/reflectiveQuestion fields
+// in generateMemoryMetadata, lib/ai.ts) so nothing here is a claim Strivo
+// can't back up if someone actually tries it. Framed honestly rather than
+// as "ChatGPT has no memory at all" (it does, to a degree) -- the real,
+// defensible gap is that a general-purpose chatbot never acts on its own:
+// it only ever responds inside a conversation someone started.
+const COMPARISON_POINTS = [
+  {
+    title: "Follows up, unprompted",
+    strivo: "Remembers something you mentioned was coming up and checks back in days later — no chat to keep open, nothing to set a reminder for.",
+    others: "Only responds inside a conversation you start. Nothing happens once you close the tab.",
+  },
+  {
+    title: "Organizes your stories by competency",
+    strivo: "Every memory is auto-tagged (Leadership, Problem-Solving, and 20 more) and tracked in a Story Bank, so gaps are visible at a glance.",
+    others: "General-purpose chat with no structured tracking of what you've told it over time.",
+  },
+  {
+    title: "Reacts to what you just said",
+    strivo: "Notices when a story shows real skill or persistence and tells you, unprompted, right after you record it.",
+    others: "Waits to be asked. Won't flag anything as noteworthy on its own.",
+  },
+  {
+    title: "Writes the resume line for you",
+    strivo: "A polished, numbers-included bullet generated automatically from the story you told — ready to copy.",
+    others: "Requires you to ask, then re-explain the context, every single time.",
+  },
+  {
+    title: "Sends real check-ins automatically",
+    strivo: "Weekly recaps, monthly growth reflections, quarterly benchmarks — pushed to your phone without you asking.",
+    others: "Zero proactive outreach. Every insight has to be requested.",
+  },
+];
+
 // Deliberately not fabricated testimonials attributed to made-up people --
 // Strivo is early-stage and doesn't have verified user quotes to publish
 // yet. An honest founder's-note section fills the same spot on the page
@@ -702,51 +740,67 @@ export function MarketingHome({
           </motion.div>
         </motion.div>
 
-        {/* Proactive check-ins -- deliberately NOT a third grid column.
-            Everything in the two lists above reacts to something that
-            already happened; this is the one thing that reaches out
-            UNPROMPTED about something still coming, which is specifically
-            what neither ChatGPT nor Claude can do (both forget the moment
-            a chat ends). Its own rose accent, full-width, and placed right
-            below the grid so it reads as the payoff of "in the moment +
-            over time" rather than a peer to either column. */}
+      </section>
+
+      {/* Dedicated differentiator section -- what Strivo actually does that
+          a general-purpose AI chatbot doesn't, stated plainly rather than
+          folded into the human-side grid above. This is the section built
+          to carry the "no other AI app has this" message on its own (see
+          COMPARISON_POINTS above for why each line is scoped to something
+          concretely shipped, not a vague claim). Colors stay in the site's
+          own violet/blue palette -- a Check in violet for what Strivo does,
+          a muted gray X for the generic-chatbot side, no new accent color
+          introduced just for this section. */}
+      <section className="relative border-t border-[#1e1e26] bg-[#0a0a0f] px-8 py-20 sm:px-12">
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-center text-xs font-semibold tracking-[0.15em] text-brand-primary">
+          STRIVO VS. GENERIC AI CHATBOTS
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mx-auto mb-3 mt-2 max-w-xl text-center text-2xl font-bold tracking-tight sm:text-3xl">
+          Things ChatGPT and Claude simply can&apos;t do
+        </motion.h2>
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mx-auto mb-12 max-w-lg text-center text-sm leading-relaxed text-[#8a8a99]">
+          Not a bigger model, not a better prompt — a different job. A general-purpose chatbot only
+          answers what you ask it, inside a conversation you started. Strivo is built to act on your
+          behalf, in the background, without being asked.
+        </motion.p>
+
         <motion.div
           initial="hidden"
           whileInView="show"
-          viewport={{ once: true, amount: 0.4 }}
-          variants={fadeUp}
-          className="relative mx-auto mt-6 max-w-5xl overflow-hidden rounded-2xl border border-rose-500/20 p-6 sm:p-7"
-          style={{ background: "linear-gradient(135deg,#241017,#170d12)" }}
+          viewport={{ once: true, amount: 0.1 }}
+          variants={stagger}
+          className="mx-auto grid max-w-3xl gap-4"
         >
-          <div
-            className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full"
-            style={{ background: "radial-gradient(circle, rgba(244,63,94,0.18), transparent 70%)" }}
-          />
-          <div className="relative flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-            <div
-              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl"
-              style={{ background: "rgba(244,63,94,0.15)", color: "#fb7185" }}
+          {COMPARISON_POINTS.map((c, i) => (
+            <motion.div
+              key={c.title}
+              variants={fadeUp}
+              className="rounded-2xl border border-[#2a2a35] p-5 sm:p-6"
+              style={{ background: i % 2 === 0 ? "linear-gradient(160deg,#181022,#0d0d14)" : "linear-gradient(160deg,#0d1a22,#0d0d14)" }}
             >
-              <MessageCircleQuestion size={22} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-base font-bold text-white">And it follows up — completely unprompted</p>
-                <span
-                  className="rounded-full px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide"
-                  style={{ background: "rgba(244,63,94,0.18)", color: "#fb7185" }}
+              <div className="flex items-start gap-3">
+                <div
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                  style={{ background: i % 2 === 0 ? "rgba(139,92,246,0.18)" : "rgba(96,165,250,0.18)", color: i % 2 === 0 ? "#c4b5fd" : "#93c5fd" }}
                 >
-                  Only on Strivo
-                </span>
+                  <Check size={14} strokeWidth={3} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-bold text-white sm:text-base">{c.title}</p>
+                  <p className="mt-1 text-sm leading-relaxed text-[#a8a8b3]">{c.strivo}</p>
+                </div>
               </div>
-              <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-[#8a8a99]">
-                Mention an interview next week or a hard conversation coming up, and Strivo remembers on
-                its own — no chat to keep open, nothing to set a reminder for yourself. Days later, it
-                asks how it went, and turns your answer into a story you can actually use. ChatGPT and
-                Claude forget the moment the conversation ends; Strivo doesn&apos;t.
-              </p>
-            </div>
-          </div>
+              <div className="ml-10 mt-3 flex items-start gap-3 border-t border-[#232330] pt-3 sm:ml-10">
+                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white/5 text-[#5c5c68]">
+                  <X size={14} strokeWidth={3} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-[#5c5c68]">ChatGPT / Claude</p>
+                  <p className="mt-0.5 text-sm leading-relaxed text-[#6a6a75]">{c.others}</p>
+                </div>
+              </div>
+            </motion.div>
+          ))}
         </motion.div>
       </section>
 
