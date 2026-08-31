@@ -22,6 +22,10 @@ export type Memory = {
   // when competencies is empty. Surfaced as a one-time popup on the Record
   // success screen.
   praise: string | null;
+  // Ready-to-use resume bullet line (always English) generated alongside
+  // praise -- see COMPETENCY_OPTIONS/generateMemoryMetadata in lib/ai.ts.
+  // Always null when competencies is empty.
+  resume_line: string | null;
   metadata_status: "pending" | "ready" | "failed";
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
@@ -138,6 +142,7 @@ export function updateMemoryMetadata(
       | "search_text"
       | "competencies"
       | "praise"
+      | "resume_line"
       | "metadata_status"
       | "key_points"
       | "summary_feedback"
@@ -156,11 +161,12 @@ export function updateMemoryMetadata(
   const search_text = input.search_text ?? current.search_text;
   const competencies = input.competencies ?? current.competencies;
   const praise = input.praise ?? current.praise;
+  const resume_line = input.resume_line ?? current.resume_line;
   const metadata_status = input.metadata_status ?? current.metadata_status;
   const key_points = input.key_points ?? current.key_points;
   const summary_feedback = input.summary_feedback ?? current.summary_feedback;
   db.prepare(
-    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
+    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
      WHERE id = ? AND user_id = ?`
   ).run(
     title,
@@ -172,6 +178,7 @@ export function updateMemoryMetadata(
     search_text,
     competencies,
     praise,
+    resume_line,
     metadata_status,
     key_points,
     summary_feedback,

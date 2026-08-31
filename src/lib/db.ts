@@ -75,6 +75,7 @@ function migrate(db: DatabaseSync) {
       search_text TEXT,
       competencies TEXT,
       praise TEXT,
+      resume_line TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -508,6 +509,17 @@ function migrate(db: DatabaseSync) {
   // would feel fake. Null for memories created before this existed.
   if (!memoryColumns.includes("praise")) {
     db.exec(`ALTER TABLE memories ADD COLUMN praise TEXT;`);
+  }
+
+  // A single ready-to-use resume bullet line generated alongside praise
+  // above (see generateMemoryMetadata in lib/ai.ts) -- always in English
+  // regardless of the memory's own language, since that's the resume
+  // convention in Strivo's target market. Shown with a one-tap copy button
+  // on the Record success popup and the memory detail page. Same gate as
+  // praise: null whenever competencies is empty. Null for memories created
+  // before this existed.
+  if (!memoryColumns.includes("resume_line")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN resume_line TEXT;`);
   }
 
   // The app's versionName (e.g. "1.5.1"), sent by the client on push-token

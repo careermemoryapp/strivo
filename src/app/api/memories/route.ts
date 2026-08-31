@@ -83,6 +83,9 @@ export async function POST(req: Request) {
       // savedPraise in app/(app)/record/page.tsx). Always null when
       // competencies is empty.
       praise: metadata.praise,
+      // Ready-to-use resume bullet (always English) -- surfaced with a
+      // copy button on the Record success popup and memory detail page.
+      resume_line: metadata.resumeLine,
       metadata_status: "ready",
     });
   } else {

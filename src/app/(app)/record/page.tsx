@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Mic, Square, Check, ArrowRight, Home as HomeIcon, RotateCcw,
   Target, Sparkles as SparklesIcon, CheckCircle2, Lock, ChevronRight,
-  Upload, Paperclip,
+  Upload, Paperclip, Copy, ClipboardCheck,
 } from "lucide-react";
 import { safeJsonParse } from "@/lib/utils";
 import { DarkHeader } from "@/components/DarkHeader";
@@ -65,6 +65,12 @@ export default function RecordPage() {
   // competency was detected.
   const [savedPraise, setSavedPraise] = useState<string | null>(null);
   const [showPraisePopup, setShowPraisePopup] = useState(false);
+  // Ready-to-use resume bullet (always English — see resumeLine in
+  // generateMemoryMetadata, lib/ai.ts) shown alongside the praise in the
+  // same popup, with a one-tap copy so the value isn't just a compliment
+  // but something immediately usable.
+  const [savedResumeLine, setSavedResumeLine] = useState<string | null>(null);
+  const [resumeLineCopied, setResumeLineCopied] = useState(false);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
@@ -132,6 +138,19 @@ export default function RecordPage() {
     }
   }
 
+  async function copyResumeLine() {
+    if (!savedResumeLine) return;
+    try {
+      await navigator.clipboard.writeText(savedResumeLine);
+      setResumeLineCopied(true);
+      setTimeout(() => setResumeLineCopied(false), 2000);
+    } catch {
+      // Clipboard API can be unavailable in some contexts (e.g. no HTTPS,
+      // permission denied) — fail silently, the line is still visible to
+      // select and copy manually.
+    }
+  }
+
   function startOver() {
     speech.reset();
     setTypedText("");
@@ -146,6 +165,8 @@ export default function RecordPage() {
     setSavedCompetencies([]);
     setSavedPraise(null);
     setShowPraisePopup(false);
+    setSavedResumeLine(null);
+    setResumeLineCopied(false);
   }
 
   async function createMemory() {
@@ -168,6 +189,7 @@ export default function RecordPage() {
       const competencies = safeJsonParse<string[]>(data.memory.competencies, []);
       setSavedCompetencies(competencies);
       setSavedPraise(data.memory.praise ?? null);
+      setSavedResumeLine(data.memory.resume_line ?? null);
       setStage("success");
       // Small delay so the popup lands a beat after the success screen
       // appears, instead of both flashing in at once — reads as a genuine
@@ -254,6 +276,29 @@ export default function RecordPage() {
                 </div>
               )}
               <p className="mt-3 text-[15px] leading-relaxed text-ink">{savedPraise}</p>
+
+              {/* Immediately usable, not just a compliment -- a real resume
+                  bullet pulled from this specific story, with any numbers
+                  in the transcript worked in. Always English (see
+                  resumeLine in generateMemoryMetadata, lib/ai.ts) even when
+                  the memory itself was recorded in Hindi, since that's the
+                  resume convention here. */}
+              {savedResumeLine && (
+                <div className="mt-4 rounded-[12px] border border-[#ece5f5] bg-[#f9f8fc] p-3 text-left">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#a29ab9]">
+                    Resume-ready line
+                  </p>
+                  <p className="mt-1 text-sm text-ink leading-snug">{savedResumeLine}</p>
+                  <button
+                    onClick={copyResumeLine}
+                    className="mt-2 flex items-center gap-1 text-xs font-semibold text-[#8b5cf6]"
+                  >
+                    {resumeLineCopied ? <ClipboardCheck size={13} /> : <Copy size={13} />}
+                    {resumeLineCopied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              )}
+
               <button
                 onClick={() => setShowPraisePopup(false)}
                 className="mt-5 w-full rounded-pill py-3 text-sm font-semibold text-white"

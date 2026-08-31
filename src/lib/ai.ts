@@ -47,6 +47,17 @@ export type MemoryMetadata = {
   // reads as a genuine reaction in the moment rather than permanent UI
   // chrome. Null when competencies is empty.
   praise: string | null;
+  // A single polished, resume-ready bullet line built from this memory --
+  // action-verb-led, past tense, with any concrete numbers/metrics in the
+  // transcript pulled in (e.g. "Reduced month-end close from 2 days to 4
+  // hours by leading a billing system migration"). ALWAYS in English
+  // regardless of the transcript's language, since resumes in Strivo's
+  // target market are conventionally written in English even when the
+  // memory itself was dictated in Hindi or mixed language -- unlike
+  // searchText, this one IS shown to the user, just not in their own words.
+  // Same gate as praise: only generated when competencies is non-empty, so
+  // it never fires on a memory with nothing resume-worthy in it.
+  resumeLine: string | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -106,6 +117,7 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
             "Most people telling a casual, everyday story have no idea it happens to be a strong example of something like Leadership or Problem-Solving -- your job here is to spot that for them even though they never used that word themselves and may not think of it that way. " +
             "Equally, don't force a fit: an empty array is correct and expected for a large share of memories (e.g. a plain status update or a memory with no clear personal action in it). " +
             "praise (string or null): ONLY when competencies is non-empty, write one short (1-2 sentence) warm, specific compliment to the person, SAME language as the transcript, in second person, that names the concrete thing they actually did (referencing a real detail, decision, or number from the transcript -- not a vague restatement) and briefly notes it could make a strong interview or resume story. Sound like a genuine reaction from a supportive coach who actually read the story, never like a generic template ('Great job!', 'Well done!') -- it should be obvious it was written about THIS story specifically and would sound wrong attached to a different one. When competencies is empty, praise MUST be null. " +
+            "resumeLine (string or null): ONLY when competencies is non-empty, write ONE polished resume bullet line for this story, ALWAYS IN ENGLISH regardless of the transcript's language. Standard resume conventions: start with a strong past-tense action verb (Led, Reduced, Built, Launched, Resolved, etc.), be a single line with no trailing period, and if the transcript mentions ANY concrete number, percentage, time saved, or scale (team size, users, revenue, duration), work it in naturally -- if the transcript has no numbers, write a strong qualitative bullet instead rather than inventing a fake metric. Never fabricate a number, outcome, or detail that isn't in the transcript. When competencies is empty, resumeLine MUST be null. " +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -143,6 +155,10 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
       // filter above -- enforces the "never praise something that isn't
       // there" rule at the code level too, not just via the prompt.
       praise: filteredCompetencies.length > 0 && typeof parsed.praise === "string" ? parsed.praise.slice(0, 400) : null,
+      resumeLine:
+        filteredCompetencies.length > 0 && typeof parsed.resumeLine === "string"
+          ? parsed.resumeLine.trim().replace(/\.$/, "").slice(0, 200)
+          : null,
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);

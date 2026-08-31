@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
   MoreVertical, Trash2, Pencil, FileText, Sparkles, Mic, Type, CheckCircle2, Paperclip,
-  ThumbsUp, ThumbsDown, Share2, Copy,
+  ThumbsUp, ThumbsDown, Share2, Copy, ClipboardCheck,
 } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
@@ -30,6 +30,7 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
   const [saving, setSaving] = useState(false);
   const [duplicating, setDuplicating] = useState(false);
   const [shareMsg, setShareMsg] = useState<string | null>(null);
+  const [resumeLineCopied, setResumeLineCopied] = useState(false);
 
   async function handleDelete() {
     setDeleting(true);
@@ -79,6 +80,18 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ feedback }),
     });
+  }
+
+  async function copyResumeLine() {
+    if (!memory.resume_line) return;
+    try {
+      await navigator.clipboard.writeText(memory.resume_line);
+      setResumeLineCopied(true);
+      setTimeout(() => setResumeLineCopied(false), 2000);
+    } catch {
+      // Clipboard API can be unavailable in some contexts — fail silently,
+      // the line is still visible to select and copy manually.
+    }
   }
 
   function startEdit() {
@@ -192,6 +205,21 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
               <p className="mt-1.5 text-[11px] text-amber-700/80">
                 {memory.praise || "Worth reusing in an interview or performance review — just ask your AI for it."}
               </p>
+              {memory.resume_line && (
+                <div className="mt-2.5 rounded-[10px] border border-amber-200/70 bg-white/70 px-3 py-2">
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-amber-600">
+                    Resume-ready line
+                  </p>
+                  <p className="mt-1 text-xs text-ink leading-snug">{memory.resume_line}</p>
+                  <button
+                    onClick={copyResumeLine}
+                    className="mt-1.5 flex items-center gap-1 text-[11px] font-semibold text-amber-700"
+                  >
+                    {resumeLineCopied ? <ClipboardCheck size={12} /> : <Copy size={12} />}
+                    {resumeLineCopied ? "Copied" : "Copy"}
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
