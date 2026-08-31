@@ -123,6 +123,10 @@ export async function POST(req: Request) {
       // copy button on the Record success popup and memory detail page.
       resume_line: metadata.resumeLine,
       has_metric: metadata.hasMetric ? 1 : 0,
+      // Optional, skippable follow-up question shown on the Record success
+      // screen (see savedReflectiveQuestion in record/page.tsx). Null when
+      // the AI judged this memory too thin to follow up on.
+      reflective_question: metadata.reflectiveQuestion,
       metadata_status: "ready",
     });
   } else {

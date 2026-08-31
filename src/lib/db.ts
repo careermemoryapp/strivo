@@ -77,6 +77,8 @@ function migrate(db: DatabaseSync) {
       praise TEXT,
       resume_line TEXT,
       has_metric INTEGER NOT NULL DEFAULT 0,
+      reflective_question TEXT,
+      reflective_answer TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -553,6 +555,22 @@ function migrate(db: DatabaseSync) {
   // toward that milestone, not that they're wrongly flagged either way.
   if (!memoryColumns.includes("has_metric")) {
     db.exec(`ALTER TABLE memories ADD COLUMN has_metric INTEGER NOT NULL DEFAULT 0;`);
+  }
+
+  // The optional "someone is actually listening" follow-up question (see
+  // reflectiveQuestion in generateMemoryMetadata, lib/ai.ts), generated
+  // alongside the rest of the AI metadata, plus the user's answer if they
+  // chose to give one (see /api/memories/[id]/reflect). Null question means
+  // the AI judged this memory too thin to follow up on; null answer just
+  // means they haven't answered yet (or skipped it) -- answering also
+  // folds the Q&A into the transcript itself, so reflective_answer here is
+  // a convenience copy for UI purposes, not the only place the content
+  // lives. Null for memories created before this existed.
+  if (!memoryColumns.includes("reflective_question")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN reflective_question TEXT;`);
+  }
+  if (!memoryColumns.includes("reflective_answer")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN reflective_answer TEXT;`);
   }
 
   // The app's versionName (e.g. "1.5.1"), sent by the client on push-token

@@ -30,6 +30,12 @@ export type Memory = {
   // (see hasMetric in generateMemoryMetadata, lib/ai.ts). Powers the "first
   // story backed by a real number" milestone.
   has_metric: number;
+  // See reflectiveQuestion in generateMemoryMetadata (lib/ai.ts) and
+  // /api/memories/[id]/reflect. reflective_question is null when the AI
+  // judged the memory too thin to follow up on; reflective_answer is null
+  // until the user answers (or if they skip it).
+  reflective_question: string | null;
+  reflective_answer: string | null;
   metadata_status: "pending" | "ready" | "failed";
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
@@ -164,6 +170,8 @@ export function updateMemoryMetadata(
       | "praise"
       | "resume_line"
       | "has_metric"
+      | "reflective_question"
+      | "reflective_answer"
       | "metadata_status"
       | "key_points"
       | "summary_feedback"
@@ -184,11 +192,13 @@ export function updateMemoryMetadata(
   const praise = input.praise ?? current.praise;
   const resume_line = input.resume_line ?? current.resume_line;
   const has_metric = input.has_metric ?? current.has_metric;
+  const reflective_question = input.reflective_question ?? current.reflective_question;
+  const reflective_answer = input.reflective_answer ?? current.reflective_answer;
   const metadata_status = input.metadata_status ?? current.metadata_status;
   const key_points = input.key_points ?? current.key_points;
   const summary_feedback = input.summary_feedback ?? current.summary_feedback;
   db.prepare(
-    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
+    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, reflective_question = ?, reflective_answer = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
      WHERE id = ? AND user_id = ?`
   ).run(
     title,
@@ -202,6 +212,8 @@ export function updateMemoryMetadata(
     praise,
     resume_line,
     has_metric,
+    reflective_question,
+    reflective_answer,
     metadata_status,
     key_points,
     summary_feedback,

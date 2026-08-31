@@ -67,6 +67,15 @@ export type MemoryMetadata = {
   // has_metric in lib/repo/memories.ts and the milestone detection in
   // app/api/memories/route.ts).
   hasMetric: boolean;
+  // One short, genuinely curious follow-up question about this specific
+  // memory -- the "someone is actually listening" layer. Shown as an
+  // optional, skippable prompt on the Record success screen; if the user
+  // answers, the answer gets folded into the transcript itself (see
+  // /api/memories/[id]/reflect), making the memory genuinely richer rather
+  // than just decorated. Independent of competencies -- even a mundane
+  // memory can have something worth asking about. Null when the memory is
+  // too thin/trivial to meaningfully follow up on.
+  reflectiveQuestion: string | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -128,6 +137,7 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
             "praise (string or null): ONLY when competencies is non-empty, write one short (1-2 sentence) warm, specific compliment to the person, SAME language as the transcript, in second person, that names the concrete thing they actually did (referencing a real detail, decision, or number from the transcript -- not a vague restatement) and briefly notes it could make a strong interview or resume story. Sound like a genuine reaction from a supportive coach who actually read the story, never like a generic template ('Great job!', 'Well done!') -- it should be obvious it was written about THIS story specifically and would sound wrong attached to a different one. When competencies is empty, praise MUST be null. " +
             "resumeLine (string or null): ONLY when competencies is non-empty, write ONE polished resume bullet line for this story, ALWAYS IN ENGLISH regardless of the transcript's language. Standard resume conventions: start with a strong past-tense action verb (Led, Reduced, Built, Launched, Resolved, etc.), be a single line with no trailing period, and if the transcript mentions ANY concrete number, percentage, time saved, or scale (team size, users, revenue, duration), work it in naturally -- if the transcript has no numbers, write a strong qualitative bullet instead rather than inventing a fake metric. Never fabricate a number, outcome, or detail that isn't in the transcript. When competencies is empty, resumeLine MUST be null. " +
             "hasMetric (boolean): true ONLY if the transcript states at least one concrete, quantifiable metric reflecting real impact or scale -- a percentage, a money amount, a count of people/users/items, a duration saved, a clear before/after number. A date, someone's age, a phone number, or another incidental number does NOT count. false otherwise -- most memories should be false. " +
+            "reflectiveQuestion (string or null): one short, genuinely curious follow-up question about THIS specific memory, SAME language as the transcript, the kind a thoughtful friend or coach would actually wonder after hearing this story -- grounded in a specific real detail from the transcript (name what happened, don't ask generically). Examples of the RIGHT kind of specificity: 'What made you decide to split it into two phases instead of pushing back the whole deadline?' -- NOT a generic template like 'How did that make you feel?' that could be pasted onto any memory. Return null if the memory is too thin or routine to meaningfully follow up on (e.g. a one-line status note with nothing left to explore) -- don't force a question onto everything. " +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -170,6 +180,7 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
           ? parsed.resumeLine.trim().replace(/\.$/, "").slice(0, 200)
           : null,
       hasMetric: parsed.hasMetric === true,
+      reflectiveQuestion: typeof parsed.reflectiveQuestion === "string" ? parsed.reflectiveQuestion.slice(0, 300) : null,
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);

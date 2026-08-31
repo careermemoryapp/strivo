@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Mic, Square, Check, ArrowRight, Home as HomeIcon, RotateCcw,
   Target, Sparkles as SparklesIcon, CheckCircle2, Lock, ChevronRight,
-  Upload, Paperclip, Copy, ClipboardCheck, Award,
+  Upload, Paperclip, Copy, ClipboardCheck, Award, MessageCircleQuestion,
 } from "lucide-react";
 import { safeJsonParse } from "@/lib/utils";
 import { DarkHeader } from "@/components/DarkHeader";
@@ -78,6 +78,18 @@ export default function RecordPage() {
   // popup as the praise above when present, but can also open the popup on
   // its own when there's a milestone with no competency praise attached.
   const [savedMilestones, setSavedMilestones] = useState<string[]>([]);
+  // The optional "someone is actually listening" follow-up question (see
+  // reflectiveQuestion in generateMemoryMetadata, lib/ai.ts) -- shown as an
+  // inline, skippable prompt on the success screen rather than a popup,
+  // since it asks for input instead of just delivering a reaction. Null
+  // when the AI judged this memory too thin to follow up on.
+  const [savedReflectiveQuestion, setSavedReflectiveQuestion] = useState<string | null>(null);
+  const [reflectionText, setReflectionText] = useState("");
+  const [reflectionSaving, setReflectionSaving] = useState(false);
+  // "answered" | "skipped" collapses the prompt into a quiet confirmation
+  // instead of leaving an answered (or dismissed) question sitting on
+  // screen looking unfinished.
+  const [reflectionOutcome, setReflectionOutcome] = useState<"answered" | "skipped" | null>(null);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
@@ -175,6 +187,31 @@ export default function RecordPage() {
     setSavedResumeLine(null);
     setResumeLineCopied(false);
     setSavedMilestones([]);
+    setSavedReflectiveQuestion(null);
+    setReflectionText("");
+    setReflectionSaving(false);
+    setReflectionOutcome(null);
+  }
+
+  async function submitReflection() {
+    if (!savedMemoryId || !reflectionText.trim()) return;
+    setReflectionSaving(true);
+    try {
+      const res = await fetch(`/api/memories/${savedMemoryId}/reflect`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answer: reflectionText.trim() }),
+      });
+      if (!res.ok) throw new Error();
+      setReflectionOutcome("answered");
+    } catch {
+      // Best-effort, non-critical enrichment -- the memory itself is
+      // already safely saved either way, so a failure here just leaves the
+      // prompt visible to retry rather than showing a scary error banner.
+      setReflectionSaving(false);
+      return;
+    }
+    setReflectionSaving(false);
   }
 
   async function createMemory() {
@@ -200,6 +237,7 @@ export default function RecordPage() {
       setSavedResumeLine(data.memory.resume_line ?? null);
       const milestones: string[] = Array.isArray(data.milestones) ? data.milestones : [];
       setSavedMilestones(milestones);
+      setSavedReflectiveQuestion(data.memory.reflective_question ?? null);
       setStage("success");
       // Small delay so the popup lands a beat after the success screen
       // appears, instead of both flashing in at once — reads as a genuine
@@ -235,6 +273,58 @@ export default function RecordPage() {
               ? "Your AI has generated a title, summary, and tags for it."
               : "We saved your transcript. AI summary generation didn't complete, but your words are safe — you can still view and search this memory."}
           </p>
+
+          {/* Optional, skippable follow-up question -- the "someone is
+              actually listening" layer. Answering folds the answer into
+              the transcript itself (see /api/memories/[id]/reflect), so a
+              thin memory can become genuinely richer, not just decorated.
+              Inline rather than a popup since it asks for input instead of
+              just delivering a reaction. */}
+          {savedReflectiveQuestion && (
+            <div className="mt-5 w-full rounded-[14px] border border-[#ece5f5] bg-[#f9f8fc] p-4 text-left">
+              {reflectionOutcome ? (
+                <p className="flex items-center gap-1.5 text-sm text-ink-soft">
+                  <CheckCircle2 size={15} className="shrink-0 text-[#8b5cf6]" />
+                  {reflectionOutcome === "answered"
+                    ? "Added to your memory — thanks for the extra detail."
+                    : "No problem — you can always add more from the memory later."}
+                </p>
+              ) : (
+                <>
+                  <p className="flex items-center gap-1.5 text-sm font-semibold text-[#3c3650]">
+                    <MessageCircleQuestion size={15} className="shrink-0 text-[#8b5cf6]" />
+                    One more thing —
+                  </p>
+                  <p className="mt-1 text-sm text-ink-soft">{savedReflectiveQuestion}</p>
+                  <textarea
+                    value={reflectionText}
+                    onChange={(e) => setReflectionText(e.target.value)}
+                    rows={2}
+                    placeholder="Totally optional…"
+                    className="mt-2.5 w-full rounded-[10px] border border-[#ece5f5] bg-surface p-2.5 text-sm text-ink outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20 resize-none"
+                  />
+                  <div className="mt-2.5 flex gap-2">
+                    <button
+                      onClick={() => setReflectionOutcome("skipped")}
+                      disabled={reflectionSaving}
+                      className="flex-1 rounded-pill border border-[#ece5f5] py-2 text-xs font-semibold text-ink-soft disabled:opacity-50"
+                    >
+                      Skip
+                    </button>
+                    <button
+                      onClick={submitReflection}
+                      disabled={!reflectionText.trim() || reflectionSaving}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-pill py-2 text-xs font-semibold text-white disabled:opacity-50"
+                      style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                    >
+                      {reflectionSaving && <Spinner className="h-3.5 w-3.5 border-white/40 border-t-white" />}
+                      Add this
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           <div className="mt-8 w-full space-y-3">
             {savedMemoryId && (
