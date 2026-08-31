@@ -3,6 +3,7 @@ import { touchChat } from "@/lib/repo/chats";
 import { retrieveRelevantMemories, type RetrievalResult } from "@/lib/retrieval";
 import { buildSystemPrompt, chatCompletion, generateChatTitle, type ChatMessage } from "@/lib/ai";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
+import { getUserById } from "@/lib/repo/users";
 
 const HISTORY_LIMIT = 16;
 
@@ -68,7 +69,10 @@ export async function sendUserMessageAndGetReply(
     return { userMessage, aiMessage, retrieval, error: "ai_chat feature disabled" };
   }
 
-  const systemPrompt = buildSystemPrompt(retrieval.memories);
+  // Best-effort: a lookup failure here just means the chat AI won't have a
+  // name to use, not something worth failing the whole reply over.
+  const firstName = getUserById(userId)?.first_name ?? null;
+  const systemPrompt = buildSystemPrompt(retrieval.memories, new Date(), firstName);
   const result = await chatCompletion(systemPrompt, history);
 
   if ("error" in result) {

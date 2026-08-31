@@ -112,9 +112,18 @@ export const COMPETENCY_OPTIONS = [
 // Generates title/summary/category/tags for a raw transcript. Returns null
 // on ANY failure — callers must still keep the raw transcript saved either
 // way (the user's words matter more than the AI metadata).
-export async function generateMemoryMetadata(transcript: string): Promise<MemoryMetadata | null> {
+export async function generateMemoryMetadata(transcript: string, firstName?: string | null): Promise<MemoryMetadata | null> {
   const openai = getClient();
   if (!openai) return null;
+  // Same "occasionally, never forced" name guidance as buildSystemPrompt's
+  // nameContext -- only given to the model when a name is actually
+  // available, and phrased as a light option for praise/reflectiveQuestion
+  // specifically (the two fields written directly to the person, in second
+  // person) rather than every field, since title/summary/keyPoints are
+  // meant to stay neutral record-keeping, not a personal address.
+  const nameHint = firstName
+    ? ` The person's first name is ${firstName} -- you may use it occasionally in praise or reflectiveQuestion when it feels natural (e.g. opening the sentence), but don't force it into every one; most should read fine without it.`
+    : "";
   try {
     const completion = await openai.chat.completions.create({
       model: CHAT_MODEL,
@@ -124,7 +133,9 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
         {
           role: "system",
           content:
-            "You turn a raw first-person memory transcript (spoken or typed, in any language) into structured metadata. " +
+            "You turn a raw first-person memory transcript (spoken or typed, in any language) into structured metadata." +
+            nameHint +
+            " " +
             "Respond ONLY with a JSON object with keys: title (string, <=8 words, concrete and specific, SAME language as the transcript), " +
             "summary (string, 1-2 sentences, third-person-neutral but factual, a brief intro to what happened, SAME language as the transcript), " +
             "keyPoints (array of 3-6 short factual bullet points capturing the specific details, decisions, numbers and outcomes mentioned, SAME language as the transcript), " +
@@ -500,10 +511,21 @@ function todayIstLabel(now: Date = new Date()): string {
 // memories are actually present.
 const warmthContext = `\n\nTone: you're a supportive coach the user actually knows, not a neutral lookup tool. When you're giving a PERSONAL answer and a memory you're drawing on shows something genuinely admirable -- real initiative, growth, a hard problem solved well -- it's good to briefly acknowledge that in passing, in a short clause, not a paragraph. Use this sparingly: only when it genuinely fits what's being asked, never in every reply, and never in place of or delaying the actual answer. Skip it entirely for GENERIC questions -- those should just be answered directly.`;
 
-export function buildSystemPrompt(memories: Memory[], now: Date = new Date()): string {
+// The "you're a coach who actually knows this person" layer, part 2: their
+// first name. Deliberately worded the same way as warmthContext above --
+// "occasionally," "sparingly," "never forced" -- because a name dropped into
+// every single reply reads like a mail-merge, not familiarity. Omitted
+// entirely (see buildSystemPrompt) when the caller doesn't have a name to
+// give it, rather than falling back to something generic like "there."
+function nameContext(firstName: string): string {
+  return `\n\nThe user's first name is ${firstName}. You can address them by name occasionally when it genuinely fits -- opening a reply, or a warm aside -- but not in every message, and never forced into a spot that doesn't call for it.`;
+}
+
+export function buildSystemPrompt(memories: Memory[], now: Date = new Date(), firstName?: string | null): string {
   const dateContext = `\n\nToday's date is ${todayIstLabel(now)} (India Standard Time). Use this to correctly judge date-relative questions ("today," "yesterday," "this week," a specific date, etc.) against each memory's Date field below. If a memory's date genuinely falls in the period the user is asking about, treat it as relevant with confidence -- do not hedge or claim "no relevant memory" out of uncertainty about what day it is; you now know.`;
+  const nameCtx = firstName ? nameContext(firstName) : "";
   if (memories.length === 0) {
-    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.`;
+    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.`;
   }
   const competencyContext = `\n\nEach memory below may list Competencies -- behavioral-interview qualities (Leadership, Problem-Solving, etc.) that memory was independently identified as genuinely demonstrating, generated when it was recorded (see generateMemoryMetadata). The user themselves may not realize a memory qualifies -- they might have just described a normal day, not framed it as a "leadership story." When asked for an example of a specific competency (e.g. "give me a leadership example," "tell me about a time you solved a problem"), actively use this field to find the match rather than only pattern-matching the user's own wording against the transcript, and you can point out to them that this is a strong example of that competency even if they didn't call it that themselves.`;
   const context = memories
@@ -513,7 +535,7 @@ export function buildSystemPrompt(memories: Memory[], now: Date = new Date()): s
       return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
 }
 
 function safeParseStringArray(value: string | null): string[] {

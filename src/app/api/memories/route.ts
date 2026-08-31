@@ -12,7 +12,7 @@ import {
 } from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
-import { isTrialExpired } from "@/lib/repo/users";
+import { isTrialExpired, getUserById } from "@/lib/repo/users";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -90,7 +90,11 @@ export async function POST(req: Request) {
   // this memory -- exactly what "is this the first" needs to check against.
   const milestones: string[] = [];
 
-  const metadata = await generateMemoryMetadata(transcript);
+  // Best-effort: lets praise/reflectiveQuestion address the user by name
+  // occasionally (see the nameHint comment in generateMemoryMetadata) --
+  // a lookup miss here just means those fields fall back to no name.
+  const firstName = getUserById(userId)?.first_name ?? null;
+  const metadata = await generateMemoryMetadata(transcript, firstName);
   if (metadata) {
     const priorCompetencyCounts = countMemoriesByCompetency(userId);
     const priorMetricCount = countMemoriesWithMetric(userId);

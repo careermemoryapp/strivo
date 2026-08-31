@@ -7,7 +7,7 @@ import {
   Target, Sparkles as SparklesIcon, CheckCircle2, Lock, ChevronRight,
   Upload, Paperclip, Copy, ClipboardCheck, Award, MessageCircleQuestion,
 } from "lucide-react";
-import { safeJsonParse } from "@/lib/utils";
+import { safeJsonParse, pickVariant } from "@/lib/utils";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
@@ -26,6 +26,21 @@ const TIPS = [
   { icon: SparklesIcon, title: "Speak naturally", desc: "No need to structure. Just talk." },
   { icon: CheckCircle2, title: "One thought", desc: "Focus on one idea or moment at a time." },
 ];
+
+// The Record success screen is shown after literally every save -- the
+// single most-repeated screen in the app -- so its copy is the highest-
+// leverage place to avoid the "same sentence every single time" robotic
+// feeling. Picked deterministically per-memory (see pickVariant in
+// lib/utils.ts) rather than randomly on every render, so it's stable for a
+// given memory instead of flickering. Kept to small, equivalent-meaning
+// pools -- this is a tone touch, not a place to introduce ambiguity.
+const SAVED_HEADINGS = ["Your memory is saved", "Saved — one more story captured", "Got it, safely saved"];
+const AI_GENERATED_SUBTEXT = [
+  "Your AI has generated a title, summary, and tags for it.",
+  "We've pulled out a title, summary, and tags automatically.",
+  "Titled, summarized, and tagged — ready whenever you want it.",
+];
+const ONE_MORE_THING_LABELS = ["One more thing —", "Quick follow-up —", "Curious about one thing —"];
 
 const MAX_RECORD_SECONDS = 2 * 60;
 const UPLOAD_ACCEPT = ".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt";
@@ -260,6 +275,10 @@ export default function RecordPage() {
   }
 
   if (stage === "success") {
+    // Seeded by the memory id so the phrasing is stable for this memory
+    // (no flicker on re-render) but varies from save to save -- see
+    // SAVED_HEADINGS etc. above.
+    const variantSeed = savedMemoryId ?? "";
     return (
       <div className="pb-6">
         <DarkHeader inlineTitle="Memory Saved" />
@@ -267,10 +286,10 @@ export default function RecordPage() {
           <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-50 text-green-600">
             <Check size={30} />
           </div>
-          <h2 className="text-lg font-semibold text-ink">Your memory is saved</h2>
+          <h2 className="text-lg font-semibold text-ink">{pickVariant(variantSeed, SAVED_HEADINGS)}</h2>
           <p className="mt-1 text-sm text-ink-soft max-w-xs">
             {aiGenerated
-              ? "Your AI has generated a title, summary, and tags for it."
+              ? pickVariant(variantSeed, AI_GENERATED_SUBTEXT)
               : "We saved your transcript. AI summary generation didn't complete, but your words are safe — you can still view and search this memory."}
           </p>
 
@@ -293,7 +312,7 @@ export default function RecordPage() {
                 <>
                   <p className="flex items-center gap-1.5 text-sm font-semibold text-[#3c3650]">
                     <MessageCircleQuestion size={15} className="shrink-0 text-[#8b5cf6]" />
-                    One more thing —
+                    {pickVariant(variantSeed, ONE_MORE_THING_LABELS)}
                   </p>
                   <p className="mt-1 text-sm text-ink-soft">{savedReflectiveQuestion}</p>
                   <textarea

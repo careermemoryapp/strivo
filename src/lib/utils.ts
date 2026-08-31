@@ -71,3 +71,27 @@ export function initials(firstName?: string | null, lastName?: string | null): s
   const b = (lastName ?? "").trim().charAt(0);
   return (a + b).toUpperCase() || "?";
 }
+
+// Small deterministic string hash (not cryptographic -- just needs to spread
+// different seeds across bucket indices reasonably evenly) used by
+// pickVariant below.
+function hashString(input: string): number {
+  let hash = 0;
+  for (let i = 0; i < input.length; i++) {
+    hash = (hash << 5) - hash + input.charCodeAt(i);
+    hash |= 0; // keep it a 32-bit int
+  }
+  return Math.abs(hash);
+}
+
+// Deterministically picks one of several equivalent phrasings based on a
+// seed (e.g. a memory id) -- used so small pieces of static UI copy (the
+// Record success screen, in particular, since it's the one screen shown
+// after literally every save) don't read as the exact same sentence,
+// byte-for-byte, every single time, while still being stable for a given
+// seed across re-renders instead of flickering between options. Not meant
+// for anything load-bearing -- purely a "doesn't feel robotic" touch.
+export function pickVariant(seed: string, options: string[]): string {
+  if (options.length === 0) return "";
+  return options[hashString(seed) % options.length];
+}

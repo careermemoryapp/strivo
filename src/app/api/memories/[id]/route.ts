@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/serverAuth";
 import { getMemoryById, deleteMemory, updateMemoryMetadata } from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
+import { getUserById } from "@/lib/repo/users";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await requireUserId();
@@ -47,7 +48,8 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   updateMemoryMetadata(userId, id, { transcript: parsed.data.transcript, metadata_status: "pending" });
 
-  const metadata = await generateMemoryMetadata(parsed.data.transcript);
+  const firstName = getUserById(userId)?.first_name ?? null;
+  const metadata = await generateMemoryMetadata(parsed.data.transcript, firstName);
   if (metadata) {
     updateMemoryMetadata(userId, id, {
       summary: metadata.summary,
