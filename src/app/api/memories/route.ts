@@ -75,6 +75,9 @@ export async function POST(req: Request) {
       category: metadata.category,
       tags: JSON.stringify(metadata.tags),
       search_text: metadata.searchText,
+      // See COMPETENCY_OPTIONS in lib/ai.ts -- surfaced back to the user on
+      // the Record success screen and shown on the memory detail page.
+      competencies: JSON.stringify(metadata.competencies),
       metadata_status: "ready",
     });
   } else {

@@ -30,6 +30,14 @@ export type MemoryMetadata = {
   // expected) that a Hindi memory's user-facing summary above stays in
   // Hindi while this field is always English.
   searchText: string;
+  // Which behavioral-interview competencies this story actually
+  // demonstrates (see COMPETENCY_OPTIONS below) -- e.g. Leadership,
+  // Problem-Solving. This is the "you might not realize this is a great
+  // example" layer: a user dictating a casual story about helping a
+  // teammate has no reason to know that's a strong Leadership example
+  // unless something tells them. 0-3 entries, empty when nothing genuinely
+  // fits -- not every memory should get tagged.
+  competencies: string[];
 };
 
 const CATEGORY_OPTIONS = [
@@ -42,6 +50,25 @@ const CATEGORY_OPTIONS = [
   "Achievement",
   "Personal",
   "General",
+];
+
+// Standard behavioral-interview competency taxonomy (the kind of thing STAR
+// answers and "tell me about a time..." questions are built around).
+// Deliberately broad/role-agnostic rather than corporate-leadership-only,
+// since Strivo's users span many kinds of roles, not just management.
+export const COMPETENCY_OPTIONS = [
+  "Leadership",
+  "Ownership & Initiative",
+  "Problem-Solving",
+  "Collaboration & Teamwork",
+  "Communication",
+  "Conflict Resolution",
+  "Mentorship & Coaching",
+  "Innovation & Creativity",
+  "Adaptability & Resilience",
+  "Strategic Thinking",
+  "Stakeholder Focus",
+  "Results & Impact",
 ];
 
 // Generates title/summary/category/tags for a raw transcript. Returns null
@@ -65,6 +92,10 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
             "keyPoints (array of 3-6 short factual bullet points capturing the specific details, decisions, numbers and outcomes mentioned, SAME language as the transcript), " +
             `category (one of: ${CATEGORY_OPTIONS.join(", ")}), tags (array of 2-5 short lowercase keyword strings), ` +
             "searchText (string, 2-4 sentences, ALWAYS IN ENGLISH regardless of the transcript's language — translate it if the transcript isn't already English; this is for internal search indexing only and is never shown to the user, so prioritize covering the concrete nouns/topics/keywords over elegant phrasing). " +
+            `competencies (array, 0-3 items, ONLY from this exact list: ${COMPETENCY_OPTIONS.join(", ")}). ` +
+            "Include a competency ONLY if the transcript genuinely demonstrates it through a specific action the person took or decision they made -- not because the topic is loosely related. " +
+            "Most people telling a casual, everyday story have no idea it happens to be a strong example of something like Leadership or Problem-Solving -- your job here is to spot that for them even though they never used that word themselves and may not think of it that way. " +
+            "Equally, don't force a fit: an empty array is correct and expected for a large share of memories (e.g. a plain status update or a memory with no clear personal action in it). " +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -86,6 +117,14 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
       // still better than nothing for cross-language matching, even though
       // it won't be a guaranteed-English translation in that fallback case.
       searchText: parsed.searchText ? String(parsed.searchText).slice(0, 2000) : String(parsed.summary).slice(0, 2000),
+      // Filter against the fixed list rather than trusting the model's
+      // output verbatim -- keeps this a closed taxonomy (needed so the UI
+      // badge styling and retrieval keyword-matching in lib/retrieval.ts
+      // can rely on exact values) even if the model paraphrases or
+      // hallucinates an item outside the list.
+      competencies: Array.isArray(parsed.competencies)
+        ? parsed.competencies.filter((c: unknown) => COMPETENCY_OPTIONS.includes(String(c))).slice(0, 3)
+        : [],
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
@@ -273,19 +312,21 @@ export function buildSystemPrompt(memories: Memory[], now: Date = new Date()): s
   if (memories.length === 0) {
     return `${SYSTEM_PROMPT_BASE}${dateContext}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.`;
   }
+  const competencyContext = `\n\nEach memory below may list Competencies -- behavioral-interview qualities (Leadership, Problem-Solving, etc.) that memory was independently identified as genuinely demonstrating, generated when it was recorded (see generateMemoryMetadata). The user themselves may not realize a memory qualifies -- they might have just described a normal day, not framed it as a "leadership story." When asked for an example of a specific competency (e.g. "give me a leadership example," "tell me about a time you solved a problem"), actively use this field to find the match rather than only pattern-matching the user's own wording against the transcript, and you can point out to them that this is a strong example of that competency even if they didn't call it that themselves.`;
   const context = memories
     .map((m, i) => {
-      const tags = safeParseTags(m.tags);
-      return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
+      const tags = safeParseStringArray(m.tags);
+      const competencies = safeParseStringArray(m.competencies);
+      return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}${dateContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
 }
 
-function safeParseTags(tags: string | null): string[] {
-  if (!tags) return [];
+function safeParseStringArray(value: string | null): string[] {
+  if (!value) return [];
   try {
-    const parsed = JSON.parse(tags);
+    const parsed = JSON.parse(value);
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];

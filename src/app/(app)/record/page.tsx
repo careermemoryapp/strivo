@@ -7,6 +7,7 @@ import {
   Target, Sparkles as SparklesIcon, CheckCircle2, Lock, ChevronRight,
   Upload, Paperclip,
 } from "lucide-react";
+import { safeJsonParse } from "@/lib/utils";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { Button } from "@/components/Button";
@@ -49,6 +50,13 @@ export default function RecordPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [savedMemoryId, setSavedMemoryId] = useState<string | null>(null);
   const [aiGenerated, setAiGenerated] = useState(true);
+  // Competencies (Leadership, Problem-Solving, etc.) the AI spotted in what
+  // was just recorded -- see COMPETENCY_OPTIONS in lib/ai.ts. This is the
+  // actual point of the feature: most people dictating a normal story have
+  // no idea it happens to be a strong interview example, so surfacing it
+  // right here, the moment it's saved, is what makes that visible instead
+  // of it sitting undiscovered until someone happens to open the memory.
+  const [savedCompetencies, setSavedCompetencies] = useState<string[]>([]);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
@@ -146,6 +154,7 @@ export default function RecordPage() {
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
       setSavedMemoryId(data.memory.id);
       setAiGenerated(!!data.aiMetadataGenerated);
+      setSavedCompetencies(safeJsonParse<string[]>(data.memory.competencies, []));
       setStage("success");
     } catch (e) {
       setSaveError(
@@ -172,6 +181,31 @@ export default function RecordPage() {
               ? "Your AI has generated a title, summary, and tags for it."
               : "We saved your transcript. AI summary generation didn't complete, but your words are safe — you can still view and search this memory."}
           </p>
+
+          {/* The actual point of competency detection: most people telling
+              a normal, casual story have no reason to know it happens to
+              be a strong interview example -- so tell them, right here,
+              the moment it's saved, instead of leaving it to surface only
+              if they happen to reopen this memory later. See
+              COMPETENCY_OPTIONS in lib/ai.ts. */}
+          {savedCompetencies.length > 0 && (
+            <div className="mt-5 w-full rounded-[14px] border border-amber-200 bg-amber-50 px-4 py-3.5 text-left">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-amber-700">
+                <SparklesIcon size={15} /> Nice — this is a strong example of:
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {savedCompetencies.map((c) => (
+                  <span key={c} className="rounded-pill bg-white px-2.5 py-1 text-xs font-semibold text-amber-700">
+                    {c}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-2 text-xs text-amber-700/80">
+                You may not have thought of it that way, but this could make a great interview or performance-review answer. Just ask your AI for it later.
+              </p>
+            </div>
+          )}
+
           <div className="mt-8 w-full space-y-3">
             {savedMemoryId && (
               <button

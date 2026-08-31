@@ -197,8 +197,11 @@ function keywordScore(queryTokens: string[], memory: Memory): number {
   // lib/ai.ts) is included here so an English-translated query can still
   // find keyword corroboration against a memory that was recorded in a
   // different language — the original title/transcript alone would never
-  // share literal words with a translated query.
-  const haystack = `${memory.title} ${memory.summary ?? ""} ${memory.transcript} ${memory.tags ?? ""} ${memory.search_text ?? ""}`.toLowerCase();
+  // share literal words with a translated query. competencies is included
+  // for the same reason a "give me a leadership example" query needs to
+  // reach a memory whose transcript never literally says "leadership" — see
+  // COMPETENCY_OPTIONS in lib/ai.ts.
+  const haystack = `${memory.title} ${memory.summary ?? ""} ${memory.transcript} ${memory.tags ?? ""} ${memory.search_text ?? ""} ${memory.competencies ?? ""}`.toLowerCase();
   let score = 0;
   for (const token of queryTokens) {
     if (haystack.includes(token)) score += 1;

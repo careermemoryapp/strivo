@@ -12,6 +12,11 @@ export type Memory = {
   // English translation/paraphrase used only for cross-language matching —
   // see the migration comment in lib/db.ts. Never rendered in the UI.
   search_text: string | null;
+  // JSON string array of behavioral-interview competencies (Leadership,
+  // Problem-Solving, etc.) this memory was identified as demonstrating —
+  // see COMPETENCY_OPTIONS in lib/ai.ts and the migration comment in
+  // lib/db.ts.
+  competencies: string | null;
   metadata_status: "pending" | "ready" | "failed";
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
@@ -126,6 +131,7 @@ export function updateMemoryMetadata(
       | "tags"
       | "embedding"
       | "search_text"
+      | "competencies"
       | "metadata_status"
       | "key_points"
       | "summary_feedback"
@@ -142,11 +148,12 @@ export function updateMemoryMetadata(
   const tags = input.tags ?? current.tags;
   const embedding = input.embedding ?? current.embedding;
   const search_text = input.search_text ?? current.search_text;
+  const competencies = input.competencies ?? current.competencies;
   const metadata_status = input.metadata_status ?? current.metadata_status;
   const key_points = input.key_points ?? current.key_points;
   const summary_feedback = input.summary_feedback ?? current.summary_feedback;
   db.prepare(
-    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
+    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
      WHERE id = ? AND user_id = ?`
   ).run(
     title,
@@ -156,6 +163,7 @@ export function updateMemoryMetadata(
     tags,
     embedding,
     search_text,
+    competencies,
     metadata_status,
     key_points,
     summary_feedback,

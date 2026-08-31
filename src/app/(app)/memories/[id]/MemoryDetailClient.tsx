@@ -107,6 +107,7 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
 
   const { icon: Icon } = memoryCategoryDef(memory.category);
   const keyPoints = safeJsonParse<string[]>(memory.key_points, []);
+  const competencies = safeJsonParse<string[]>(memory.competencies, []);
   const wordCount = memory.transcript.trim().split(/\s+/).filter(Boolean).length;
 
   return (
@@ -168,6 +169,31 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
               </div>
             </div>
           </div>
+
+          {/* Competencies (Leadership, Problem-Solving, etc.) the AI
+              identified this memory as genuinely demonstrating, even though
+              the person almost certainly didn't frame it that way
+              themselves when recording it — see COMPETENCY_OPTIONS in
+              lib/ai.ts. Distinct amber/gold styling (vs. the purple category
+              pill above) to read as "here's something notable," not just
+              another classification tag. */}
+          {competencies.length > 0 && (
+            <div className="mt-4 rounded-[13px] border border-amber-200 bg-amber-50 px-3.5 py-3">
+              <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-700">
+                <Sparkles size={13} /> This looks like a strong example of:
+              </p>
+              <div className="mt-1.5 flex flex-wrap gap-1.5">
+                {competencies.map((c) => (
+                  <span key={c} className="rounded-pill bg-white px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                    {c}
+                  </span>
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-amber-700/80">
+                Worth reusing in an interview or performance review — just ask your AI for it.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="flex gap-1 rounded-pill bg-[#f2effa] p-1">

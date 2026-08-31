@@ -72,6 +72,8 @@ function migrate(db: DatabaseSync) {
       source TEXT NOT NULL DEFAULT 'text',
       key_points TEXT,
       summary_feedback TEXT,
+      search_text TEXT,
+      competencies TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     );
@@ -480,6 +482,20 @@ function migrate(db: DatabaseSync) {
   const memoryColumns = (db.prepare(`PRAGMA table_info(memories)`).all() as { name: string }[]).map((c) => c.name);
   if (!memoryColumns.includes("search_text")) {
     db.exec(`ALTER TABLE memories ADD COLUMN search_text TEXT;`);
+  }
+
+  // Interview-competency tags (Leadership, Ownership & Initiative,
+  // Problem-Solving, etc. — see COMPETENCY_OPTIONS in lib/ai.ts), generated
+  // alongside the rest of the AI metadata. Distinct from `category` (one
+  // broad classification like Work/Meeting) and `tags` (freeform keywords)
+  // -- this is specifically "which behavioral-interview competencies does
+  // this story actually demonstrate," so a memory a user dictated casually
+  // (e.g. "I helped a stuck teammate finish their part") can still surface
+  // as a strong Leadership example even though the word "leadership" never
+  // appears in it and they never framed it that way themselves. Null for
+  // memories created before this existed.
+  if (!memoryColumns.includes("competencies")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN competencies TEXT;`);
   }
 
   // The app's versionName (e.g. "1.5.1"), sent by the client on push-token
