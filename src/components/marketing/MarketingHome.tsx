@@ -401,28 +401,28 @@ const OVER_TIME_FEATURES = [
 const COMPARISON_POINTS = [
   {
     title: "Follows up, unprompted",
-    strivo: "Remembers something you mentioned was coming up and checks back in days later — no chat to keep open, nothing to set a reminder for.",
-    others: "Only responds inside a conversation you start. Nothing happens once you close the tab.",
+    strivo: "You mention an interview next Tuesday. Five days later — completely on its own, no chat open, no reminder set — Strivo asks how it went, and turns your answer into a story you can actually use.",
+    others: "The moment you close the tab, the conversation is gone. Nothing comes back to check on you — ever.",
   },
   {
     title: "Organizes your stories by competency",
-    strivo: "Every memory is auto-tagged (Leadership, Problem-Solving, and 20 more) and tracked in a Story Bank, so gaps are visible at a glance.",
-    others: "General-purpose chat with no structured tracking of what you've told it over time.",
+    strivo: "Every memory is auto-tagged the second you record it — Leadership, Problem-Solving, and 20 more. Open your Story Bank and know exactly which \"tell me about a time...\" questions you can already answer, and which you can't yet.",
+    others: "No memory of the shape of what you've told it. Finding that one story again means scrolling back through old chats and hoping you remember which one.",
   },
   {
     title: "Reacts to what you just said",
-    strivo: "Notices when a story shows real skill or persistence and tells you, unprompted, right after you record it.",
-    others: "Waits to be asked. Won't flag anything as noteworthy on its own.",
+    strivo: "You finish talking. Before you've even opened a new screen, it tells you — unprompted — \"that's a strong Leadership example.\" You didn't have to ask. It noticed.",
+    others: "Says nothing unless you explicitly ask it to evaluate your story. Most people never think to ask, so most good stories go unnoticed.",
   },
   {
     title: "Writes the resume line for you",
-    strivo: "A polished, numbers-included bullet generated automatically from the story you told — ready to copy.",
-    others: "Requires you to ask, then re-explain the context, every single time.",
+    strivo: "A polished, numbers-included bullet — built automatically the moment you finish your story, sitting there ready to copy straight into your resume.",
+    others: "You have to ask for it, re-explain the context, and hope it gets the numbers right — every single time.",
   },
   {
     title: "Sends real check-ins automatically",
-    strivo: "Weekly recaps, monthly growth reflections, quarterly benchmarks — pushed to your phone without you asking.",
-    others: "Zero proactive outreach. Every insight has to be requested.",
+    strivo: "A recap of your week. A read on how you've grown. A quarter measured honestly against the one before it. All pushed to your phone — you never once have to go looking for them.",
+    others: "Nothing arrives on its own. Every insight, every recap, every reflection has to be requested, from scratch, by you.",
   },
 ];
 
@@ -703,11 +703,13 @@ export function MarketingHome({
             <FlowConnector />
           </motion.div>
 
-          {/* Right: over time */}
+          {/* Right: over time -- blue-tinted background (not green), matching
+              the site's own violet/blue palette and the same two-tone
+              language used in the comparison section below. */}
           <motion.div
             variants={fadeUp}
             className="rounded-2xl border border-[#2a2a35] p-6 sm:p-7"
-            style={{ background: "linear-gradient(160deg,#0d1a16,#0d0d14)" }}
+            style={{ background: "linear-gradient(160deg,#0d1622,#0d0d14)" }}
           >
             <div className="mb-5 flex items-center gap-2">
               <span className="h-2 w-2 rounded-full" style={{ background: "#60a5fa", boxShadow: "0 0 8px #60a5fa" }} />
