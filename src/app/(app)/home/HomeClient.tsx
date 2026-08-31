@@ -2,7 +2,7 @@
 
 import { useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp } from "lucide-react";
+import { ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
@@ -32,6 +32,11 @@ type HomeData = {
   // GROWTH_VISIBLE_MS in page.tsx) -- the "How You've Grown" feature (see
   // app/(app)/growth), whose primary delivery is also a push notification.
   growth: { text: string } | null;
+  // Present only when a recent quarterly benchmark exists (see
+  // BENCHMARK_VISIBLE_MS in page.tsx) -- the "You vs. You" feature (see
+  // app/(app)/benchmark), whose primary delivery is also a push
+  // notification.
+  benchmark: { text: string; quarterLabel: string } | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -274,6 +279,32 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
               <p className="truncate text-[11px] text-[#4a4270]/70">{data.growth.text}</p>
             </div>
             <ChevronRight size={15} className="shrink-0 text-[#c3bce3]" />
+          </button>
+        </div>
+      )}
+
+      {/* Quarterly benchmark teaser -- secondary surface for anyone who
+          opens the app without tapping the push notification (see
+          /benchmark and BENCHMARK_VISIBLE_MS in page.tsx). Teal/emerald,
+          matching the /benchmark page's own card, and distinct from the
+          recap (indigo) and growth (violet) teasers above since this one
+          leads with real numbers rather than pure narrative. */}
+      {data.benchmark && (
+        <div className="px-5 pt-4">
+          <button
+            onClick={() => router.push("/benchmark")}
+            className="flex w-full items-center gap-3 rounded-[14px] border border-emerald-100 bg-emerald-50 px-4 py-3 text-left"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-emerald-600">
+              <Scale size={15} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-semibold text-emerald-800">
+                You vs. You — {data.benchmark.quarterLabel}
+              </p>
+              <p className="truncate text-[11px] text-emerald-800/70">{data.benchmark.text}</p>
+            </div>
+            <ChevronRight size={15} className="shrink-0 text-emerald-300" />
           </button>
         </div>
       )}

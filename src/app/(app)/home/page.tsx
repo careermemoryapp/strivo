@@ -5,6 +5,7 @@ import { countMemories, listMemoryDates } from "@/lib/repo/memories";
 import { listChats } from "@/lib/repo/chats";
 import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
 import { getRecentGrowthNarrative } from "@/lib/repo/growthNarratives";
+import { getRecentQuarterlyBenchmark } from "@/lib/repo/quarterlyBenchmarks";
 import { computeStreak } from "@/lib/utils";
 import { HomeClient } from "./HomeClient";
 
@@ -24,6 +25,12 @@ const RECAP_VISIBLE_MS = 8 * 24 * 60 * 60 * 1000;
 // -- otherwise most people would never see it here at all between one
 // generation and the next.
 const GROWTH_VISIBLE_MS = 21 * 24 * 60 * 60 * 1000;
+
+// Quarterly benchmarks are generated at most 4 times a year, so this gets
+// the most generous window of the three -- long enough that anyone who
+// checks Home even occasionally after the quarterly push still sees it,
+// without stretching so long it overlaps into the NEXT quarter's benchmark.
+const BENCHMARK_VISIBLE_MS = 30 * 24 * 60 * 60 * 1000;
 
 // Server Component: fetches everything Home needs here, before anything is
 // sent to the browser, instead of shipping an empty client component that
@@ -51,6 +58,7 @@ export default async function HomePage() {
 
   const recentRecap = getRecentWeeklyRecap(userId, RECAP_VISIBLE_MS);
   const recentGrowth = getRecentGrowthNarrative(userId, GROWTH_VISIBLE_MS);
+  const recentBenchmark = getRecentQuarterlyBenchmark(userId, BENCHMARK_VISIBLE_MS);
 
   return (
     <HomeClient
@@ -74,6 +82,11 @@ export default async function HomePage() {
         // Just the narrative text -- tapping the teaser goes to /growth for
         // the full framing (date range compared, etc.).
         growth: recentGrowth ? { text: recentGrowth.narrative_text } : null,
+        // Just the reflection text + labels -- tapping the teaser goes to
+        // /benchmark for the full quarter-vs-quarter numbers.
+        benchmark: recentBenchmark
+          ? { text: recentBenchmark.reflection_text, quarterLabel: recentBenchmark.quarter_label }
+          : null,
       }}
     />
   );

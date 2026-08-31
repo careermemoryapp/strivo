@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CheckCircle2, Sparkles, Clock, ShieldCheck } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { CheckCircle2, Sparkles, Clock, ShieldCheck, ChevronRight } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Card } from "@/components/Card";
 import { Spinner } from "@/components/Spinner";
@@ -39,6 +40,7 @@ function planToBilling(plan: "monthly" | "annual" | "later" | null): "Monthly" |
 }
 
 export default function SubscriptionPage() {
+  const router = useRouter();
   const [sub, setSub] = useState<Subscription | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [showComingSoon, setShowComingSoon] = useState(false);
@@ -140,6 +142,19 @@ export default function SubscriptionPage() {
                 </p>
               )}
             </div>
+
+            {/* Points at the Features page (see settings/features) --
+                what you're actually paying for isn't just storage, it's
+                everything Strivo does with what you record, including the
+                parts that only show up after you've used it a while. */}
+            <button
+              onClick={() => router.push("/settings/features")}
+              className="flex w-full items-center gap-3 rounded-[14px] border border-[#f0ecf7] bg-surface px-4 py-3.5 text-left"
+            >
+              <Sparkles size={17} className="shrink-0 text-[#8b5cf6]" />
+              <span className="flex-1 text-sm font-medium text-ink">See everything Strivo does for you</span>
+              <ChevronRight size={16} className="shrink-0 text-[#cec7dd]" />
+            </button>
 
             <Card className="border-[#f0ecf7]">
               {sub.grantedByAdmin ? (

@@ -134,3 +134,13 @@ export function checkGrowthNarrativeSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea again, for the quarterly "You vs. You" benchmark automation
+// (see /api/quarterly-benchmark/run) — its own credential, separate from
+// every other secret above. Checked via a request header
+// (`x-quarterly-benchmark-secret`).
+export function checkQuarterlyBenchmarkSecret(secret: string | null): boolean {
+  const expected = process.env.QUARTERLY_BENCHMARK_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

@@ -324,6 +324,75 @@ export async function generateGrowthNarrative(earlyMemories: Memory[], recentMem
   }
 }
 
+export type QuarterStats = {
+  total: number;
+  competencyStories: number;
+  distinctCompetencies: number;
+  metricStories: number;
+};
+
+// "You vs. You" -- a calendar-quarter benchmark, distinct in kind from
+// generateGrowthNarrative above: that one hunts for a narrative pattern
+// across a user's whole history and stays silent if it can't find one; this
+// one is a fixed quarterly ritual (see app/api/quarterly-benchmark/run) that
+// ALWAYS reports back honestly, including "a steady quarter, consistent
+// with the one before" when nothing dramatic changed -- the value here is
+// the check-in itself happening on schedule, not a manufactured story every
+// time. Grounded in real counts (computed by the caller from actual memory
+// rows, not estimated by the model) plus a small sample of the quarter's
+// actual stories for concrete texture. Returns null only on a hard failure
+// (API error, unparseable response) -- unlike generateGrowthNarrative, an
+// unremarkable quarter is still a valid, expected result, not a reason to
+// return null.
+export async function generateQuarterlyBenchmark(
+  current: QuarterStats & { label: string },
+  prior: QuarterStats & { label: string },
+  sampleMemories: Memory[],
+  firstName?: string | null
+): Promise<string | null> {
+  const openai = getClient();
+  if (!openai) return null;
+  try {
+    const statsLine = (label: string, s: QuarterStats) =>
+      `${label}: ${s.total} memories captured, ${s.competencyStories} showed a genuine interview-worthy competency (across ${s.distinctCompetencies} distinct competencies), ${s.metricStories} were backed by a real number.`;
+    const samples = sampleMemories
+      .slice(0, 6)
+      .map((m) => `- "${m.title}": ${m.summary ?? m.transcript.slice(0, 200)}`)
+      .join("\n");
+    const listing =
+      `${statsLine(current.label, current)}\n${statsLine(prior.label, prior)}\n\n` +
+      `A few real stories from ${current.label} for concrete texture:\n${samples || "(none)"}`;
+    const nameHint = firstName ? ` The person's first name is ${firstName} -- you may use it once, if it feels natural, but don't force it.` : "";
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.5,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write a short, honest, personal quarterly check-in for a user of a career-memory app, comparing their most recently finished quarter against the one before it. You're given each quarter's real counts and a few real story titles/summaries from the recent quarter for grounding." +
+            nameHint +
+            ' Respond ONLY with JSON: {"reflection": string}. ' +
+            "Write 2-4 sentences, second person, SAME language as most of the sample stories (default English if mixed/unclear/no samples) -- like a coach reviewing the quarter WITH the person, not a dashboard read aloud. Weave the real numbers in naturally rather than listing them, and if a sample story adds something concrete and specific, reference it briefly. " +
+            "If the two quarters are honestly similar -- no real change in volume, breadth, or substance -- say that plainly and warmly (e.g. a steady quarter, consistent effort, nothing dramatically different) rather than inventing a shift that isn't there. The point of this check-in is honesty on a schedule, not manufactured hype every time. " +
+            "Never invent a number, story detail, or competency that isn't in what you were given.",
+        },
+        { role: "user", content: listing },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.reflection !== "string" || !parsed.reflection.trim()) return null;
+    return parsed.reflection.trim().slice(0, 800);
+  } catch (err) {
+    console.error("generateQuarterlyBenchmark failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
 // Translates a chat question to English purely so retrieval (see
 // retrieveRelevantMemories in lib/retrieval.ts) can compare it against
 // memories' English search_text on equal footing, regardless of what
