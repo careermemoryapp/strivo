@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUserId } from "@/lib/serverAuth";
-import { countMemoriesByCompetency } from "@/lib/repo/memories";
+import { listMemoriesGroupedByCompetency } from "@/lib/repo/memories";
 import { COMPETENCY_OPTIONS } from "@/lib/ai";
 import { CoverageClient } from "./CoverageClient";
 
@@ -14,8 +14,12 @@ export default async function CoveragePage() {
   const userId = await requireUserId();
   if (!userId) redirect("/login");
 
-  const counts = countMemoriesByCompetency(userId);
-  const coverage = COMPETENCY_OPTIONS.map((name) => ({ name, count: counts[name] ?? 0 }));
+  const grouped = listMemoriesGroupedByCompetency(userId);
+  const coverage = COMPETENCY_OPTIONS.map((name) => ({
+    name,
+    count: grouped[name]?.length ?? 0,
+    stories: grouped[name] ?? [],
+  }));
 
   return <CoverageClient coverage={coverage} />;
 }

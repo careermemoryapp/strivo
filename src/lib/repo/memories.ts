@@ -303,6 +303,36 @@ export function countMemoriesByCompetency(userId: string): Record<string, number
   return counts;
 }
 
+// Same idea as countMemoriesByCompetency above, but keeps the actual
+// id/title of every memory under each competency instead of just a count --
+// backs the clickable story chips on the Story Bank coverage view (see
+// CoverageClient.tsx), which link straight to the memory that earned each
+// competency rather than just showing a bare number. Newest-first per
+// competency, same convention as listMemories' default sort. The client
+// caps how many chips it actually renders per competency; this returns
+// everything so that cap can change without another round trip.
+export function listMemoriesGroupedByCompetency(userId: string): Record<string, { id: string; title: string }[]> {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT id, title, competencies FROM memories WHERE user_id = ? AND competencies IS NOT NULL ORDER BY created_at DESC`)
+    .all(userId) as { id: string; title: string; competencies: string }[];
+  const grouped: Record<string, { id: string; title: string }[]> = {};
+  for (const row of rows) {
+    try {
+      const parsed = JSON.parse(row.competencies);
+      if (!Array.isArray(parsed)) continue;
+      for (const c of parsed) {
+        if (typeof c !== "string") continue;
+        (grouped[c] ??= []).push({ id: row.id, title: row.title });
+      }
+    } catch {
+      // Malformed JSON on an old/corrupted row -- skip it, same as
+      // countMemoriesByCompetency above.
+    }
+  }
+  return grouped;
+}
+
 // How many of the user's memories already have a hard number in them (see
 // has_metric above) -- used purely to detect the one-time "first story
 // backed by a real number" milestone (see app/api/memories/route.ts): if
