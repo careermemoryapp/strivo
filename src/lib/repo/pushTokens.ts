@@ -43,6 +43,18 @@ export function getLatestAppVersionForUser(userId: string): string | null {
   return row?.app_version ?? null;
 }
 
+// All of one specific user's registered device tokens -- unlike everything
+// else in this file (which is either "every token" or a broadcast segment),
+// this is scoped to a single user. Needed for the weekly recap automation
+// (see app/api/weekly-recap/run), which sends a personal push per user
+// rather than a broadcast.
+export function getPushTokensForUser(userId: string): string[] {
+  const db = getDb();
+  return (db.prepare(`SELECT token FROM push_tokens WHERE user_id = ?`).all(userId) as { token: string }[]).map(
+    (r) => r.token
+  );
+}
+
 export function listAllPushTokens(): string[] {
   const db = getDb();
   return (db.prepare(`SELECT token FROM push_tokens`).all() as { token: string }[]).map((r) => r.token);

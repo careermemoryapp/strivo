@@ -2,7 +2,7 @@
 
 import { useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronRight, Sparkles, ArrowUp, Mic, Clock } from "lucide-react";
+import { ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
@@ -24,6 +24,10 @@ type HomeData = {
   // (app)/layout.tsx before Home ever renders, and active has nothing to
   // remind them of.
   trial: { daysLeft: number } | null;
+  // Present only when a recent weekly recap exists (see RECAP_VISIBLE_MS in
+  // page.tsx) -- a secondary surface for the "Your Week in Stories" feature
+  // (see app/(app)/recap), whose primary delivery is a push notification.
+  recap: { headline: string } | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -218,6 +222,30 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
               <p className="text-[11px] text-[#8a7550]">Tap to see your plan</p>
             </div>
             <ChevronRight size={15} className="shrink-0 text-[#c9ab6c]" />
+          </button>
+        </div>
+      )}
+
+      {/* Weekly recap teaser -- secondary surface for anyone who opens the
+          app without tapping the push notification (see /recap and
+          RECAP_VISIBLE_MS in page.tsx). Indigo rather than the app's usual
+          purple/amber so it reads as its own distinct kind of moment,
+          matching the milestone-badge color used on the Record success
+          popup. */}
+      {data.recap && (
+        <div className="px-5 pt-4">
+          <button
+            onClick={() => router.push("/recap")}
+            className="flex w-full items-center gap-3 rounded-[14px] border border-indigo-100 bg-indigo-50 px-4 py-3 text-left"
+          >
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-indigo-500">
+              <CalendarDays size={15} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[12.5px] font-semibold text-indigo-700">Your week in stories</p>
+              <p className="truncate text-[11px] text-indigo-700/70">{data.recap.headline}</p>
+            </div>
+            <ChevronRight size={15} className="shrink-0 text-indigo-300" />
           </button>
         </div>
       )}

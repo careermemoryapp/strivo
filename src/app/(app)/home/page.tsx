@@ -3,8 +3,19 @@ import { requireUserId } from "@/lib/serverAuth";
 import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
 import { countMemories, listMemoryDates } from "@/lib/repo/memories";
 import { listChats } from "@/lib/repo/chats";
+import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
 import { computeStreak } from "@/lib/utils";
 import { HomeClient } from "./HomeClient";
+
+// How recent a weekly recap has to be to still show on Home -- a recap is
+// meant to feel like "hey, here's your week," so one from a month ago
+// lingering on Home forever would read as stale/broken rather than a
+// reason to open the app. Generous enough that someone who doesn't open
+// the app every single day still sees it, without it overstaying its
+// welcome. Push notifications (see app/api/weekly-recap/run) are the
+// primary way people are meant to discover a new recap — this is just a
+// secondary surface for anyone who opens the app without tapping the push.
+const RECAP_VISIBLE_MS = 8 * 24 * 60 * 60 * 1000;
 
 // Server Component: fetches everything Home needs here, before anything is
 // sent to the browser, instead of shipping an empty client component that
@@ -30,6 +41,8 @@ export default async function HomePage() {
   // across the Server -> Client boundary for no reason.
   const subscription = user ? getSubscriptionInfo(user) : null;
 
+  const recentRecap = getRecentWeeklyRecap(userId, RECAP_VISIBLE_MS);
+
   return (
     <HomeClient
       initialData={{
@@ -46,6 +59,9 @@ export default async function HomePage() {
           subscription && subscription.status === "trial"
             ? { daysLeft: subscription.daysLeft ?? 0 }
             : null,
+        // Only the headline, not the full stories -- Home just needs enough
+        // to tease the card; tapping it goes to /recap for the rest.
+        recap: recentRecap ? { headline: recentRecap.headline } : null,
       }}
     />
   );

@@ -26,6 +26,10 @@ export type Memory = {
   // praise -- see COMPETENCY_OPTIONS/generateMemoryMetadata in lib/ai.ts.
   // Always null when competencies is empty.
   resume_line: string | null;
+  // 0/1 flag -- whether this memory states a concrete quantifiable metric
+  // (see hasMetric in generateMemoryMetadata, lib/ai.ts). Powers the "first
+  // story backed by a real number" milestone.
+  has_metric: number;
   metadata_status: "pending" | "ready" | "failed";
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
@@ -118,6 +122,22 @@ export function listMemoriesByDateRange(userId: string, startUtcIso: string, end
     .all(userId, startUtcIso, endUtcIso) as Memory[];
 }
 
+// Every distinct user who has recorded at least one memory since the given
+// UTC instant -- the candidate list for the weekly recap automation (see
+// app/api/weekly-recap/run): no point generating/checking a recap for
+// someone who recorded nothing this week. Deliberately unscoped by any
+// single userId (unlike virtually everything else in this file) since this
+// IS the cross-user query the automation job needs -- it's never reachable
+// from a normal per-user request path, only from the secret-gated
+// automation route.
+export function listUserIdsWithMemoriesSince(sinceUtcIso: string): string[] {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT DISTINCT user_id FROM memories WHERE created_at >= ?`)
+    .all(sinceUtcIso) as { user_id: string }[];
+  return rows.map((r) => r.user_id);
+}
+
 export function listMemoriesWithEmbeddings(userId: string): Memory[] {
   const db = getDb();
   return db
@@ -143,6 +163,7 @@ export function updateMemoryMetadata(
       | "competencies"
       | "praise"
       | "resume_line"
+      | "has_metric"
       | "metadata_status"
       | "key_points"
       | "summary_feedback"
@@ -162,11 +183,12 @@ export function updateMemoryMetadata(
   const competencies = input.competencies ?? current.competencies;
   const praise = input.praise ?? current.praise;
   const resume_line = input.resume_line ?? current.resume_line;
+  const has_metric = input.has_metric ?? current.has_metric;
   const metadata_status = input.metadata_status ?? current.metadata_status;
   const key_points = input.key_points ?? current.key_points;
   const summary_feedback = input.summary_feedback ?? current.summary_feedback;
   db.prepare(
-    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
+    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
      WHERE id = ? AND user_id = ?`
   ).run(
     title,
@@ -179,6 +201,7 @@ export function updateMemoryMetadata(
     competencies,
     praise,
     resume_line,
+    has_metric,
     metadata_status,
     key_points,
     summary_feedback,
@@ -231,6 +254,19 @@ export function countMemoriesByCompetency(userId: string): Record<string, number
     }
   }
   return counts;
+}
+
+// How many of the user's memories already have a hard number in them (see
+// has_metric above) -- used purely to detect the one-time "first story
+// backed by a real number" milestone (see app/api/memories/route.ts): if
+// this is 0 right before a new memory with hasMetric=true is saved, that
+// new one is the first.
+export function countMemoriesWithMetric(userId: string): number {
+  const db = getDb();
+  const row = db
+    .prepare(`SELECT COUNT(*) as c FROM memories WHERE user_id = ? AND has_metric = 1`)
+    .get(userId) as { c: number };
+  return row.c;
 }
 
 // Distinct creation dates (YYYY-MM-DD, local to server) for streak calc.

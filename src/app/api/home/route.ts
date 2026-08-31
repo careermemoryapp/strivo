@@ -3,7 +3,13 @@ import { requireUserId } from "@/lib/serverAuth";
 import { getUserById } from "@/lib/repo/users";
 import { countMemories, listMemoryDates } from "@/lib/repo/memories";
 import { listChats } from "@/lib/repo/chats";
+import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
 import { computeStreak } from "@/lib/utils";
+
+// Kept in sync with the identical constant in page.tsx (the Server
+// Component's first-render fetch) -- see the comment there for why this
+// window exists.
+const RECAP_VISIBLE_MS = 8 * 24 * 60 * 60 * 1000;
 
 export async function GET() {
   const userId = await requireUserId();
@@ -13,6 +19,7 @@ export async function GET() {
   const streak = computeStreak(listMemoryDates(userId));
   const memoryCount = countMemories(userId);
   const recentChats = listChats(userId).slice(0, 3);
+  const recentRecap = getRecentWeeklyRecap(userId, RECAP_VISIBLE_MS);
 
   return NextResponse.json({
     user: user
@@ -21,6 +28,7 @@ export async function GET() {
     streak,
     memoryCount,
     recentChats,
+    recap: recentRecap ? { headline: recentRecap.headline } : null,
     // True until the user has picked Monthly/Annual on the first-run trial
     // screen (see app/welcome-trial -- deliberately outside the (app) route
     // group/layout, see the comment there). The authoritative redirect now

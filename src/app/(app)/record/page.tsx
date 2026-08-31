@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Mic, Square, Check, ArrowRight, Home as HomeIcon, RotateCcw,
   Target, Sparkles as SparklesIcon, CheckCircle2, Lock, ChevronRight,
-  Upload, Paperclip, Copy, ClipboardCheck,
+  Upload, Paperclip, Copy, ClipboardCheck, Award,
 } from "lucide-react";
 import { safeJsonParse } from "@/lib/utils";
 import { DarkHeader } from "@/components/DarkHeader";
@@ -71,6 +71,13 @@ export default function RecordPage() {
   // but something immediately usable.
   const [savedResumeLine, setSavedResumeLine] = useState<string | null>(null);
   const [resumeLineCopied, setResumeLineCopied] = useState(false);
+  // One-time milestone callouts (see MEMORY_COUNT_MILESTONES and the
+  // per-competency/hard-number checks in app/api/memories/route.ts) --
+  // small, earned moments ("First Leadership story", "10th memory
+  // recorded") rather than a repetitive streak counter. Shown in the same
+  // popup as the praise above when present, but can also open the popup on
+  // its own when there's a milestone with no competency praise attached.
+  const [savedMilestones, setSavedMilestones] = useState<string[]>([]);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
@@ -167,6 +174,7 @@ export default function RecordPage() {
     setShowPraisePopup(false);
     setSavedResumeLine(null);
     setResumeLineCopied(false);
+    setSavedMilestones([]);
   }
 
   async function createMemory() {
@@ -190,11 +198,16 @@ export default function RecordPage() {
       setSavedCompetencies(competencies);
       setSavedPraise(data.memory.praise ?? null);
       setSavedResumeLine(data.memory.resume_line ?? null);
+      const milestones: string[] = Array.isArray(data.milestones) ? data.milestones : [];
+      setSavedMilestones(milestones);
       setStage("success");
       // Small delay so the popup lands a beat after the success screen
       // appears, instead of both flashing in at once — reads as a genuine
       // reaction to what was just recorded rather than a loading artifact.
-      if (competencies.length > 0 && data.memory.praise) {
+      // Opens for EITHER competency praise or a milestone, since a
+      // milestone (e.g. "10th memory recorded") can land on a memory with
+      // no competency at all.
+      if ((competencies.length > 0 && data.memory.praise) || milestones.length > 0) {
         setTimeout(() => setShowPraisePopup(true), 450);
       }
     } catch (e) {
@@ -246,11 +259,12 @@ export default function RecordPage() {
             normal, casual story have no reason to know it happens to be a
             strong interview example -- so tell them, in the moment, with an
             actual reaction rather than a permanent inline box they might
-            skim past. Auto-opens (see the setTimeout in createMemory) and
-            only appears when the AI genuinely found something to praise --
-            see the `praise` field in generateMemoryMetadata (lib/ai.ts),
-            which is only ever non-null when competencies is non-empty. */}
-        {showPraisePopup && savedPraise && (
+            skim past. Auto-opens (see the setTimeout in createMemory) for
+            EITHER competency praise or a milestone (see savedMilestones) --
+            a milestone like "10th memory recorded" can land on a memory
+            with no competency praise attached at all, so this can't be
+            gated on savedPraise alone. */}
+        {showPraisePopup && (savedPraise || savedMilestones.length > 0) && (
           <div
             className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-5 pb-5 sm:items-center sm:pb-0"
             onClick={() => setShowPraisePopup(false)}
@@ -261,21 +275,45 @@ export default function RecordPage() {
               onClick={(e) => e.stopPropagation()}
             >
               <div
-                className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-amber-50 text-amber-500"
-                style={{ boxShadow: "0 8px 20px rgba(245,158,11,0.2)" }}
+                className={cn(
+                  "mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full",
+                  savedPraise ? "bg-amber-50 text-amber-500" : "bg-indigo-50 text-indigo-500"
+                )}
+                style={{ boxShadow: savedPraise ? "0 8px 20px rgba(245,158,11,0.2)" : "0 8px 20px rgba(99,102,241,0.2)" }}
               >
-                <SparklesIcon size={26} />
+                {savedPraise ? <SparklesIcon size={26} /> : <Award size={26} />}
               </div>
-              {savedCompetencies.length > 0 && (
-                <div className="flex flex-wrap justify-center gap-1.5">
-                  {savedCompetencies.map((c) => (
-                    <span key={c} className="rounded-pill bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                      {c}
+
+              {/* Milestones -- small, earned, one-time badges. Shown above
+                  the competency/praise section (if any) since a milestone
+                  is the rarer, more special event of the two. */}
+              {savedMilestones.length > 0 && (
+                <div className="flex flex-col items-center gap-1.5">
+                  {savedMilestones.map((m) => (
+                    <span
+                      key={m}
+                      className="flex items-center gap-1.5 rounded-pill bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600"
+                    >
+                      <Award size={13} /> {m}
                     </span>
                   ))}
                 </div>
               )}
-              <p className="mt-3 text-[15px] leading-relaxed text-ink">{savedPraise}</p>
+
+              {savedPraise && (
+                <>
+                  {savedCompetencies.length > 0 && (
+                    <div className={cn("flex flex-wrap justify-center gap-1.5", savedMilestones.length > 0 && "mt-3")}>
+                      {savedCompetencies.map((c) => (
+                        <span key={c} className="rounded-pill bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <p className="mt-3 text-[15px] leading-relaxed text-ink">{savedPraise}</p>
+                </>
+              )}
 
               {/* Immediately usable, not just a compliment -- a real resume
                   bullet pulled from this specific story, with any numbers
@@ -302,7 +340,11 @@ export default function RecordPage() {
               <button
                 onClick={() => setShowPraisePopup(false)}
                 className="mt-5 w-full rounded-pill py-3 text-sm font-semibold text-white"
-                style={{ background: "linear-gradient(135deg,#fbbf24,#f97316)" }}
+                style={{
+                  background: savedPraise
+                    ? "linear-gradient(135deg,#fbbf24,#f97316)"
+                    : "linear-gradient(135deg,#818cf8,#6366f1)",
+                }}
               >
                 Got it
               </button>

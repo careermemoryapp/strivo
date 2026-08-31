@@ -58,6 +58,15 @@ export type MemoryMetadata = {
   // Same gate as praise: only generated when competencies is non-empty, so
   // it never fires on a memory with nothing resume-worthy in it.
   resumeLine: string | null;
+  // Whether the transcript contains at least one concrete, quantifiable
+  // metric reflecting real impact or scale -- a percentage, an amount of
+  // money, a count of people/users, time saved, a before/after number.
+  // Independent of competencies (a memory can have a hard number without
+  // being a formal "competency" story, or vice versa) -- used purely to
+  // power the "first story backed by a real number" one-time milestone (see
+  // has_metric in lib/repo/memories.ts and the milestone detection in
+  // app/api/memories/route.ts).
+  hasMetric: boolean;
 };
 
 const CATEGORY_OPTIONS = [
@@ -118,6 +127,7 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
             "Equally, don't force a fit: an empty array is correct and expected for a large share of memories (e.g. a plain status update or a memory with no clear personal action in it). " +
             "praise (string or null): ONLY when competencies is non-empty, write one short (1-2 sentence) warm, specific compliment to the person, SAME language as the transcript, in second person, that names the concrete thing they actually did (referencing a real detail, decision, or number from the transcript -- not a vague restatement) and briefly notes it could make a strong interview or resume story. Sound like a genuine reaction from a supportive coach who actually read the story, never like a generic template ('Great job!', 'Well done!') -- it should be obvious it was written about THIS story specifically and would sound wrong attached to a different one. When competencies is empty, praise MUST be null. " +
             "resumeLine (string or null): ONLY when competencies is non-empty, write ONE polished resume bullet line for this story, ALWAYS IN ENGLISH regardless of the transcript's language. Standard resume conventions: start with a strong past-tense action verb (Led, Reduced, Built, Launched, Resolved, etc.), be a single line with no trailing period, and if the transcript mentions ANY concrete number, percentage, time saved, or scale (team size, users, revenue, duration), work it in naturally -- if the transcript has no numbers, write a strong qualitative bullet instead rather than inventing a fake metric. Never fabricate a number, outcome, or detail that isn't in the transcript. When competencies is empty, resumeLine MUST be null. " +
+            "hasMetric (boolean): true ONLY if the transcript states at least one concrete, quantifiable metric reflecting real impact or scale -- a percentage, a money amount, a count of people/users/items, a duration saved, a clear before/after number. A date, someone's age, a phone number, or another incidental number does NOT count. false otherwise -- most memories should be false. " +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -159,9 +169,81 @@ export async function generateMemoryMetadata(transcript: string): Promise<Memory
         filteredCompetencies.length > 0 && typeof parsed.resumeLine === "string"
           ? parsed.resumeLine.trim().replace(/\.$/, "").slice(0, 200)
           : null,
+      hasMetric: parsed.hasMetric === true,
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
+export type WeeklyRecapResult = {
+  headline: string;
+  stories: { memoryId: string; blurb: string }[];
+};
+
+// Picks the best 2-3 stories out of a batch of memories (in practice, one
+// user's past 7 days -- see app/api/weekly-recap/run) and writes a short,
+// warm recap. This is the "give them a reason to open the app even when
+// they're not actively prepping for an interview" feature -- a weekly
+// digest pushed to their phone, not something they have to go looking for.
+// Returns null on any failure OR if nothing in the batch is genuinely worth
+// featuring; callers should just skip that user's recap for the week
+// rather than send a low-quality one or error the whole job.
+export async function generateWeeklyRecap(memories: Memory[]): Promise<WeeklyRecapResult | null> {
+  const openai = getClient();
+  if (!openai || memories.length === 0) return null;
+  try {
+    const listing = memories
+      .map((m) => {
+        const competencies = safeParseStringArray(m.competencies);
+        return `id: ${m.id}\nTitle: ${m.title}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nSummary: ${m.summary ?? m.transcript.slice(0, 300)}`;
+      })
+      .join("\n\n---\n\n");
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.5,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You write a short, warm weekly recap of a user's most notable personal memories from the past week, for a career-memory app. " +
+            "You'll be given a list of memories (id, title, optional competencies, summary). Pick the 2-3 BEST ones -- prioritize ones with competencies listed, a concrete outcome, or real substance; skip anything thin or routine. If fewer than 2 are genuinely worth featuring, return fewer -- never pad with weak picks, and if NONE are worth featuring, return an empty stories array. " +
+            'Respond ONLY with JSON: {"headline": string, "stories": [{"id": string, "blurb": string}]}. ' +
+            'headline: one short, warm sentence (<=14 words) summarizing the week as a whole, SAME language as most of the memories (default English if mixed/unclear) -- written like a friend noticing you had a good week, not a corporate summary. ' +
+            "stories: each item's id must EXACTLY match one of the provided memory ids, and blurb is one specific, warm sentence (SAME language as that memory) naming what actually happened and, if relevant, what it shows about the person. " +
+            "Never invent facts not present in what you were given.",
+        },
+        { role: "user", content: listing },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed.headline || !Array.isArray(parsed.stories)) return null;
+
+    const validIds = new Set(memories.map((m) => m.id));
+    const stories: { memoryId: string; blurb: string }[] = [];
+    for (const item of parsed.stories) {
+      if (
+        item &&
+        typeof item === "object" &&
+        typeof (item as { id?: unknown }).id === "string" &&
+        typeof (item as { blurb?: unknown }).blurb === "string"
+      ) {
+        const id = (item as { id: string }).id;
+        const blurb = (item as { blurb: string }).blurb;
+        if (validIds.has(id)) stories.push({ memoryId: id, blurb: blurb.slice(0, 300) });
+      }
+      if (stories.length >= 3) break;
+    }
+    if (stories.length === 0) return null;
+
+    return { headline: String(parsed.headline).slice(0, 200), stories };
+  } catch (err) {
+    console.error("generateWeeklyRecap failed:", err);
     Sentry.captureException(err);
     return null;
   }
@@ -341,10 +423,23 @@ function todayIstLabel(now: Date = new Date()): string {
   });
 }
 
+// "Human angle" tone guidance -- without this, the chat AI is functionally
+// a lookup tool that happens to write full sentences: correct, but flat.
+// Deliberately narrow and occasion-gated (see the "sparingly" language
+// below) rather than "always be warm," because a compliment attached to
+// every single reply stops registering as genuine within a few messages and
+// starts reading as a tic -- the same reasoning behind gating the Record
+// page's praise popup on a real competency match rather than firing on
+// every memory. Applied in BOTH buildSystemPrompt branches below (with and
+// without matched memories) so the tone is consistent either way, even
+// though the memory-specific opportunities to use it only exist when
+// memories are actually present.
+const warmthContext = `\n\nTone: you're a supportive coach the user actually knows, not a neutral lookup tool. When you're giving a PERSONAL answer and a memory you're drawing on shows something genuinely admirable -- real initiative, growth, a hard problem solved well -- it's good to briefly acknowledge that in passing, in a short clause, not a paragraph. Use this sparingly: only when it genuinely fits what's being asked, never in every reply, and never in place of or delaying the actual answer. Skip it entirely for GENERIC questions -- those should just be answered directly.`;
+
 export function buildSystemPrompt(memories: Memory[], now: Date = new Date()): string {
   const dateContext = `\n\nToday's date is ${todayIstLabel(now)} (India Standard Time). Use this to correctly judge date-relative questions ("today," "yesterday," "this week," a specific date, etc.) against each memory's Date field below. If a memory's date genuinely falls in the period the user is asking about, treat it as relevant with confidence -- do not hedge or claim "no relevant memory" out of uncertainty about what day it is; you now know.`;
   if (memories.length === 0) {
-    return `${SYSTEM_PROMPT_BASE}${dateContext}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.`;
+    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.`;
   }
   const competencyContext = `\n\nEach memory below may list Competencies -- behavioral-interview qualities (Leadership, Problem-Solving, etc.) that memory was independently identified as genuinely demonstrating, generated when it was recorded (see generateMemoryMetadata). The user themselves may not realize a memory qualifies -- they might have just described a normal day, not framed it as a "leadership story." When asked for an example of a specific competency (e.g. "give me a leadership example," "tell me about a time you solved a problem"), actively use this field to find the match rather than only pattern-matching the user's own wording against the transcript, and you can point out to them that this is a strong example of that competency even if they didn't call it that themselves.`;
   const context = memories
@@ -354,7 +449,7 @@ export function buildSystemPrompt(memories: Memory[], now: Date = new Date()): s
       return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}${dateContext}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
 }
 
 function safeParseStringArray(value: string | null): string[] {

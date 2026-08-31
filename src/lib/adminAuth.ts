@@ -113,3 +113,14 @@ export function checkBlogAutomationSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea as checkBlogAutomationSecret, for the weekly recap automation
+// (see /api/weekly-recap/run) — a separate credential from both
+// ADMIN_PASSWORD and BLOG_AUTOMATION_SECRET so none of the three share
+// blast radius if one leaks. Checked via a request header
+// (`x-weekly-recap-secret`).
+export function checkWeeklyRecapSecret(secret: string | null): boolean {
+  const expected = process.env.WEEKLY_RECAP_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

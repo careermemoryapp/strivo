@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
-import { createMemory, listMemories, updateMemoryMetadata, getMemoryById } from "@/lib/repo/memories";
+import {
+  createMemory,
+  listMemories,
+  updateMemoryMetadata,
+  getMemoryById,
+  countMemories,
+  countMemoriesByCompetency,
+  countMemoriesWithMetric,
+} from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired } from "@/lib/repo/users";
@@ -28,6 +36,12 @@ function fallbackTitle(transcript: string): string {
   const words = transcript.trim().split(/\s+/).slice(0, 8).join(" ");
   return words.length < transcript.trim().length ? `${words}…` : words || "Untitled memory";
 }
+
+// Round-number checkpoints worth calling out on the memory-count milestone
+// (see below) -- deliberately a short, sparse list rather than every 5th or
+// 10th memory forever, so it stays a genuine one-time moment instead of
+// becoming background noise.
+const MEMORY_COUNT_MILESTONES = [10, 25, 50, 100, 250, 500];
 
 export async function POST(req: Request) {
   const userId = await requireUserId();
@@ -66,8 +80,30 @@ export async function POST(req: Request) {
   // if any of it fails, the user's transcript is already safely persisted.
   const memory = createMemory({ userId, title, transcript, source });
 
+  // One-time milestone callouts (see app/(app)/record/page.tsx's
+  // savedMilestones popup) -- small, earned moments rather than a
+  // repetitive streak counter. Each check below reads the user's PRIOR
+  // memories only: this new row was already inserted by createMemory above
+  // but doesn't have competencies/has_metric written yet (that happens in
+  // updateMemoryMetadata further down), so countMemoriesByCompetency and
+  // countMemoriesWithMetric right now still reflect everything OTHER than
+  // this memory -- exactly what "is this the first" needs to check against.
+  const milestones: string[] = [];
+
   const metadata = await generateMemoryMetadata(transcript);
   if (metadata) {
+    const priorCompetencyCounts = countMemoriesByCompetency(userId);
+    const priorMetricCount = countMemoriesWithMetric(userId);
+
+    for (const c of metadata.competencies) {
+      if (!priorCompetencyCounts[c]) {
+        milestones.push(`First ${c} story`);
+      }
+    }
+    if (metadata.hasMetric && priorMetricCount === 0) {
+      milestones.push("First story backed by a real number");
+    }
+
     updateMemoryMetadata(userId, memory.id, {
       title: parsed.data.title?.trim() || metadata.title,
       summary: metadata.summary,
@@ -86,10 +122,21 @@ export async function POST(req: Request) {
       // Ready-to-use resume bullet (always English) -- surfaced with a
       // copy button on the Record success popup and memory detail page.
       resume_line: metadata.resumeLine,
+      has_metric: metadata.hasMetric ? 1 : 0,
       metadata_status: "ready",
     });
   } else {
     updateMemoryMetadata(userId, memory.id, { metadata_status: "failed" });
+  }
+
+  // Total-count milestone -- independent of whether AI metadata succeeded,
+  // and independent of the loop above, since it's about the raw count, not
+  // competencies. countMemories() already includes the row createMemory
+  // just inserted, so checking against the checkpoint list directly tells
+  // us whether THIS memory is the one that hit it.
+  const totalCount = countMemories(userId);
+  if (MEMORY_COUNT_MILESTONES.includes(totalCount)) {
+    milestones.push(`${totalCount}th memory recorded`);
   }
 
   // Embedding input includes metadata.searchText (an English gloss of the
@@ -104,5 +151,5 @@ export async function POST(req: Request) {
   }
 
   const final = getMemoryById(userId, memory.id);
-  return NextResponse.json({ memory: final, aiMetadataGenerated: !!metadata });
+  return NextResponse.json({ memory: final, aiMetadataGenerated: !!metadata, milestones });
 }
