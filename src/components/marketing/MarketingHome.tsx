@@ -4,10 +4,52 @@ import { useRef, useState } from "react";
 import { motion, useMotionValue, useSpring, type Variants } from "framer-motion";
 import {
   Check, X, Plus, Sparkles, Copy, MessageCircleQuestion, Award, LayoutGrid, CalendarDays, TrendingUp, Scale, ArrowRight,
+  Instagram, Linkedin,
 } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME, PLAY_STORE_URL } from "@/lib/config";
+
+// Strivo's official social accounts — shown as icon links in the header
+// and footer. Kept as one list so both spots can't drift out of sync.
+const SOCIAL_LINKS = [
+  { name: "X", href: "https://x.com/Strivo_ai" },
+  { name: "LinkedIn", href: "https://www.linkedin.com/company/strivo-ai/" },
+  { name: "Instagram", href: "https://www.instagram.com/strivo.ai" },
+] as const;
+
+// lucide-react's "Twitter" icon is the retired bird logo — this is the
+// current X wordmark glyph instead, drawn inline so it stays accurate.
+function XLogoIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+    </svg>
+  );
+}
+
+function SocialLinks({ className = "" }: { className?: string }) {
+  const icons = { X: XLogoIcon, LinkedIn: Linkedin, Instagram: Instagram } as const;
+  return (
+    <div className={`flex items-center gap-4 ${className}`}>
+      {SOCIAL_LINKS.map((s) => {
+        const Icon = icons[s.name];
+        return (
+          <a
+            key={s.name}
+            href={s.href}
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label={`${APP_NAME} on ${s.name}`}
+            className="text-[#888] transition-colors hover:text-white"
+          >
+            <Icon size={16} />
+          </a>
+        );
+      })}
+    </div>
+  );
+}
 
 // The public marketing homepage at strivo.ai — the ONLY thing a browser
 // visitor ever sees. The real app (voice recording, chat, memories) lives
@@ -510,6 +552,7 @@ export function MarketingHome({
           <Link href="/blog" className="text-xs font-medium text-[#888] hover:text-white">
             Blog
           </Link>
+          <SocialLinks className="hidden sm:flex" />
           <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#888] hover:text-white">
             Get the app →
           </a>
@@ -907,8 +950,9 @@ export function MarketingHome({
       </section>
 
       {/* Footer */}
-      <footer className="flex flex-col items-center justify-between gap-3 border-t border-[#1e1e26] px-8 py-6 text-xs text-[#5a5a66] sm:flex-row" style={{ background: "#0a0a0f" }}>
+      <footer className="flex flex-col items-center justify-between gap-4 border-t border-[#1e1e26] px-8 py-6 text-xs text-[#5a5a66] sm:flex-row" style={{ background: "#0a0a0f" }}>
         <span>© {new Date().getFullYear()} {APP_NAME}</span>
+        <SocialLinks />
         <div className="flex gap-5">
           <Link href="/privacy" className="hover:text-white">Privacy</Link>
           <Link href="/terms" className="hover:text-white">Terms</Link>
