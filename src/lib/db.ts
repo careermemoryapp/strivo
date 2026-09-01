@@ -377,6 +377,34 @@ function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_underplayed_win_callouts_user ON underplayed_win_callouts(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_underplayed_win_callouts_memory ON underplayed_win_callouts(memory_id);
+
+    -- The in-app notification center (bell icon on Home -- see
+    -- app/(app)/home/HomeClient.tsx and app/(app)/notifications). Every
+    -- automatic push this app sends (weekly recap, growth narrative,
+    -- quarterly benchmark, check-ins, the underplayed-win callout, and admin
+    -- nudges) writes one row here at the same moment it sends the phone push
+    -- -- see notifyUser in lib/notify.ts, the single place both happen
+    -- together. This is what makes the bell a permanent, complete history:
+    -- unlike a push, it's still there if the phone was silenced, push was
+    -- never enabled, or the user just didn't look at the time. 'type' is a
+    -- loose tag (e.g. 'weekly_recap', 'nudge') for icon/grouping purposes
+    -- only, not a closed enum enforced at the DB level -- same pragmatism as
+    -- memories.category. 'route' mirrors the push's own deep-link target
+    -- (see sendPushToAllDevices's 'route' field in lib/push.ts) so tapping a
+    -- row in the list does exactly what tapping the original push would
+    -- have done.
+    CREATE TABLE IF NOT EXISTS notifications (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type TEXT NOT NULL,
+      title TEXT,
+      body TEXT NOT NULL,
+      route TEXT,
+      read INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

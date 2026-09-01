@@ -96,6 +96,28 @@ export function listPushTokensForSegment(segment: NudgeSegment): string[] {
   ).map((r) => r.token);
 }
 
+// Distinct user ids matching a nudge segment -- unlike listPushTokensForSegment
+// above (which returns tokens, for the actual push send), this drives the
+// in-app notification fan-out for admin nudges (see app/api/admin/nudge):
+// every user in the segment gets a permanent notification row regardless of
+// whether they have a registered device, so someone who's never enabled
+// push still sees the nudge the next time they open the app. Deliberately
+// queries `users` directly rather than joining through push_tokens like the
+// two functions above -- a segment is a property of the USER (are they
+// active, inactive, etc.), and requiring a device token just to be eligible
+// would silently exclude every push-disabled user from an otherwise
+// perfectly good in-app message.
+export function listUserIdsForSegment(segment: NudgeSegment): string[] {
+  const db = getDb();
+  // segmentWhere only ever references u.last_active_at (or the literal
+  // "1=1" for "all") -- none of its branches touch push_tokens columns --
+  // so aliasing `users` as `u` directly is enough to reuse it here without
+  // the join listPushTokensForSegment needs.
+  return (db.prepare(`SELECT id FROM users u WHERE ${segmentWhere(segment)}`).all() as { id: string }[]).map(
+    (r) => r.id
+  );
+}
+
 export function countDevicesForSegment(segment: NudgeSegment): number {
   const db = getDb();
   const row = db

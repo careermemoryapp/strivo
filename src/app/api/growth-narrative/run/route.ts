@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { isAdminAuthed, checkGrowthNarrativeSecret } from "@/lib/adminAuth";
 import { listUserIdsWithMemoriesSince, listOldestMemories, listNewestMemories } from "@/lib/repo/memories";
 import { shouldGenerateGrowthNarrative, createGrowthNarrative } from "@/lib/repo/growthNarratives";
-import { getPushTokensForUser } from "@/lib/repo/pushTokens";
 import { generateGrowthNarrative } from "@/lib/ai";
-import { sendPushToAllDevices } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 
 // How many memories go into each side of the "earlier vs recent"
 // comparison. Small enough to keep the AI call focused and cheap, large
@@ -64,14 +63,15 @@ export async function POST(req: Request) {
       latestMemoryDate: allDates[allDates.length - 1],
     });
 
-    const tokens = getPushTokensForUser(userId);
-    if (tokens.length > 0) {
-      await sendPushToAllDevices(tokens, {
-        title: "How you've grown",
-        body: narrativeText,
-        route: "/growth",
-      });
-    }
+    // See lib/notify.ts -- writes the in-app notification and sends the
+    // push together, one call instead of this route reaching for
+    // sendPushToAllDevices directly.
+    await notifyUser(userId, {
+      type: "growth_narrative",
+      title: "How you've grown",
+      body: narrativeText,
+      route: "/growth",
+    });
     narrativesSent++;
   }
 

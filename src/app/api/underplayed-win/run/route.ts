@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { isAdminAuthed, checkUnderplayedWinSecret } from "@/lib/adminAuth";
 import { listUserIdsWithMemoriesSince, listSelfMinimizedCandidates } from "@/lib/repo/memories";
 import { shouldSurfaceUnderplayedWin, createUnderplayedWinCallout } from "@/lib/repo/underplayedWins";
-import { getPushTokensForUser } from "@/lib/repo/pushTokens";
 import { generateUnderplayedWinCallout } from "@/lib/ai";
-import { sendPushToAllDevices } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 import { getUserById } from "@/lib/repo/users";
 
 // How many unsurfaced flagged memories to hand the model per user -- enough
@@ -64,21 +63,21 @@ export async function POST(req: Request) {
       messageText: result.message,
     });
 
-    const tokens = getPushTokensForUser(userId);
-    if (tokens.length > 0) {
-      // Deliberately no title -- see the tone note in
-      // generateUnderplayedWinCallout (lib/ai.ts). Every other automatic
-      // push in this app (weekly recap, growth narrative, quarterly
-      // benchmark) leads with a bolded headline; this one is meant to read
-      // like a plain, unannounced observation instead of another
-      // notification with a banner on it, so the message body IS the whole
-      // thing. Deep-links straight to the memory it's about, same pattern
-      // as checkins/run's `/check-in/${id}` route.
-      await sendPushToAllDevices(tokens, {
-        body: result.message,
-        route: `/memories/${result.memoryId}`,
-      });
-    }
+    // See lib/notify.ts -- writes the in-app notification (see
+    // app/(app)/notifications) and sends the push together. Deliberately no
+    // title -- see the tone note in generateUnderplayedWinCallout (lib/ai.ts).
+    // Every other automatic notification in this app (weekly recap, growth
+    // narrative, quarterly benchmark) leads with a bolded headline; this one
+    // is meant to read like a plain, unannounced observation instead of
+    // another notification with a banner on it, so the message body IS the
+    // whole thing -- both in the push and in the notification list row.
+    // Deep-links straight to the memory it's about, same pattern as
+    // checkins/run's `/check-in/${id}` route.
+    await notifyUser(userId, {
+      type: "underplayed_win",
+      body: result.message,
+      route: `/memories/${result.memoryId}`,
+    });
     calloutsSent++;
   }
 

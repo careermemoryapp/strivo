@@ -2,9 +2,8 @@ import { NextResponse } from "next/server";
 import { isAdminAuthed, checkWeeklyRecapSecret } from "@/lib/adminAuth";
 import { listUserIdsWithMemoriesSince, listMemoriesByDateRange } from "@/lib/repo/memories";
 import { createWeeklyRecap, hasWeeklyRecapForWeek, type RecapStory } from "@/lib/repo/weeklyRecaps";
-import { getPushTokensForUser } from "@/lib/repo/pushTokens";
 import { generateWeeklyRecap } from "@/lib/ai";
-import { sendPushToAllDevices } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 
 // Strivo's target market is India — same IST convention as
 // lib/retrieval.ts and lib/ai.ts (see comments there for the full
@@ -80,14 +79,16 @@ export async function POST(req: Request) {
 
     createWeeklyRecap({ userId, weekStart: weekStartLabel, headline: recap.headline, stories });
 
-    const tokens = getPushTokensForUser(userId);
-    if (tokens.length > 0) {
-      await sendPushToAllDevices(tokens, {
-        title: "Your week in stories",
-        body: recap.headline,
-        route: "/recap",
-      });
-    }
+    // Writes the in-app notification (see app/(app)/notifications) and
+    // sends the push together -- see lib/notify.ts for why both go through
+    // one call now instead of this route reaching for sendPushToAllDevices
+    // directly.
+    await notifyUser(userId, {
+      type: "weekly_recap",
+      title: "Your week in stories",
+      body: recap.headline,
+      route: "/recap",
+    });
     recapsSent++;
   }
 

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthed, checkCheckinSecret } from "@/lib/adminAuth";
 import { getDueCheckins, expireStaleCheckins, markCheckinActive } from "@/lib/repo/pendingCheckins";
-import { getPushTokensForUser } from "@/lib/repo/pushTokens";
-import { sendPushToAllDevices } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 
 // Same IST convention duplicated across lib/ai.ts, lib/retrieval.ts, and
 // every other automation route in this app -- see those for the full
@@ -63,18 +62,18 @@ export async function POST(req: Request) {
     markCheckinActive(checkin.id);
     activated++;
 
-    const tokens = getPushTokensForUser(checkin.user_id);
-    if (tokens.length > 0) {
-      await sendPushToAllDevices(tokens, {
-        title: "One more thing —",
-        body: checkin.question,
-        route: `/check-in/${checkin.id}`,
-      });
-      pushed++;
-    }
-    // No push token registered is fine, not an error -- the check-in is
-    // still 'active' now, so it'll show up as a Home teaser (see
-    // getActiveCheckinForUser) the next time they open the app.
+    // See lib/notify.ts -- writes the in-app notification (see
+    // app/(app)/notifications) unconditionally and sends the push only if a
+    // device is registered; either way the check-in is already 'active' now,
+    // so it'll also show up as a Home teaser (see getActiveCheckinForUser)
+    // the next time they open the app.
+    const { pushed: didPush } = await notifyUser(checkin.user_id, {
+      type: "checkin",
+      title: "One more thing —",
+      body: checkin.question,
+      route: `/check-in/${checkin.id}`,
+    });
+    if (didPush) pushed++;
   }
 
   return NextResponse.json({ ok: true, dueConsidered: due.length, activated, pushed, expiredCount });

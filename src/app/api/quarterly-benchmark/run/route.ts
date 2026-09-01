@@ -2,10 +2,9 @@ import { NextResponse } from "next/server";
 import { isAdminAuthed, checkQuarterlyBenchmarkSecret } from "@/lib/adminAuth";
 import { listUserIdsWithMemoriesSince, listMemoriesByDateRange, type Memory } from "@/lib/repo/memories";
 import { createQuarterlyBenchmark, hasQuarterlyBenchmarkForQuarter, type QuarterStats } from "@/lib/repo/quarterlyBenchmarks";
-import { getPushTokensForUser } from "@/lib/repo/pushTokens";
 import { getUserById } from "@/lib/repo/users";
 import { generateQuarterlyBenchmark } from "@/lib/ai";
-import { sendPushToAllDevices } from "@/lib/push";
+import { notifyUser } from "@/lib/notify";
 import { safeJsonParse } from "@/lib/utils";
 
 // Strivo's target market is India — same IST convention duplicated across
@@ -134,14 +133,15 @@ export async function POST(req: Request) {
       prior: priorStats,
     });
 
-    const tokens = getPushTokensForUser(userId);
-    if (tokens.length > 0) {
-      await sendPushToAllDevices(tokens, {
-        title: "Your quarter, you vs. you",
-        body: reflection,
-        route: "/benchmark",
-      });
-    }
+    // See lib/notify.ts -- writes the in-app notification and sends the
+    // push together, one call instead of this route reaching for
+    // sendPushToAllDevices directly.
+    await notifyUser(userId, {
+      type: "quarterly_benchmark",
+      title: "Your quarter, you vs. you",
+      body: reflection,
+      route: "/benchmark",
+    });
     benchmarksSent++;
   }
 

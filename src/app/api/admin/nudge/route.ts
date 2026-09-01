@@ -3,8 +3,8 @@ import * as Sentry from "@sentry/nextjs";
 import { z } from "zod";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { createNudge, listRecentNudges } from "@/lib/repo/nudges";
-import { listPushTokensForSegment, countDevicesForSegment, type NudgeSegment } from "@/lib/repo/pushTokens";
-import { sendPushToAllDevices } from "@/lib/push";
+import { listUserIdsForSegment, countDevicesForSegment, type NudgeSegment } from "@/lib/repo/pushTokens";
+import { notifyUser } from "@/lib/notify";
 
 const SEGMENTS: NudgeSegment[] = ["all", "recent_missed_today", "inactive"];
 
@@ -45,22 +45,33 @@ export async function POST(req: Request) {
   // notification-bar push below.
   const nudge = createNudge(parsed.data);
 
-  // Fire the real notification-bar push, scoped to whichever audience
-  // segment was picked (see repo/pushTokens.ts). Best effort and
-  // non-blocking on failure — see sendPushToAllDevices, which already
-  // no-ops cleanly if Firebase isn't configured yet. The `route` data
-  // field is what the app uses (see usePushRegistration.ts's
-  // action-performed listener) to send people straight to the Record page
-  // when they tap the notification, instead of just opening the app to
-  // Home.
-  sendPushToAllDevices(listPushTokensForSegment(parsed.data.segment), {
-    title: nudge.title ?? undefined,
-    body: nudge.message,
-    route: "/record",
-  }).catch((e) => {
-    console.error("Nudge push send failed:", e);
-    Sentry.captureException(e);
-  });
+  // Fan out to every user in the picked audience segment (see
+  // listUserIdsForSegment in repo/pushTokens.ts) -- each gets a permanent
+  // in-app notification (see app/(app)/notifications) plus a real push if
+  // they have a device registered (see notifyUser, lib/notify.ts). This is
+  // a change from the old behavior (a single broadcast call over just the
+  // segment's device tokens): someone in the segment with push disabled
+  // now still gets the message, they just see it in-app instead of on
+  // their lock screen. Best effort and non-blocking on failure per user, so
+  // one bad send doesn't stop the rest of the segment. The `route` field is
+  // what the app uses (see usePushRegistration.ts's action-performed
+  // listener) to send people straight to the Record page when they tap the
+  // notification, instead of just opening the app to Home.
+  (async () => {
+    for (const userId of listUserIdsForSegment(parsed.data.segment)) {
+      try {
+        await notifyUser(userId, {
+          type: "nudge",
+          title: nudge.title ?? undefined,
+          body: nudge.message,
+          route: "/record",
+        });
+      } catch (e) {
+        console.error("Nudge notify failed for user:", userId, e);
+        Sentry.captureException(e);
+      }
+    }
+  })();
 
   return NextResponse.json({ sent: nudge });
 }
