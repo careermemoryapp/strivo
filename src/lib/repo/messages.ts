@@ -87,6 +87,22 @@ export function updateMessageEmbedding(id: string, embedding: number[]) {
 // newest-first with a cap, same reasoning as listMessages' LIMIT 500 -- an
 // account with years of chat history shouldn't make every single turn scan
 // an ever-growing table.
+// Every message across every chat this user has, both sender=user AND
+// sender=ai -- unlike listMessages (one chat) and listMessagesWithEmbeddings
+// (user-only, excludes one chat, cross-chat recall candidate pool), this is
+// specifically for the admin data-export route (see
+// /api/admin/users/[id]/export): a GDPR/CCPA portability export has to be
+// the user's whole conversation history, not a subset. Unbounded (no LIMIT)
+// for the same reason listMemories is unbounded -- an export that silently
+// truncated would be a real compliance problem, not just a UX one.
+// Oldest-first so the exported JSON reads in the order it actually happened.
+export function listAllMessagesForUser(userId: string): Message[] {
+  const db = getDb();
+  return db
+    .prepare(`SELECT * FROM messages WHERE user_id = ? ORDER BY created_at ASC`)
+    .all(userId) as Message[];
+}
+
 export function listMessagesWithEmbeddings(
   userId: string,
   excludeChatId: string,

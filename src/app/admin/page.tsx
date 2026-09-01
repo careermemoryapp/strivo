@@ -1687,32 +1687,48 @@ export default function AdminDashboardPage() {
                               {new Date(u.createdAt).toLocaleDateString()}
                             </td>
                             <td className="px-4 py-3">
-                              {u.status === "active" ? (
-                                <button
-                                  onClick={() => handleSetStatus(u.id, "trial")}
-                                  disabled={userActionId === u.id}
-                                  className="whitespace-nowrap text-xs font-semibold text-ink-soft disabled:opacity-50"
+                              <div className="flex flex-col items-start gap-1">
+                                {u.status === "active" ? (
+                                  <button
+                                    onClick={() => handleSetStatus(u.id, "trial")}
+                                    disabled={userActionId === u.id}
+                                    className="whitespace-nowrap text-xs font-semibold text-ink-soft disabled:opacity-50"
+                                  >
+                                    Revert to trial
+                                  </button>
+                                ) : (
+                                  <>
+                                    <button
+                                      onClick={() => handleSetStatus(u.id, "active", "annual")}
+                                      disabled={userActionId === u.id}
+                                      className="whitespace-nowrap text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
+                                    >
+                                      Grant Plus · Yearly
+                                    </button>
+                                    <button
+                                      onClick={() => handleSetStatus(u.id, "active", "monthly")}
+                                      disabled={userActionId === u.id}
+                                      className="whitespace-nowrap text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
+                                    >
+                                      Grant Plus · Monthly
+                                    </button>
+                                  </>
+                                )}
+                                {/* GDPR/CCPA data-portability fulfillment -- see
+                                    /api/admin/users/[id]/export's comment. Opens in a
+                                    new tab so it downloads a JSON file rather than
+                                    navigating the admin dashboard away; the admin
+                                    session cookie rides along automatically since
+                                    this is a same-origin GET. */}
+                                <a
+                                  href={`/api/admin/users/${u.id}/export`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="whitespace-nowrap text-xs font-semibold text-ink-soft"
                                 >
-                                  Revert to trial
-                                </button>
-                              ) : (
-                                <div className="flex flex-col items-start gap-1">
-                                  <button
-                                    onClick={() => handleSetStatus(u.id, "active", "annual")}
-                                    disabled={userActionId === u.id}
-                                    className="whitespace-nowrap text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
-                                  >
-                                    Grant Plus · Yearly
-                                  </button>
-                                  <button
-                                    onClick={() => handleSetStatus(u.id, "active", "monthly")}
-                                    disabled={userActionId === u.id}
-                                    className="whitespace-nowrap text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
-                                  >
-                                    Grant Plus · Monthly
-                                  </button>
-                                </div>
-                              )}
+                                  Export data
+                                </a>
+                              </div>
                             </td>
                           </tr>
                         ))}
