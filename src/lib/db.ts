@@ -405,6 +405,29 @@ function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read);
+
+    -- Per-user on/off switches for each of the 6 notification types (see
+    -- NOTIFICATION_TYPES in lib/notificationTypes.ts) -- the Settings >
+    -- Notifications screen (app/(app)/settings/notifications). One column
+    -- per type rather than a normalized key/value table, since the set of
+    -- types is small and fixed and this keeps a single read cheap (no join,
+    -- no JSON parsing). Deliberately lazy: no row means "everything on",
+    -- the default -- a row only gets created the first time someone flips
+    -- ANY switch (see setNotificationPref in lib/repo/notificationPrefs.ts),
+    -- so a user who never visits this screen costs nothing here. Checked by
+    -- notifyUser (lib/notify.ts) before EVERY automatic notification -- a
+    -- disabled type is skipped entirely (no in-app row, no push), not just
+    -- hidden from the list.
+    CREATE TABLE IF NOT EXISTS notification_prefs (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      weekly_recap INTEGER NOT NULL DEFAULT 1,
+      growth_narrative INTEGER NOT NULL DEFAULT 1,
+      quarterly_benchmark INTEGER NOT NULL DEFAULT 1,
+      checkin INTEGER NOT NULL DEFAULT 1,
+      underplayed_win INTEGER NOT NULL DEFAULT 1,
+      nudge INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

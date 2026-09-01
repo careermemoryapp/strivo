@@ -109,7 +109,7 @@ export default function SettingsPage() {
         <div>
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[#a8a2bd]">Preferences</h3>
           <div className="rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
-            <Row icon={<Bell size={18} />} label="Notifications" comingSoon />
+            <Row icon={<Bell size={18} />} label="Notifications" onClick={() => router.push("/settings/notifications")} />
             <Row icon={<Palette size={18} />} label="Appearance" comingSoon />
           </div>
         </div>

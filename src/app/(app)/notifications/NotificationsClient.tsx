@@ -4,10 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, type Variants } from "framer-motion";
 import { formatDistanceToNowStrict } from "date-fns";
-import {
-  Bell, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, Heart, Megaphone, Sparkles,
-} from "lucide-react";
+import { Bell, Sparkles } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
+import { NOTIFICATION_META, type NotificationType } from "@/lib/notificationTypes";
 
 export type NotificationRow = {
   id: string;
@@ -29,22 +28,13 @@ const stagger: Variants = {
   show: { transition: { staggerChildren: 0.06 } },
 };
 
-// Same icon/color pairing as each feature's own Home teaser card (see
-// HomeClient.tsx) AND the Features page (settings/features/page.tsx) so a
-// row here is instantly recognizable as "the same kind of thing" someone
-// may have already seen elsewhere -- underplayed_win and nudge are the two
-// exceptions, since neither has a Home teaser today (the underplayed-win
-// callout is push/notification-only by design -- see
-// generateUnderplayedWinCallout in lib/ai.ts -- and nudges never had an
-// in-app surface before this feature existed at all).
-const TYPE_STYLES: Record<string, { icon: typeof Bell; color: string }> = {
-  weekly_recap: { icon: CalendarDays, color: "#6366f1" },
-  growth_narrative: { icon: TrendingUp, color: "#7c6ff0" },
-  quarterly_benchmark: { icon: Scale, color: "#10b981" },
-  checkin: { icon: MessageCircleQuestion, color: "#f43f5e" },
-  underplayed_win: { icon: Heart, color: "#db2777" },
-  nudge: { icon: Megaphone, color: "#f59e0b" },
-};
+// Icon/color per type now comes from lib/notificationTypes.ts -- the same
+// source the Settings > Notifications toggle screen uses (see
+// settings/notifications/NotificationPrefsClient.tsx) -- so a row here and
+// its on/off switch there can never drift out of sync on what a type looks
+// like. DEFAULT_STYLE only matters for a `type` value that predates
+// whatever's in NOTIFICATION_META (should never happen in practice, but a
+// row shouldn't render broken if it ever does).
 const DEFAULT_STYLE = { icon: Bell, color: "#7c6ff0" };
 
 export function NotificationsClient({ notifications: initial }: { notifications: NotificationRow[] }) {
@@ -164,7 +154,7 @@ export function NotificationsClient({ notifications: initial }: { notifications:
         ) : (
           <motion.div initial="hidden" animate="show" variants={stagger} className="space-y-2.5">
             {notifications.map((n) => {
-              const style = TYPE_STYLES[n.type] ?? DEFAULT_STYLE;
+              const style = NOTIFICATION_META[n.type as NotificationType] ?? DEFAULT_STYLE;
               const Icon = style.icon;
               const unread = n.read === 0;
               return (

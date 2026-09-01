@@ -1,4 +1,5 @@
 import { createNotification } from "@/lib/repo/notifications";
+import { isNotificationTypeEnabled } from "@/lib/repo/notificationPrefs";
 import { getPushTokensForUser } from "@/lib/repo/pushTokens";
 import { sendPushToAllDevices } from "@/lib/push";
 
@@ -26,10 +27,21 @@ import { sendPushToAllDevices } from "@/lib/push";
 // either way, so this is only useful to a caller that wants to report on
 // push reach specifically (see app/api/checkins/run, which already tracked
 // a `pushed` count before this helper existed).
+//
+// Checks the per-type preference (see lib/repo/notificationPrefs.ts, backed
+// by the Settings > Notifications toggles) before doing anything else -- a
+// disabled type is skipped ENTIRELY: no notification row, no push. This is
+// the one gate every one of the 6 notification types passes through, so
+// turning a category off in Settings genuinely stops it everywhere at once
+// rather than just hiding it from the list.
 export async function notifyUser(
   userId: string,
   input: { type: string; title?: string; body: string; route?: string }
 ): Promise<{ pushed: boolean }> {
+  if (!isNotificationTypeEnabled(userId, input.type)) {
+    return { pushed: false };
+  }
+
   createNotification({
     userId,
     type: input.type,
