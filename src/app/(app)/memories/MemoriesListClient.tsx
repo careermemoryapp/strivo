@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, ChevronDown, Brain, Trophy, ChevronRight } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
+import { NotificationBell } from "@/components/NotificationBell";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { MemoryCard } from "@/components/MemoryCard";
 import { EmptyState } from "@/components/EmptyState";
@@ -62,9 +63,12 @@ export function MemoriesListClient({ initialMemories }: { initialMemories: Memor
       <DarkHeader
         wordmark
         avatarRight={
-          <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-            <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
-          </button>
+          <div className="flex items-center gap-3.5">
+            <NotificationBell />
+            <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
+              <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
+            </button>
+          </div>
         }
       >
         <div className="relative mt-5">

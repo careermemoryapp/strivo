@@ -7,7 +7,6 @@ import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
 import { getRecentGrowthNarrative } from "@/lib/repo/growthNarratives";
 import { getRecentQuarterlyBenchmark } from "@/lib/repo/quarterlyBenchmarks";
 import { getActiveCheckinForUser } from "@/lib/repo/pendingCheckins";
-import { countUnreadNotifications } from "@/lib/repo/notifications";
 import { computeStreak } from "@/lib/utils";
 import { HomeClient } from "./HomeClient";
 
@@ -66,11 +65,6 @@ export default async function HomePage() {
   // the user actually answers or dismisses it (see /api/checkins/run, which
   // is what flips a row to 'active' in the first place).
   const activeCheckin = getActiveCheckinForUser(userId);
-  // Bell badge on the header (see HomeClient.tsx) -- the notification
-  // center (see app/(app)/notifications) is the permanent home for
-  // everything Strivo has ever said unprompted; this is just the unread
-  // count so the bell can show a dot/number without a client round trip.
-  const unreadNotifications = countUnreadNotifications(userId);
 
   return (
     <HomeClient
@@ -102,7 +96,6 @@ export default async function HomePage() {
         // Just the question -- tapping the teaser goes to /check-in/[id]
         // for the actual answer flow.
         checkin: activeCheckin ? { id: activeCheckin.id, question: activeCheckin.question } : null,
-        unreadNotifications,
       }}
     />
   );

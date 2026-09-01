@@ -11,6 +11,7 @@ import {
 import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
 import { Avatar } from "@/components/Avatar";
+import { NotificationBell } from "@/components/NotificationBell";
 import { APP_NAME } from "@/lib/config";
 
 function Row({
@@ -78,7 +79,7 @@ export default function SettingsPage() {
 
   return (
     <div className="pb-8">
-      <DarkHeader back inlineTitle="Settings">
+      <DarkHeader back inlineTitle="Settings" right={<NotificationBell />}>
         {profile && (
           <div className="relative mt-4 flex items-center gap-3.5 rounded-[14px] border border-white/10 bg-white/8 p-3.5">
             <Avatar firstName={profile.firstName} lastName={profile.lastName} size={44} />

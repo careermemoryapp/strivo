@@ -10,6 +10,7 @@ import {
 import { safeJsonParse, pickVariant } from "@/lib/utils";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -473,9 +474,12 @@ export default function RecordPage() {
       <DarkHeader
         wordmark
         avatarRight={
-          <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-            <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
-          </button>
+          <div className="flex items-center gap-3.5">
+            <NotificationBell />
+            <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
+              <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
+            </button>
+          </div>
         }
         title="Record Memory"
         subtitle="Capture your thoughts. Your AI will remember what matters."

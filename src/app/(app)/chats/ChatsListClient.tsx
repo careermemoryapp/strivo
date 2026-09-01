@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Search, Plus, X, MessageSquare } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
+import { NotificationBell } from "@/components/NotificationBell";
 import { ChatCard } from "@/components/ChatCard";
 import { EmptyState } from "@/components/EmptyState";
 import { Spinner } from "@/components/Spinner";
@@ -87,9 +88,12 @@ export function ChatsListClient({ initialChats }: { initialChats: Chat[] }) {
       <DarkHeader
         wordmark
         avatarRight={
-          <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
-            <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
-          </button>
+          <div className="flex items-center gap-3.5">
+            <NotificationBell />
+            <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
+              <Avatar firstName={user?.firstName} lastName={user?.lastName} size={32} />
+            </button>
+          </div>
         }
       >
         <div className="relative mt-5 flex items-start justify-between gap-3">

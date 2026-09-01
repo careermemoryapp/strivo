@@ -3,11 +3,12 @@
 import { useState, useCallback, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, Bell,
+  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
 import { LogoMark } from "@/components/Logo";
+import { NotificationBell } from "@/components/NotificationBell";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useCurrentUser } from "@/lib/useCurrentUser";
@@ -46,12 +47,6 @@ type HomeData = {
   // delivery is still a push notification (see app/api/checkins/run) -- this
   // is the secondary surface for anyone who opens the app without tapping it.
   checkin: { id: string; question: string } | null;
-  // Unread count for the bell icon below (see app/(app)/notifications) --
-  // the permanent, complete history of every automatic message Strivo has
-  // ever sent this user (weekly recap, growth narrative, quarterly
-  // benchmark, check-ins, the underplayed-win callout, admin nudges), not
-  // just whichever ONE of each is still within its Home teaser window above.
-  unreadNotifications: number;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -163,21 +158,7 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           <span className="text-[17px] font-bold tracking-tight text-white">Strivo</span>
         </div>
         <div className="flex items-center gap-3.5">
-          <button
-            onClick={() => router.push("/notifications")}
-            aria-label={data.unreadNotifications > 0 ? `Notifications, ${data.unreadNotifications} unread` : "Notifications"}
-            className="relative flex h-8 w-8 items-center justify-center rounded-full text-white/85 active:bg-white/10"
-          >
-            <Bell size={19} />
-            {data.unreadNotifications > 0 && (
-              <span
-                className="absolute right-1 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
-                style={{ background: "#f43f5e" }}
-              >
-                {data.unreadNotifications > 9 ? "9+" : data.unreadNotifications}
-              </span>
-            )}
-          </button>
+          <NotificationBell />
           <button onClick={() => router.push("/settings")} aria-label="Profile and settings">
             <Avatar
               firstName={currentUser?.firstName ?? data.user?.firstName}
