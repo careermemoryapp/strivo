@@ -153,3 +153,12 @@ export function checkCheckinSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea again, for the "someone's actually proud of you" automation (see
+// /api/underplayed-win/run) -- its own credential, separate from every other
+// secret above. Checked via a request header (`x-underplayed-win-secret`).
+export function checkUnderplayedWinSecret(secret: string | null): boolean {
+  const expected = process.env.UNDERPLAYED_WIN_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

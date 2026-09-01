@@ -89,6 +89,21 @@ export type MemoryMetadata = {
   // model can get subtly wrong. null for the large majority of memories,
   // which don't mention anything upcoming at all.
   futureCheckin: { question: string; targetDate: string } | null;
+  // Flags the narrower "you did something genuinely big and described it
+  // like it was nothing" case -- the layer behind the unprompted
+  // "someone's actually proud of you" push (see generateUnderplayedWinCallout
+  // below and app/api/underplayed-win/run). Distinct from competencies/praise
+  // above: a memory can have real competencies and still be reported with
+  // ordinary pride or plain neutral language, which is NOT what this flags.
+  // True only when the transcript's own words visibly undersell a real
+  // accomplishment ("just", "nothing much", "anyone would have done that")
+  // sitting on top of genuine ownership, impact, or difficulty overcome.
+  // Rare by design -- most memories, even strong ones, are false here.
+  // selfMinimizedReason is a short internal note (never shown to the user
+  // directly) naming the specific gap, used later to help the callout-writer
+  // stay grounded in the actual transcript rather than re-reading it cold.
+  selfMinimized: boolean;
+  selfMinimizedReason: string | null;
 };
 
 const CATEGORY_OPTIONS = [
@@ -190,6 +205,7 @@ export async function generateMemoryMetadata(
             "hasMetric (boolean): true ONLY if the transcript states at least one concrete, quantifiable metric reflecting real impact or scale -- a percentage, a money amount, a count of people/users/items, a duration saved, a clear before/after number. A date, someone's age, a phone number, or another incidental number does NOT count. false otherwise -- most memories should be false. " +
             "reflectiveQuestion (string or null): one short, genuinely curious follow-up question about THIS specific memory, SAME language as the transcript, the kind a thoughtful friend or coach would actually wonder after hearing this story -- grounded in a specific real detail from the transcript (name what happened, don't ask generically). Examples of the RIGHT kind of specificity: 'What made you decide to split it into two phases instead of pushing back the whole deadline?' -- NOT a generic template like 'How did that make you feel?' that could be pasted onto any memory. Return null if the memory is too thin or routine to meaningfully follow up on (e.g. a one-line status note with nothing left to explore) -- don't force a question onto everything. " +
             `futureCheckin (object or null): today's date is ${todayIso} (IST). ONLY when the transcript clearly mentions a SPECIFIC upcoming event that hasn't happened yet, with an identifiable timeframe -- an interview, a hard conversation, a performance review, a deadline, a decision, a result coming back. Examples: "I have my performance review next month", "talking to my manager about this on Friday", "we find out the results in two weeks". If so, return { question: string (SAME language as the transcript, short, specific, naming the actual event, phrased as something to ask AFTER it happens -- e.g. "How did the conversation with your manager go?", not "How do you feel about Friday?"), targetDate: string in YYYY-MM-DD format, your best-effort resolution of the relative timeframe against today's date -- e.g. "next Friday" or "in two weeks" becomes an actual calendar date. If only a vague timeframe is given (e.g. "sometime next month"), pick a single reasonable date within it rather than returning null over it. } Return null if there's no clear upcoming event, if the event already happened or is happening today, or if there's truly no timeframe at all to anchor a date to. This is rare -- most memories are about something already done, not something still coming, so null is the right answer far more often than not. Never invent an event that isn't actually mentioned. ` +
+            "selfMinimized (boolean) and selfMinimizedReason (string or null): selfMinimized is true ONLY when the transcript describes a genuinely strong accomplishment -- real ownership, real impact, or a real difficulty actually overcome -- using flat, dismissive, or minimizing language about it: 'just', 'nothing much', 'anyone would have done that', 'it wasn't a big deal', or simply reporting something significant in a matter-of-fact tone with zero acknowledgment of its actual weight. This is NARROWER than competencies/praise above: a memory can genuinely have competencies while being described with ordinary pride or plain neutral reporting, which does NOT count here -- reserve true for a real, noticeable gap between what actually happened and how modestly the person framed it. Most memories are false here, including most memories with competencies -- this should fire rarely. When true, selfMinimizedReason is one short (<=20 words) English internal note naming the specific gap (e.g. 'Led a 3-team rollout solo but called it \"just helping out\"') -- never shown to the user directly, only used internally later. When false, selfMinimizedReason MUST be null. " +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -239,6 +255,11 @@ export async function generateMemoryMetadata(
       // occasionally subtly wrong, and a check-in with a bad date (already
       // past, or absurdly far out) is worse than no check-in at all.
       futureCheckin: validateFutureCheckin(parsed.futureCheckin, todayIso),
+      selfMinimized: parsed.selfMinimized === true,
+      selfMinimizedReason:
+        parsed.selfMinimized === true && typeof parsed.selfMinimizedReason === "string"
+          ? parsed.selfMinimizedReason.slice(0, 200)
+          : null,
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
@@ -434,6 +455,73 @@ export async function generateQuarterlyBenchmark(
     return parsed.reflection.trim().slice(0, 800);
   } catch (err) {
     console.error("generateQuarterlyBenchmark failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
+// The "someone's actually proud of you" push -- distinct in kind from every
+// other reflective feature above (weekly recap, growth narrative, quarterly
+// benchmark), which all summarize or find a pattern across MANY memories.
+// This one goes the other way: given a small batch of memories the user
+// already flagged as selfMinimized at save time (see the field above), it
+// picks the SINGLE strongest one and writes back exactly what they
+// undersold, grounded in a real detail, unprompted. See
+// shouldSurfaceUnderplayedWin in lib/repo/underplayedWins.ts for the cadence
+// gate that keeps this rare (called by app/api/underplayed-win/run), and
+// listSelfMinimizedCandidates in lib/repo/memories.ts for how candidates are
+// selected (unsurfaced, selfMinimized memories only).
+// Returns null on any failure OR if nothing in the batch is genuinely strong
+// enough -- callers should just skip that user this cycle rather than force
+// a weak one out just to hit a schedule.
+export async function generateUnderplayedWinCallout(
+  candidates: Memory[],
+  firstName?: string | null
+): Promise<{ memoryId: string; message: string } | null> {
+  const openai = getClient();
+  if (!openai || candidates.length === 0) return null;
+  try {
+    const listing = candidates
+      .map((m) => {
+        const competencies = safeParseStringArray(m.competencies);
+        return (
+          `id: ${m.id}\nTitle: ${m.title}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\n` +
+          `Story: ${m.summary ?? m.transcript.slice(0, 400)}\nWhy it was flagged: ${m.self_minimized_reason ?? "(not recorded)"}`
+        );
+      })
+      .join("\n\n---\n\n");
+    const nameHint = firstName
+      ? ` The person's first name is ${firstName} -- you may open with it if it feels natural, but don't force it.`
+      : "";
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.5,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You're given a short list of a user's personal memories (from a career-memory app) that were each flagged as describing a real accomplishment in flat or self-minimizing language -- the person genuinely undersold what they did. Your job: pick the ONE strongest, clearest example, and write a short message that notices it, unprompted, the way a friend or mentor would if they'd actually caught it in the moment." +
+            nameHint +
+            ' Respond ONLY with JSON: {"memoryId": string or null, "message": string or null}. ' +
+            "memoryId must EXACTLY match one of the provided ids, or null if none of them is genuinely strong enough to be worth a message on its own -- don't force a pick from a weak batch. " +
+            "message (SAME language as that memory, 1-3 sentences, second person): name the SPECIFIC thing they did (a real detail from the story -- what happened, what they handled, what it took) and point out, plainly and warmly, that they didn't seem to register it as a big deal. NOT coaching, NOT a generic compliment, NOT a call to action -- no 'keep it up', no 'you should be proud', no suggestion to go do anything. Just the observation itself, stated like someone who actually noticed and is genuinely a little surprised the person breezed past it. It should be obvious this was written about THIS specific story and would sound wrong attached to a different one. " +
+            "Never invent a detail, outcome, or number that isn't in the story you were given.",
+        },
+        { role: "user", content: listing },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (typeof parsed.memoryId !== "string" || typeof parsed.message !== "string" || !parsed.message.trim()) {
+      return null;
+    }
+    const match = candidates.find((c) => c.id === parsed.memoryId);
+    if (!match) return null;
+    return { memoryId: match.id, message: parsed.message.trim().slice(0, 400) };
+  } catch (err) {
+    console.error("generateUnderplayedWinCallout failed:", err);
     Sentry.captureException(err);
     return null;
   }

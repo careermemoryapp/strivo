@@ -36,6 +36,15 @@ export type Memory = {
   // until the user answers (or if they skip it).
   reflective_question: string | null;
   reflective_answer: string | null;
+  // See selfMinimized/selfMinimizedReason in generateMemoryMetadata
+  // (lib/ai.ts) and the migration comment in lib/db.ts -- 0/1 flag for
+  // whether this memory's own words undersell a real accomplishment, plus a
+  // short internal note on the specific gap when it does. Powers the
+  // unprompted "someone's actually proud of you" push (see
+  // generateUnderplayedWinCallout, lib/ai.ts, and listSelfMinimizedCandidates
+  // below). self_minimized_reason is always null when self_minimized is 0.
+  self_minimized: number;
+  self_minimized_reason: string | null;
   metadata_status: "pending" | "ready" | "failed";
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
@@ -185,6 +194,8 @@ export function updateMemoryMetadata(
       | "has_metric"
       | "reflective_question"
       | "reflective_answer"
+      | "self_minimized"
+      | "self_minimized_reason"
       | "metadata_status"
       | "key_points"
       | "summary_feedback"
@@ -207,11 +218,13 @@ export function updateMemoryMetadata(
   const has_metric = input.has_metric ?? current.has_metric;
   const reflective_question = input.reflective_question ?? current.reflective_question;
   const reflective_answer = input.reflective_answer ?? current.reflective_answer;
+  const self_minimized = input.self_minimized ?? current.self_minimized;
+  const self_minimized_reason = input.self_minimized_reason ?? current.self_minimized_reason;
   const metadata_status = input.metadata_status ?? current.metadata_status;
   const key_points = input.key_points ?? current.key_points;
   const summary_feedback = input.summary_feedback ?? current.summary_feedback;
   db.prepare(
-    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, reflective_question = ?, reflective_answer = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
+    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, reflective_question = ?, reflective_answer = ?, self_minimized = ?, self_minimized_reason = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
      WHERE id = ? AND user_id = ?`
   ).run(
     title,
@@ -227,6 +240,8 @@ export function updateMemoryMetadata(
     has_metric,
     reflective_question,
     reflective_answer,
+    self_minimized,
+    self_minimized_reason,
     metadata_status,
     key_points,
     summary_feedback,
@@ -344,6 +359,29 @@ export function countMemoriesWithMetric(userId: string): number {
     .prepare(`SELECT COUNT(*) as c FROM memories WHERE user_id = ? AND has_metric = 1`)
     .get(userId) as { c: number };
   return row.c;
+}
+
+// Candidate pool for the "someone's actually proud of you" push (see
+// generateUnderplayedWinCallout in lib/ai.ts and app/api/underplayed-win/run)
+// -- memories flagged self_minimized=1 that have never been used for a
+// callout before (LEFT JOIN ... IS NULL against underplayed_win_callouts,
+// same "never reuse" idea as pending_checkins' status field, just modeled as
+// existence-of-a-row instead of a status column since a memory can only ever
+// be surfaced once). Bounded by `limit` and newest-first, same reasoning as
+// listOldestMemories/listNewestMemories above -- recent underplayed moments
+// read as more timely ("last week you...") than something from months ago,
+// and a small batch keeps the AI call focused.
+export function listSelfMinimizedCandidates(userId: string, limit: number): Memory[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT m.* FROM memories m
+       LEFT JOIN underplayed_win_callouts c ON c.memory_id = m.id
+       WHERE m.user_id = ? AND m.self_minimized = 1 AND c.id IS NULL
+       ORDER BY m.created_at DESC
+       LIMIT ?`
+    )
+    .all(userId, limit) as Memory[];
 }
 
 // Distinct creation dates (YYYY-MM-DD, local to server) for streak calc.

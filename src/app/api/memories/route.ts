@@ -138,6 +138,13 @@ export async function POST(req: Request) {
       // screen (see savedReflectiveQuestion in record/page.tsx). Null when
       // the AI judged this memory too thin to follow up on.
       reflective_question: metadata.reflectiveQuestion,
+      // See selfMinimized/selfMinimizedReason in generateMemoryMetadata
+      // (lib/ai.ts) -- the flag behind the unprompted "someone's actually
+      // proud of you" push (see listSelfMinimizedCandidates in
+      // lib/repo/memories.ts and app/api/underplayed-win/run). Not shown
+      // anywhere on this response; picked up later by that scheduled job.
+      self_minimized: metadata.selfMinimized ? 1 : 0,
+      self_minimized_reason: metadata.selfMinimizedReason,
       metadata_status: "ready",
     });
 

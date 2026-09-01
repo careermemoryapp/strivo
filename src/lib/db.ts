@@ -358,6 +358,25 @@ function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_pending_checkins_user ON pending_checkins(user_id, status);
     CREATE INDEX IF NOT EXISTS idx_pending_checkins_due ON pending_checkins(status, target_date);
+
+    -- One row per "someone's actually proud of you" push actually sent (see
+    -- generateUnderplayedWinCallout in lib/ai.ts and app/api/underplayed-win/run)
+    -- -- the unprompted callout on a specific past memory the user described
+    -- in flat/self-minimizing language (see selfMinimized/self_minimized on
+    -- the memories table below). memory_id records exactly which memory the
+    -- message was about, both so the tap target can deep-link straight to it
+    -- and so shouldSurfaceUnderplayedWin (lib/repo/underplayedWins.ts) can
+    -- exclude already-surfaced memories from future candidate batches --
+    -- each real memory only ever gets used for this once.
+    CREATE TABLE IF NOT EXISTS underplayed_win_callouts (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      memory_id TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+      message_text TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_underplayed_win_callouts_user ON underplayed_win_callouts(user_id, created_at);
+    CREATE INDEX IF NOT EXISTS idx_underplayed_win_callouts_memory ON underplayed_win_callouts(memory_id);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---
@@ -650,6 +669,25 @@ function migrate(db: DatabaseSync) {
   }
   if (!memoryColumns.includes("reflective_answer")) {
     db.exec(`ALTER TABLE memories ADD COLUMN reflective_answer TEXT;`);
+  }
+
+  // Whether this memory's own words visibly undersell a real accomplishment
+  // (see selfMinimized in generateMemoryMetadata, lib/ai.ts) -- the flag
+  // behind the unprompted "someone's actually proud of you" push (see
+  // generateUnderplayedWinCallout in lib/ai.ts and app/api/underplayed-win/run).
+  // Set once at creation time, same as competencies/praise -- never
+  // recomputed on edit. Defaults to 0 (false) for memories created before
+  // this existed, which is the safe default: they simply never become
+  // candidates, not wrongly flagged either way.
+  if (!memoryColumns.includes("self_minimized")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN self_minimized INTEGER NOT NULL DEFAULT 0;`);
+  }
+  // Short internal note (never shown to the user directly) naming the
+  // specific gap the model spotted -- reused as grounding context when
+  // generateUnderplayedWinCallout later writes the actual message. Always
+  // null when self_minimized is 0.
+  if (!memoryColumns.includes("self_minimized_reason")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN self_minimized_reason TEXT;`);
   }
 
   // The app's versionName (e.g. "1.5.1"), sent by the client on push-token
