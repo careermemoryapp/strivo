@@ -9,6 +9,7 @@ export type Message = {
   retrieved_memories: string | null; // JSON array of memory ids
   status: "sent" | "error" | "pending";
   created_at: string;
+  embedding: string | null; // JSON.stringify(number[]) -- see db.ts migration comment
 };
 
 export function createMessage(input: {
@@ -63,4 +64,41 @@ export function listMessages(userId: string, chatId: string): Message[] {
 export function updateMessageStatus(userId: string, id: string, status: Message["status"]) {
   const db = getDb();
   db.prepare(`UPDATE messages SET status = ? WHERE id = ? AND user_id = ?`).run(status, id, userId);
+}
+
+// Fire-and-forget target from chatService.ts, called AFTER a user message
+// has already been saved and (usually) already replied to -- see the
+// embedding comment on the messages table in lib/db.ts for why this exists.
+// No-ops silently if the message was deleted out from under it (chat
+// deletion) rather than throwing, since nothing is waiting on this write.
+export function updateMessageEmbedding(id: string, embedding: number[]) {
+  const db = getDb();
+  db.prepare(`UPDATE messages SET embedding = ? WHERE id = ?`).run(JSON.stringify(embedding), id);
+}
+
+// The candidate pool for cross-chat message recall (see
+// retrieveRelevantMessages in lib/retrieval.ts). Scoped to sender='user'
+// only -- the AI's own prior replies aren't "something the user said" and
+// recalling them back at the user as if they were would be strange, plus it
+// would double the embedding volume for no benefit. excludeChatId leaves out
+// the CURRENT conversation: those messages are already in the model's
+// context via the normal history array (see chatService.ts), so surfacing
+// them again here would just be redundant, not additive. Ordered
+// newest-first with a cap, same reasoning as listMessages' LIMIT 500 -- an
+// account with years of chat history shouldn't make every single turn scan
+// an ever-growing table.
+export function listMessagesWithEmbeddings(
+  userId: string,
+  excludeChatId: string,
+  limit = 500
+): Message[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT * FROM messages
+       WHERE user_id = ? AND chat_id != ? AND sender = 'user' AND embedding IS NOT NULL
+       ORDER BY created_at DESC
+       LIMIT ?`
+    )
+    .all(userId, excludeChatId, limit) as Message[];
 }

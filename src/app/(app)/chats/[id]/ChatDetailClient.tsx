@@ -107,6 +107,7 @@ export function ChatDetailClient({
       retrieved_memories: null,
       status: "sent",
       created_at: new Date().toISOString(),
+      embedding: null,
     };
     setMessages((prev) => [...prev, optimisticUser]);
 

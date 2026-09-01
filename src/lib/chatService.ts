@@ -1,11 +1,19 @@
-import { createMessage, listMessages, type Message } from "@/lib/repo/messages";
+import { createMessage, listMessages, updateMessageEmbedding, type Message } from "@/lib/repo/messages";
 import { touchChat } from "@/lib/repo/chats";
 import { retrieveRelevantMemories, type RetrievalResult } from "@/lib/retrieval";
-import { buildSystemPrompt, chatCompletion, generateChatTitle, type ChatMessage } from "@/lib/ai";
+import { buildSystemPrompt, chatCompletion, embedText, generateChatTitle, type ChatMessage } from "@/lib/ai";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 import { getUserById } from "@/lib/repo/users";
 
 const HISTORY_LIMIT = 16;
+
+// Below this length a message is things like "ok", "thanks", "yes" -- no
+// real recall value, and embedding every single one would be pure waste
+// (see listMessagesWithEmbeddings in lib/repo/messages.ts, the pool this
+// feeds). Chosen loosely, not tuned -- the cost of skipping a genuinely
+// recall-worthy 8-character message is low, and the model still has full
+// history for the current chat regardless of whether it got embedded.
+const MIN_EMBEDDABLE_LENGTH = 12;
 
 export async function sendUserMessageAndGetReply(
   userId: string,
@@ -13,6 +21,23 @@ export async function sendUserMessageAndGetReply(
   content: string
 ): Promise<{ userMessage: Message; aiMessage: Message; retrieval: RetrievalResult; error?: string }> {
   const userMessage = createMessage({ chatId, userId, sender: "user", content, status: "sent" });
+
+  // Fire-and-forget: embed this message in the background so a future
+  // question in a DIFFERENT chat can recall it even though it's never being
+  // saved as a formal Memory (see retrieveRelevantMemories in
+  // lib/retrieval.ts and the messages.embedding column comment in
+  // lib/db.ts). Deliberately not awaited -- nothing below depends on it, and
+  // the user is waiting on the reply, not on this. Safe to do fire-and-forget
+  // here specifically because Strivo runs on a long-lived pm2 process (see
+  // ecosystem config), not a serverless/edge function that could get frozen
+  // or killed before this promise resolves.
+  if (content.trim().length >= MIN_EMBEDDABLE_LENGTH) {
+    embedText(content)
+      .then((embedding) => {
+        if (embedding) updateMessageEmbedding(userMessage.id, embedding);
+      })
+      .catch(() => {});
+  }
 
   const priorMessages = listMessages(userId, chatId)
     .filter((m) => m.status !== "error")
@@ -40,7 +65,7 @@ export async function sendUserMessageAndGetReply(
   // would double the wait on every brand-new chat for no reason.
   const isFirstMessage = priorMessages.length === 1;
   const [retrieval, generatedTitle] = await Promise.all([
-    retrieveRelevantMemories(userId, retrievalQuery || content),
+    retrieveRelevantMemories(userId, retrievalQuery || content, chatId),
     isFirstMessage ? generateChatTitle(content) : Promise.resolve(null),
   ]);
   const history: ChatMessage[] = priorMessages.map((m) => ({
@@ -72,7 +97,7 @@ export async function sendUserMessageAndGetReply(
   // Best-effort: a lookup failure here just means the chat AI won't have a
   // name to use, not something worth failing the whole reply over.
   const firstName = getUserById(userId)?.first_name ?? null;
-  const systemPrompt = buildSystemPrompt(retrieval.memories, new Date(), firstName);
+  const systemPrompt = buildSystemPrompt(retrieval.memories, new Date(), firstName, retrieval.recalledMessages);
   const result = await chatCompletion(systemPrompt, history);
 
   if ("error" in result) {

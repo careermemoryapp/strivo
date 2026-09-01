@@ -741,6 +741,21 @@ function migrate(db: DatabaseSync) {
     db.exec(`ALTER TABLE memories ADD COLUMN self_minimized_reason TEXT;`);
   }
 
+  // Vector embedding of a user (not AI) message's content, same
+  // JSON.stringify(number[]) format as memories.embedding above (see
+  // embedText in lib/ai.ts). Lets retrieval (lib/retrieval.ts) recall
+  // something the user mentioned in passing in a DIFFERENT chat that was
+  // never saved as a formal Memory -- otherwise a casual mention is
+  // invisible to every conversation except the one it happened in. Set in
+  // the background after a message is saved (see chatService.ts), not
+  // synchronously, so it never adds latency to the reply the user is
+  // waiting on. Null for messages sent before this existed and for AI
+  // replies (only the user's own words are worth recalling this way).
+  const messageColumns = (db.prepare(`PRAGMA table_info(messages)`).all() as { name: string }[]).map((c) => c.name);
+  if (!messageColumns.includes("embedding")) {
+    db.exec(`ALTER TABLE messages ADD COLUMN embedding TEXT;`);
+  }
+
   // The app's versionName (e.g. "1.5.1"), sent by the client on push-token
   // registration (see App.getInfo() in usePushRegistration.ts) — lets the
   // admin panel show which build each user is actually running, since push

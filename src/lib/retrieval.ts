@@ -1,4 +1,5 @@
 import { listMemories, listMemoriesWithEmbeddings, listMemoriesByDateRange, type Memory } from "@/lib/repo/memories";
+import { listMessagesWithEmbeddings, type Message } from "@/lib/repo/messages";
 import { embedText, translateToEnglish } from "@/lib/ai";
 
 // ---------------------------------------------------------------------------
@@ -192,6 +193,15 @@ export function detectDateRange(englishQuery: string, now: Date = new Date()): D
   return null;
 }
 
+function messageKeywordScore(queryTokens: string[], message: Message): number {
+  const haystack = message.content.toLowerCase();
+  let score = 0;
+  for (const token of queryTokens) {
+    if (haystack.includes(token)) score += 1;
+  }
+  return score;
+}
+
 function keywordScore(queryTokens: string[], memory: Memory): number {
   // search_text (an always-English gloss, see generateMemoryMetadata in
   // lib/ai.ts) is included here so an English-translated query can still
@@ -221,14 +231,30 @@ function cosineSimilarity(a: number[], b: number[]): number {
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+export type RecalledMessage = { content: string; createdAt: string };
+
 export type RetrievalResult = {
   memories: Memory[];
+  // Things the user said in a DIFFERENT chat that were never saved as a
+  // formal Memory (see the messages.embedding column comment in lib/db.ts).
+  // Populated independently of `method`/`memories` below -- a query can
+  // recall a casual mention even when no formal memory matches at all, or
+  // vice versa. Always [] when currentChatId wasn't passed in (nothing to
+  // exclude the current chat by) or when nothing cleared the similarity bar.
+  recalledMessages: RecalledMessage[];
   method: "semantic" | "keyword" | "date" | "none";
 };
+
+// How many cross-chat messages to surface per query. Kept small (vs. topK's
+// 5 for memories) -- an unsaved aside is lower-confidence than a formal
+// memory by construction, so a handful of strong candidates beats a long
+// list of marginal ones.
+const MESSAGE_TOP_K = 2;
 
 export async function retrieveRelevantMemories(
   userId: string,
   query: string,
+  currentChatId: string | null = null,
   topK = 5
 ): Promise<RetrievalResult> {
   // Translate the query to English before embedding/keyword-matching so it
@@ -250,20 +276,54 @@ export async function retrieveRelevantMemories(
   // lookup first. If nothing was recorded in that window we deliberately
   // fall through to the normal search below instead of returning empty,
   // in case the date word was incidental to an otherwise-matchable question.
+  // Cross-chat message recall is deliberately skipped for this branch: a
+  // date recap ("what did I do today") is asking for a *log*, not "did I
+  // mention X anywhere" -- pulling in unrelated cross-chat asides here would
+  // dilute a request that already has a clean, literal answer.
   const dateRange = detectDateRange(translatedQuery);
   if (dateRange) {
     const inRange = listMemoriesByDateRange(userId, dateRange.startUtcIso, dateRange.endUtcIso);
     if (inRange.length > 0) {
-      return { memories: inRange.slice(0, topK), method: "date" };
+      return { memories: inRange.slice(0, topK), recalledMessages: [], method: "date" };
     }
   }
 
-  // 1. Try semantic retrieval.
+  // 1. Try semantic retrieval -- for both formal memories AND cross-chat
+  // messages that were never saved as one. One embedding call for the query
+  // is reused against both candidate pools below, since it's the same query
+  // vector either way and embedding calls are the expensive part.
   const withEmbeddings = listMemoriesWithEmbeddings(userId);
+  const withMessageEmbeddings = currentChatId ? listMessagesWithEmbeddings(userId, currentChatId) : [];
   const queryTokensForGate = tokenize(translatedQuery);
-  if (withEmbeddings.length > 0) {
+  let recalledMessages: RecalledMessage[] = [];
+  if (withEmbeddings.length > 0 || withMessageEmbeddings.length > 0) {
     const queryEmbedding = await embedText(translatedQuery);
     if (queryEmbedding) {
+      if (withMessageEmbeddings.length > 0) {
+        recalledMessages = withMessageEmbeddings
+          .map((msg) => {
+            let score = 0;
+            try {
+              const emb = JSON.parse(msg.embedding as string) as number[];
+              score = cosineSimilarity(queryEmbedding, emb);
+            } catch {
+              score = 0;
+            }
+            return { msg, score, keywordHits: messageKeywordScore(queryTokensForGate, msg) };
+          })
+          // Same conservative bar as the memory semantic match below (see
+          // its comment for the full reasoning) -- a one-off chat message
+          // has even less signal than a recorded memory (shorter, no
+          // curated title/summary/search_text to lean on), so there's no
+          // case for trusting it with a LOWER bar. If anything this is the
+          // higher-risk surface: recalling an out-of-context aside back at
+          // the user unprompted needs to actually be right.
+          .filter((s) => s.score > 0.45 || (s.score > 0.3 && s.keywordHits > 0))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, MESSAGE_TOP_K)
+          .map((s) => ({ content: s.msg.content, createdAt: s.msg.created_at }));
+      }
+
       const scored = withEmbeddings
         .map((m) => {
           let score = 0;
@@ -320,21 +380,97 @@ export async function retrieveRelevantMemories(
         .sort((a, b) => b.score - a.score)
         .slice(0, topK);
       if (scored.length > 0) {
-        return { memories: scored.map((s) => s.memory), method: "semantic" };
+        return { memories: scored.map((s) => s.memory), recalledMessages, method: "semantic" };
       }
     }
   }
 
-  // 2. Fallback: keyword overlap across all of the user's memories.
+  // 2. Fallback: keyword overlap across all of the user's memories. Note
+  // `recalledMessages` (computed above, independent of which memory branch
+  // fires) still carries through here -- a query can fail every memory
+  // check and still recall a cross-chat message, or the reverse.
   const all = listMemories(userId);
   const queryTokens = tokenize(translatedQuery);
   if (all.length === 0 || queryTokens.length === 0) {
-    return { memories: [], method: "none" };
+    return { memories: [], recalledMessages, method: recalledMessages.length ? "semantic" : "none" };
   }
   const scored = all
     .map((m) => ({ memory: m, score: keywordScore(queryTokens, m) }))
     .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
-  return { memories: scored.map((s) => s.memory), method: scored.length ? "keyword" : "none" };
+  return {
+    memories: scored.map((s) => s.memory),
+    recalledMessages,
+    method: scored.length ? "keyword" : recalledMessages.length ? "semantic" : "none",
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Memories list search (app/(app)/memories, GET /api/memories) -- distinct
+// from retrieveRelevantMemories above, which picks a handful of memories to
+// feed the CHAT AI. This instead answers "which of the user's memories match
+// what they typed into the search box," and should return everything
+// plausibly relevant, not a tight top-K.
+// ---------------------------------------------------------------------------
+
+// Keyword search (listMemories' SQL LIKE pass, broadened to include
+// search_text/competencies -- see its comment) already catches most real
+// queries. This adds a semantic pass ONLY for what that structurally can't
+// catch: a paraphrase or synonym with no literal word in common with the
+// memory ("that time I calmed down an angry customer" matching a memory
+// that never uses those words). It only ADDS results the keyword pass
+// missed -- it never removes or re-ranks a keyword match, since a literal
+// hit the user typed themselves should never be second-guessed by a
+// similarity score.
+export async function searchMemoriesHybrid(
+  userId: string,
+  opts: { search?: string; sort?: "newest" | "oldest"; category?: string; competency?: string }
+): Promise<Memory[]> {
+  const keywordResults = listMemories(userId, opts);
+  const search = opts.search?.trim();
+  if (!search) return keywordResults;
+
+  const withEmbeddings = listMemoriesWithEmbeddings(userId);
+  if (withEmbeddings.length === 0) return keywordResults;
+
+  const translatedQuery = await translateToEnglish(search);
+  const queryEmbedding = await embedText(translatedQuery);
+  if (!queryEmbedding) return keywordResults;
+
+  const keywordIds = new Set(keywordResults.map((m) => m.id));
+  const queryTokens = tokenize(translatedQuery);
+
+  const semanticOnly = withEmbeddings
+    .filter((m) => !keywordIds.has(m.id))
+    // Respect the same category/competency filters the keyword pass used --
+    // a semantic addition shouldn't bypass a filter the user explicitly set.
+    .filter((m) => !opts.category || opts.category === "All" || m.category === opts.category)
+    .filter((m) => {
+      if (!opts.competency || opts.competency === "All") return true;
+      try {
+        const parsed = m.competencies ? JSON.parse(m.competencies) : [];
+        return Array.isArray(parsed) && parsed.includes(opts.competency);
+      } catch {
+        return false;
+      }
+    })
+    .map((m) => {
+      let score = 0;
+      try {
+        const emb = JSON.parse(m.embedding as string) as number[];
+        score = cosineSimilarity(queryEmbedding, emb);
+      } catch {
+        score = 0;
+      }
+      return { memory: m, score, keywordHits: keywordScore(queryTokens, m) };
+    })
+    // Same conservative bar as retrieveRelevantMemories' semantic path above
+    // -- see its long comment for the full reasoning. A search box result
+    // shouldn't be looser than what chat itself trusts.
+    .filter((s) => s.score > 0.45 || (s.score > 0.3 && s.keywordHits > 0))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 10); // an addition to real keyword matches, not the primary result set
+
+  return [...keywordResults, ...semanticOnly.map((s) => s.memory)];
 }

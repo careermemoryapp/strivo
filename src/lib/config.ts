@@ -66,6 +66,48 @@ export const QUICK_ACTIONS = [
 
 export const CHAT_CATEGORIES = ["All", "Interview", "Resume", "Leadership", "Performance Review", "Others"] as const;
 
+// Memory category taxonomy -- single source of truth for both the
+// server-only AI prompt (lib/ai.ts's CATEGORY_OPTIONS is built from this)
+// and any client component that needs the list without pulling in ai.ts,
+// which is server-only (see its file-top comment) and would break a "use
+// client" build if imported directly. See MEMORY_CATEGORIES in
+// lib/categoryIcons.tsx for the matching icon/color per category -- add a
+// new category to both places to extend the taxonomy.
+export const MEMORY_CATEGORIES_LIST = [
+  "Work", "Meeting", "Career", "Idea", "Review", "Learning", "Achievement", "Personal", "General",
+] as const;
+
+// Behavioral-interview + modern-work competency taxonomy -- see the full
+// reasoning in generateMemoryMetadata's comment in lib/ai.ts, which builds
+// its exported COMPETENCY_OPTIONS from this. Kept here (not ai.ts) for the
+// same client-safety reason as MEMORY_CATEGORIES_LIST above -- e.g. the
+// Memories list competency filter (MemoriesListClient.tsx) needs this list
+// without importing a server-only file.
+export const MEMORY_COMPETENCIES_LIST = [
+  "Leadership",
+  "Ownership & Initiative",
+  "Problem-Solving",
+  "Collaboration & Teamwork",
+  "Communication",
+  "Conflict Resolution",
+  "Mentorship & Coaching",
+  "Innovation & Creativity",
+  "Adaptability & Resilience",
+  "Strategic Thinking",
+  "Stakeholder Focus",
+  "Results & Impact",
+  "Technical & Hard Skills",
+  "AI & Tools Fluency",
+  "Data-Driven Decision Making",
+  "Product & Business Thinking",
+  "Negotiation & Influence",
+  "Time & Priority Management",
+  "Crisis Management",
+  "Learning Agility",
+  "Customer & User Empathy",
+  "Risk & Quality Management",
+] as const;
+
 export const NEW_CHAT_TEMPLATES = [
   { category: "Interview", title: "Interview Preparation", prompt: "I want to prepare for an interview." },
   { category: "Resume", title: "Resume Builder", prompt: "I want to update my resume." },

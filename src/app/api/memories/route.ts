@@ -3,7 +3,6 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import {
   createMemory,
-  listMemories,
   updateMemoryMetadata,
   getMemoryById,
   countMemories,
@@ -11,6 +10,7 @@ import {
   countMemoriesWithMetric,
 } from "@/lib/repo/memories";
 import { generateMemoryMetadata, embedText } from "@/lib/ai";
+import { searchMemoriesHybrid } from "@/lib/retrieval";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired, getUserById } from "@/lib/repo/users";
 import { createPendingCheckin, countOpenCheckins } from "@/lib/repo/pendingCheckins";
@@ -22,8 +22,14 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const search = searchParams.get("search") ?? undefined;
   const sort = (searchParams.get("sort") as "newest" | "oldest" | null) ?? "newest";
+  const category = searchParams.get("category") ?? undefined;
+  const competency = searchParams.get("competency") ?? undefined;
 
-  const memories = listMemories(userId, { search, sort });
+  // searchMemoriesHybrid falls straight through to the plain keyword
+  // listMemories query (no extra AI call) when `search` is empty -- see its
+  // comment in lib/retrieval.ts -- so this is a no-cost no-op for the
+  // default browse/filter-only case.
+  const memories = await searchMemoriesHybrid(userId, { search, sort, category, competency });
   return NextResponse.json({ memories });
 }
 

@@ -103,24 +103,49 @@ export function getMemoriesByIds(userId: string, ids: string[]): Memory[] {
 // cap here.
 export function listMemories(
   userId: string,
-  opts: { search?: string; sort?: "newest" | "oldest" } = {}
+  opts: { search?: string; sort?: "newest" | "oldest"; category?: string; competency?: string } = {}
 ): Memory[] {
   const db = getDb();
   const order = opts.sort === "oldest" ? "ASC" : "DESC";
+  const clauses = ["user_id = ?"];
+  const params: unknown[] = [userId];
+
   if (opts.search && opts.search.trim()) {
+    // search_text (English gloss, see the migration comment in lib/db.ts)
+    // and competencies are included here for the same reason keywordScore in
+    // lib/retrieval.ts includes them: without search_text, a memory recorded
+    // in Hindi is invisible to an English search term even when it's exactly
+    // what the user is looking for, and without competencies, searching
+    // "leadership" wouldn't find a memory that demonstrates leadership but
+    // never uses the word. See also searchMemoriesHybrid in lib/retrieval.ts,
+    // which layers semantic matching on top of this keyword pass for the
+    // cases even this broadened LIKE search still misses (different
+    // phrasing, no literal word overlap at all).
+    clauses.push(
+      "(LOWER(title) LIKE ? OR LOWER(COALESCE(summary,'')) LIKE ? OR LOWER(transcript) LIKE ? OR LOWER(COALESCE(tags,'')) LIKE ? OR LOWER(COALESCE(search_text,'')) LIKE ? OR LOWER(COALESCE(competencies,'')) LIKE ?)"
+    );
     const q = `%${opts.search.trim().toLowerCase()}%`;
-    return db
-      .prepare(
-        `SELECT * FROM memories
-         WHERE user_id = ?
-           AND (LOWER(title) LIKE ? OR LOWER(summary) LIKE ? OR LOWER(transcript) LIKE ? OR LOWER(COALESCE(tags,'')) LIKE ?)
-         ORDER BY created_at ${order}`
-      )
-      .all(userId, q, q, q, q) as Memory[];
+    params.push(q, q, q, q, q, q);
   }
+  if (opts.category && opts.category !== "All") {
+    clauses.push("category = ?");
+    params.push(opts.category);
+  }
+  if (opts.competency && opts.competency !== "All") {
+    // competencies is a JSON string array (e.g. '["Leadership","Ownership &
+    // Initiative"]') -- quoting the match target (`"Leadership"` rather than
+    // just `Leadership`) matches a real array element rather than any
+    // substring, which matters since some competency names in
+    // COMPETENCY_OPTIONS (lib/ai.ts) share words with others (e.g.
+    // "Leadership" vs "Mentorship & Coaching" wouldn't collide, but this
+    // stays correct even if a future addition does).
+    clauses.push("LOWER(COALESCE(competencies,'')) LIKE ?");
+    params.push(`%"${opts.competency.toLowerCase()}"%`);
+  }
+
   return db
-    .prepare(`SELECT * FROM memories WHERE user_id = ? ORDER BY created_at ${order}`)
-    .all(userId) as Memory[];
+    .prepare(`SELECT * FROM memories WHERE ${clauses.join(" AND ")} ORDER BY created_at ${order}`)
+    .all(...(params as [])) as Memory[];
 }
 
 // Half-open range [startUtcIso, endUtcIso) — used by the "what did I do

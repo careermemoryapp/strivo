@@ -1,6 +1,8 @@
 import OpenAI from "openai";
 import * as Sentry from "@sentry/nextjs";
 import type { Memory } from "@/lib/repo/memories";
+import type { RecalledMessage } from "@/lib/retrieval";
+import { MEMORY_CATEGORIES_LIST, MEMORY_COMPETENCIES_LIST } from "@/lib/config";
 
 // Server-only. Never import this file from a "use client" component.
 let client: OpenAI | null = null;
@@ -106,17 +108,7 @@ export type MemoryMetadata = {
   selfMinimizedReason: string | null;
 };
 
-const CATEGORY_OPTIONS = [
-  "Work",
-  "Meeting",
-  "Career",
-  "Idea",
-  "Review",
-  "Learning",
-  "Achievement",
-  "Personal",
-  "General",
-];
+const CATEGORY_OPTIONS: string[] = [...MEMORY_CATEGORIES_LIST];
 
 // Behavioral-interview + modern-work competency taxonomy (the kind of thing
 // STAR answers and "tell me about a time..." questions are built around).
@@ -132,30 +124,7 @@ const CATEGORY_OPTIONS = [
 // generateMemoryMetadata's prompt below) rather than narrowly scoped to one
 // discipline, since Strivo's users span everything from engineering to
 // design to operations to sales.
-export const COMPETENCY_OPTIONS = [
-  "Leadership",
-  "Ownership & Initiative",
-  "Problem-Solving",
-  "Collaboration & Teamwork",
-  "Communication",
-  "Conflict Resolution",
-  "Mentorship & Coaching",
-  "Innovation & Creativity",
-  "Adaptability & Resilience",
-  "Strategic Thinking",
-  "Stakeholder Focus",
-  "Results & Impact",
-  "Technical & Hard Skills",
-  "AI & Tools Fluency",
-  "Data-Driven Decision Making",
-  "Product & Business Thinking",
-  "Negotiation & Influence",
-  "Time & Priority Management",
-  "Crisis Management",
-  "Learning Agility",
-  "Customer & User Empathy",
-  "Risk & Quality Management",
-];
+export const COMPETENCY_OPTIONS: string[] = [...MEMORY_COMPETENCIES_LIST];
 
 // Generates title/summary/category/tags for a raw transcript. Returns null
 // on ANY failure — callers must still keep the raw transcript saved either
@@ -764,11 +733,34 @@ function nameContext(firstName: string): string {
   return `\n\nThe user's first name is ${firstName}. You can address them by name occasionally when it genuinely fits -- opening a reply, or a warm aside -- but not in every message, and never forced into a spot that doesn't call for it.`;
 }
 
-export function buildSystemPrompt(memories: Memory[], now: Date = new Date(), firstName?: string | null): string {
+// Renders cross-chat recall context (see the messages.embedding column
+// comment in lib/db.ts, and retrieveRelevantMemories in lib/retrieval.ts):
+// things the user said in a DIFFERENT conversation that were never saved as
+// a formal Memory. Deliberately kept separate from the Memory blocks below,
+// with its own lower-confidence framing and a nudge-to-save instruction --
+// per the product decision this exists to serve ("Recall + suggest saving
+// it"), the model should use these when relevant but never treat a raw,
+// un-curated chat aside with the same authority as a memory that was
+// actually reviewed and saved.
+function recalledMessagesContext(recalledMessages: RecalledMessage[]): string {
+  if (recalledMessages.length === 0) return "";
+  const items = recalledMessages
+    .map((r) => `- (said on ${r.createdAt.slice(0, 10)}, in a different conversation) "${r.content}"`)
+    .join("\n");
+  return `\n\nThe user also said the following in OTHER past conversations. These were never saved as a formal memory -- they're just raw things the user mentioned in passing, with no title, category, or curation behind them, so treat them as lower-confidence than the memories above (or than a memory-based answer if there are no memories at all). Use one only if it's genuinely relevant to the current question; don't force it in. If you do rely on one to answer, briefly (one short clause, not a separate paragraph) suggest the user save it as a proper memory so it's easier to find next time.\n\n${items}`;
+}
+
+export function buildSystemPrompt(
+  memories: Memory[],
+  now: Date = new Date(),
+  firstName?: string | null,
+  recalledMessages: RecalledMessage[] = []
+): string {
   const dateContext = `\n\nToday's date is ${todayIstLabel(now)} (India Standard Time). Use this to correctly judge date-relative questions ("today," "yesterday," "this week," a specific date, etc.) against each memory's Date field below. If a memory's date genuinely falls in the period the user is asking about, treat it as relevant with confidence -- do not hedge or claim "no relevant memory" out of uncertainty about what day it is; you now know.`;
   const nameCtx = firstName ? nameContext(firstName) : "";
+  const recalledCtx = recalledMessagesContext(recalledMessages);
   if (memories.length === 0) {
-    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.`;
+    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.${recalledCtx}`;
   }
   const competencyContext = `\n\nEach memory below may list Competencies -- behavioral-interview qualities (Leadership, Problem-Solving, etc.) that memory was independently identified as genuinely demonstrating, generated when it was recorded (see generateMemoryMetadata). The user themselves may not realize a memory qualifies -- they might have just described a normal day, not framed it as a "leadership story." When asked for an example of a specific competency (e.g. "give me a leadership example," "tell me about a time you solved a problem"), actively use this field to find the match rather than only pattern-matching the user's own wording against the transcript, and you can point out to them that this is a strong example of that competency even if they didn't call it that themselves.`;
   const context = memories
@@ -778,7 +770,7 @@ export function buildSystemPrompt(memories: Memory[], now: Date = new Date(), fi
       return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}`;
 }
 
 function safeParseStringArray(value: string | null): string[] {

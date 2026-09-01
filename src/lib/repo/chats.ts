@@ -52,9 +52,18 @@ export function listChats(userId: string, opts: { search?: string; category?: st
   const clauses = ["user_id = ?", "EXISTS (SELECT 1 FROM messages WHERE messages.chat_id = chats.id)"];
   const params: unknown[] = [userId];
   if (opts.search && opts.search.trim()) {
-    clauses.push("(LOWER(title) LIKE ? OR LOWER(COALESCE(last_message,'')) LIKE ?)");
+    // Beyond title/last_message: also matches if ANY message inside the
+    // chat contains the term, not just the most recent one. Without this, a
+    // chat where the user asked about something 20 messages ago (and the
+    // conversation has since moved on to something else) was invisible to
+    // search even though the actual content the user is trying to find is
+    // sitting right there in the transcript -- last_message only reflects
+    // whatever was said most recently, which is often unrelated by then.
+    clauses.push(
+      "(LOWER(title) LIKE ? OR LOWER(COALESCE(last_message,'')) LIKE ? OR EXISTS (SELECT 1 FROM messages msg WHERE msg.chat_id = chats.id AND LOWER(msg.content) LIKE ?))"
+    );
     const q = `%${opts.search.trim().toLowerCase()}%`;
-    params.push(q, q);
+    params.push(q, q, q);
   }
   if (opts.category && opts.category !== "All") {
     clauses.push("category = ?");
