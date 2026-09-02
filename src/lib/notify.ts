@@ -31,7 +31,7 @@ import { sendPushToAllDevices } from "@/lib/push";
 // Checks the per-type preference (see lib/repo/notificationPrefs.ts, backed
 // by the Settings > Notifications toggles) before doing anything else -- a
 // disabled type is skipped ENTIRELY: no notification row, no push. This is
-// the one gate every one of the 6 notification types passes through, so
+// the one gate every one of the 7 notification types passes through, so
 // turning a category off in Settings genuinely stops it everywhere at once
 // rather than just hiding it from the list.
 export async function notifyUser(

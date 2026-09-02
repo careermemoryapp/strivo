@@ -465,6 +465,26 @@ export function listRecurringEntities(
     .slice(0, limit);
 }
 
+// Tallies how many memories fall under each category (see
+// MEMORY_CATEGORIES_LIST in lib/config.ts) -- backs the category-imbalance
+// insight (see lib/categoryInsight.ts and /api/category-insight/run), which
+// reflects back a real, individual pattern ("you've logged a lot of Work
+// memories, nothing under Personal or Learning") rather than treating every
+// user's memory mix as equally healthy. Unlike countMemoriesByCompetency
+// above, category is a single plain column (not a JSON array), so this is a
+// straight SQL GROUP BY rather than tallying in JS. Memories with no
+// category yet (metadata still pending/failed) are excluded, same as
+// competencies' NOT NULL filter.
+export function countMemoriesByCategory(userId: string): Record<string, number> {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT category, COUNT(*) as c FROM memories WHERE user_id = ? AND category IS NOT NULL GROUP BY category`)
+    .all(userId) as { category: string; c: number }[];
+  const counts: Record<string, number> = {};
+  for (const row of rows) counts[row.category] = row.c;
+  return counts;
+}
+
 // Distinct creation dates (YYYY-MM-DD, local to server) for streak calc.
 export function listMemoryDates(userId: string): string[] {
   const db = getDb();

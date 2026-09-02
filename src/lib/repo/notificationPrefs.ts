@@ -13,6 +13,7 @@ type PrefRow = {
   checkin: number;
   underplayed_win: number;
   nudge: number;
+  category_insight: number;
   updated_at: string;
 };
 
@@ -29,6 +30,7 @@ export function getNotificationPrefs(userId: string): NotificationPrefs {
     checkin: row.checkin === 1,
     underplayed_win: row.underplayed_win === 1,
     nudge: row.nudge === 1,
+    category_insight: row.category_insight === 1,
   };
 }
 
@@ -52,8 +54,8 @@ export function setNotificationPref(userId: string, type: NotificationType, enab
   const next: NotificationPrefs = { ...current, [type]: enabled };
   const db = getDb();
   db.prepare(
-    `INSERT INTO notification_prefs (user_id, weekly_recap, growth_narrative, quarterly_benchmark, checkin, underplayed_win, nudge, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO notification_prefs (user_id, weekly_recap, growth_narrative, quarterly_benchmark, checkin, underplayed_win, nudge, category_insight, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id) DO UPDATE SET
        weekly_recap = excluded.weekly_recap,
        growth_narrative = excluded.growth_narrative,
@@ -61,6 +63,7 @@ export function setNotificationPref(userId: string, type: NotificationType, enab
        checkin = excluded.checkin,
        underplayed_win = excluded.underplayed_win,
        nudge = excluded.nudge,
+       category_insight = excluded.category_insight,
        updated_at = excluded.updated_at`
   ).run(
     userId,
@@ -70,6 +73,7 @@ export function setNotificationPref(userId: string, type: NotificationType, enab
     next.checkin ? 1 : 0,
     next.underplayed_win ? 1 : 0,
     next.nudge ? 1 : 0,
+    next.category_insight ? 1 : 0,
     nowIso()
   );
 }

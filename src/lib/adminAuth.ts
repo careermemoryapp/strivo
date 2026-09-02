@@ -162,3 +162,23 @@ export function checkUnderplayedWinSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea again, for the engagement-aware re-engagement nudge automation
+// (see /api/engagement-nudge/run and lib/engagement.ts) -- its own
+// credential, separate from every other secret above. Checked via a request
+// header (`x-engagement-nudge-secret`).
+export function checkEngagementNudgeSecret(secret: string | null): boolean {
+  const expected = process.env.ENGAGEMENT_NUDGE_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}
+
+// Same idea again, for the category-imbalance insight automation (see
+// /api/category-insight/run and lib/categoryInsight.ts) -- its own
+// credential, separate from every other secret above. Checked via a request
+// header (`x-category-insight-secret`).
+export function checkCategoryInsightSecret(secret: string | null): boolean {
+  const expected = process.env.CATEGORY_INSIGHT_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

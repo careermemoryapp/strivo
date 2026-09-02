@@ -26,6 +26,15 @@ export type User = {
   // "you were gifted this" message just because they're active.
   plan_granted_by_admin: number;
   email_opt_out: number;
+  // Timestamp of the last automated re-engagement push (see
+  // lib/engagement.ts, /api/engagement-nudge/run) -- distinct from
+  // last_active_at (when the user last opened the app) and from the
+  // `nudges` table (admin-composed broadcasts only). Null means never sent.
+  last_engagement_nudge_at: string | null;
+  // Same idea, for the category-imbalance insight (see
+  // lib/categoryInsight.ts, /api/category-insight/run). Null means never
+  // sent.
+  last_category_insight_at: string | null;
   created_at: string;
 };
 
@@ -252,4 +261,27 @@ export function setEmailOptOut(id: string, optOut: boolean) {
   const db = getDb();
   db.prepare(`UPDATE users SET email_opt_out = ? WHERE id = ?`).run(optOut ? 1 : 0, id);
   return getUserById(id);
+}
+
+// Every user id, no filtering -- the candidate pool for the engagement-nudge
+// automation (see lib/engagement.ts, /api/engagement-nudge/run), which
+// unlike weekly-recap/growth-narrative needs to consider EVERY user
+// (including someone with zero memories, to nudge their first one), not
+// just users who've already recorded something. Deliberately unbounded, same
+// reasoning as listUserIdsWithMemoriesSince in repo/memories.ts -- fine at
+// today's scale, and a silent LIMIT here would just as silently stop
+// nudging part of the user base.
+export function listAllUserIds(): string[] {
+  const db = getDb();
+  return (db.prepare(`SELECT id FROM users`).all() as { id: string }[]).map((r) => r.id);
+}
+
+export function setLastEngagementNudgeAt(id: string, iso: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET last_engagement_nudge_at = ? WHERE id = ?`).run(iso, id);
+}
+
+export function setLastCategoryInsightAt(id: string, iso: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET last_category_insight_at = ? WHERE id = ?`).run(iso, id);
 }

@@ -406,7 +406,7 @@ function migrate(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
     CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read);
 
-    -- Per-user on/off switches for each of the 6 notification types (see
+    -- Per-user on/off switches for each of the 7 notification types (see
     -- NOTIFICATION_TYPES in lib/notificationTypes.ts) -- the Settings >
     -- Notifications screen (app/(app)/settings/notifications). One column
     -- per type rather than a normalized key/value table, since the set of
@@ -426,6 +426,7 @@ function migrate(db: DatabaseSync) {
       checkin INTEGER NOT NULL DEFAULT 1,
       underplayed_win INTEGER NOT NULL DEFAULT 1,
       nudge INTEGER NOT NULL DEFAULT 1,
+      category_insight INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL
     );
   `);
@@ -844,6 +845,40 @@ function migrate(db: DatabaseSync) {
     END
     WHERE category = 'Others';
   `);
+
+  // Timestamp of the last automated re-engagement push sent to this user
+  // (see lib/engagement.ts and /api/engagement-nudge/run) -- distinct from
+  // last_active_at (when THEY last opened the app) and from the `nudges`
+  // table (which only logs admin-composed, hand-written broadcasts). This
+  // is what lets the engagement-nudge job enforce a per-user cooldown (see
+  // computeEngagementTier's cadenceDays) instead of re-sending every time
+  // the job runs. Null means "never sent one yet."
+  if (!userColumns.includes("last_engagement_nudge_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN last_engagement_nudge_at TEXT;`);
+  }
+  // Same idea as last_engagement_nudge_at above, for the category-imbalance
+  // insight (see lib/categoryInsight.ts and /api/category-insight/run) --
+  // a separate cooldown timestamp since the two automations run on
+  // different schedules and shouldn't share a gate. Null means "never sent
+  // one yet."
+  if (!userColumns.includes("last_category_insight_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN last_category_insight_at TEXT;`);
+  }
+
+  // 7th notification type -- see NOTIFICATION_TYPES in
+  // lib/notificationTypes.ts and /api/category-insight/run. Existing
+  // installs already have the notification_prefs table from before this
+  // column existed (the CREATE TABLE above only applies to a brand-new
+  // database), so it needs its own ALTER here same as every other
+  // incremental column in this file. Defaults to 1 (on) for the same
+  // "lazy row, no row means everything's on" reasoning as the other 6
+  // columns -- see the table's own comment above.
+  const notificationPrefColumns = (
+    db.prepare(`PRAGMA table_info(notification_prefs)`).all() as { name: string }[]
+  ).map((c) => c.name);
+  if (!notificationPrefColumns.includes("category_insight")) {
+    db.exec(`ALTER TABLE notification_prefs ADD COLUMN category_insight INTEGER NOT NULL DEFAULT 1;`);
+  }
 }
 
 export function getDb(): DatabaseSync {

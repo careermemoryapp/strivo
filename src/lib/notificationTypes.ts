@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
-import { CalendarDays, TrendingUp, Scale, MessageCircleQuestion, Heart, Megaphone } from "lucide-react";
+import { CalendarDays, TrendingUp, Scale, MessageCircleQuestion, Heart, Megaphone, PieChart } from "lucide-react";
 
-// Single source of truth for the 6 kinds of automatic notification this app
+// Single source of truth for the 7 kinds of automatic notification this app
 // sends (see lib/notify.ts's notifyUser -- every one of these goes through
 // that one function). Used by: the notification history list
 // (app/(app)/notifications/NotificationsClient.tsx, for icon/color per
@@ -17,6 +17,7 @@ export const NOTIFICATION_TYPES = [
   "checkin",
   "underplayed_win",
   "nudge",
+  "category_insight",
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
@@ -61,14 +62,24 @@ export const NOTIFICATION_META: Record<
     icon: Megaphone,
     color: "#f59e0b",
   },
+  category_insight: {
+    label: "Patterns in your memories",
+    description: "Points out when your memories have leaned heavily one way, in case there's more worth capturing.",
+    icon: PieChart,
+    color: "#0ea5e9",
+  },
 };
 
-// Groups the 6 types for display -- same three-way split used when
+// Groups the 7 types for display -- same three-way split used when
 // explaining these to the founder: rituals that fire on a schedule, things
 // that reach out about something specific in your own memories, and
 // messages the team sends directly.
 export const NOTIFICATION_CATEGORIES: { key: string; label: string; types: NotificationType[] }[] = [
   { key: "rituals", label: "Scheduled rituals", types: ["weekly_recap", "growth_narrative", "quarterly_benchmark"] },
-  { key: "reaches_out", label: "Reaches out about something specific", types: ["checkin", "underplayed_win"] },
+  {
+    key: "reaches_out",
+    label: "Reaches out about something specific",
+    types: ["checkin", "underplayed_win", "category_insight"],
+  },
   { key: "from_us", label: "From us directly", types: ["nudge"] },
 ];
