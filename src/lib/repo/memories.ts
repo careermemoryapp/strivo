@@ -45,6 +45,11 @@ export type Memory = {
   // below). self_minimized_reason is always null when self_minimized is 0.
   self_minimized: number;
   self_minimized_reason: string | null;
+  // JSON string array of recurring proper nouns spotted in this memory --
+  // see entities in generateMemoryMetadata (lib/ai.ts) and the migration
+  // comment in lib/db.ts. Aggregated across a user's memories by
+  // listRecurringEntities below into a lightweight personal glossary.
+  entities: string | null;
   metadata_status: "pending" | "ready" | "failed";
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
@@ -221,6 +226,7 @@ export function updateMemoryMetadata(
       | "reflective_answer"
       | "self_minimized"
       | "self_minimized_reason"
+      | "entities"
       | "metadata_status"
       | "key_points"
       | "summary_feedback"
@@ -245,11 +251,12 @@ export function updateMemoryMetadata(
   const reflective_answer = input.reflective_answer ?? current.reflective_answer;
   const self_minimized = input.self_minimized ?? current.self_minimized;
   const self_minimized_reason = input.self_minimized_reason ?? current.self_minimized_reason;
+  const entities = input.entities ?? current.entities;
   const metadata_status = input.metadata_status ?? current.metadata_status;
   const key_points = input.key_points ?? current.key_points;
   const summary_feedback = input.summary_feedback ?? current.summary_feedback;
   db.prepare(
-    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, reflective_question = ?, reflective_answer = ?, self_minimized = ?, self_minimized_reason = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
+    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, reflective_question = ?, reflective_answer = ?, self_minimized = ?, self_minimized_reason = ?, entities = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
      WHERE id = ? AND user_id = ?`
   ).run(
     title,
@@ -267,6 +274,7 @@ export function updateMemoryMetadata(
     reflective_answer,
     self_minimized,
     self_minimized_reason,
+    entities,
     metadata_status,
     key_points,
     summary_feedback,
@@ -407,6 +415,54 @@ export function listSelfMinimizedCandidates(userId: string, limit: number): Memo
        LIMIT ?`
     )
     .all(userId, limit) as Memory[];
+}
+
+// The lightweight personal glossary: names/teams/projects (see entities in
+// generateMemoryMetadata, lib/ai.ts) that show up across at least
+// `minCount` DIFFERENT memories -- a one-off mention isn't a "recurring"
+// glossary entry, and letting single mentions through would fill the chat's
+// system prompt (see recurringEntitiesContext/buildSystemPrompt, lib/ai.ts)
+// with noise instead of genuinely familiar names. Tallies case-insensitively
+// (so "priya" and "Priya" don't count as two separate entities) but keeps
+// the FIRST-SEEN casing for display, same reasoning as a real glossary
+// preferring one canonical spelling. Sorted by count descending and capped
+// at `limit`, mirroring countMemoriesByCompetency/
+// listMemoriesGroupedByCompetency above -- same "tally in JS, skip malformed
+// JSON rows" approach, fine at per-user memory counts this app deals with.
+export function listRecurringEntities(
+  userId: string,
+  minCount = 2,
+  limit = 15
+): { name: string; count: number }[] {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT entities FROM memories WHERE user_id = ? AND entities IS NOT NULL`)
+    .all(userId) as { entities: string }[];
+  // Keyed by lowercase for case-insensitive tallying; value keeps the
+  // first-seen original casing alongside the running count.
+  const counts: Record<string, { name: string; count: number }> = {};
+  for (const row of rows) {
+    try {
+      const parsed = JSON.parse(row.entities);
+      if (!Array.isArray(parsed)) continue;
+      for (const e of parsed) {
+        if (typeof e !== "string" || !e.trim()) continue;
+        const key = e.trim().toLowerCase();
+        if (counts[key]) {
+          counts[key].count += 1;
+        } else {
+          counts[key] = { name: e.trim(), count: 1 };
+        }
+      }
+    } catch {
+      // Malformed JSON on an old/corrupted row -- skip it, same as
+      // countMemoriesByCompetency above.
+    }
+  }
+  return Object.values(counts)
+    .filter((e) => e.count >= minCount)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit);
 }
 
 // Distinct creation dates (YYYY-MM-DD, local to server) for streak calc.

@@ -151,6 +151,12 @@ export async function POST(req: Request) {
       // anywhere on this response; picked up later by that scheduled job.
       self_minimized: metadata.selfMinimized ? 1 : 0,
       self_minimized_reason: metadata.selfMinimizedReason,
+      // Recurring proper nouns spotted in this memory (see entities in
+      // generateMemoryMetadata, lib/ai.ts) -- aggregated across a user's
+      // memories by listRecurringEntities and rendered into the chat system
+      // prompt (see recurringEntitiesContext/buildSystemPrompt, lib/ai.ts)
+      // as a lightweight personal glossary.
+      entities: JSON.stringify(metadata.entities),
       metadata_status: "ready",
     });
 

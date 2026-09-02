@@ -4,6 +4,7 @@ import { retrieveRelevantMemories, type RetrievalResult } from "@/lib/retrieval"
 import { buildSystemPrompt, chatCompletion, embedText, generateChatTitle, type ChatMessage } from "@/lib/ai";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 import { getUserById } from "@/lib/repo/users";
+import { listRecurringEntities } from "@/lib/repo/memories";
 
 const HISTORY_LIMIT = 16;
 
@@ -97,7 +98,11 @@ export async function sendUserMessageAndGetReply(
   // Best-effort: a lookup failure here just means the chat AI won't have a
   // name to use, not something worth failing the whole reply over.
   const firstName = getUserById(userId)?.first_name ?? null;
-  const systemPrompt = buildSystemPrompt(retrieval.memories, new Date(), firstName, retrieval.recalledMessages);
+  // Cheap synchronous DB read (see listRecurringEntities in
+  // lib/repo/memories.ts) -- no extra AI call, so no need to parallelize
+  // alongside retrieval above the way generatedTitle is.
+  const recurringEntities = listRecurringEntities(userId);
+  const systemPrompt = buildSystemPrompt(retrieval.memories, new Date(), firstName, retrieval.recalledMessages, recurringEntities);
   const result = await chatCompletion(systemPrompt, history);
 
   if ("error" in result) {

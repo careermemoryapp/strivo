@@ -33,6 +33,7 @@ import type { SentryIssue } from "@/lib/sentry";
 import type { SecurityCheck, DependencyAuditSummary } from "@/lib/securityStatus";
 import type { LiveSecurityStatus } from "@/lib/liveSecurityStatus";
 import type { BlogPost } from "@/lib/repo/blogPosts";
+import type { SupportMessage } from "@/lib/repo/support";
 import type { FEATURE_FLAGS } from "@/lib/repo/featureFlags";
 
 const DARK = "#26213c";
@@ -266,6 +267,9 @@ export default function AdminDashboardPage() {
   const [liveSecurityStatus, setLiveSecurityStatus] = useState<LiveSecurityStatus | null | undefined>(undefined);
   const [liveSecurityError, setLiveSecurityError] = useState(false);
   const [blogPosts, setBlogPosts] = useState<BlogPost[] | null>(null);
+  const [supportMessages, setSupportMessages] = useState<SupportMessage[] | null>(null);
+  const [supportError, setSupportError] = useState(false);
+  const [resolvingSupportId, setResolvingSupportId] = useState<string | null>(null);
   const [blogError, setBlogError] = useState(false);
   const [featureFlags, setFeatureFlags] = useState<
     { key: string; label: string; description: string; enabled: number }[] | null
@@ -350,6 +354,41 @@ export default function AdminDashboardPage() {
       setBlogError(true);
     }
   }, [handleUnauthorized]);
+
+  // Surfaces Help & Support / "Export Data" submissions (see /api/support)
+  // directly from the database. These are always saved here first, before
+  // the SES email attempt (see the comment on createSupportMessage in
+  // lib/repo/support.ts) -- so this is the reliable place to see a request
+  // even if the notification email never arrives (SES not configured yet,
+  // recipient not verified, transient AWS error, etc.).
+  const loadSupportMessages = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/support");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setSupportError(true);
+      const data = await res.json();
+      setSupportMessages(data.messages ?? []);
+      setSupportError(false);
+    } catch {
+      setSupportError(true);
+    }
+  }, [handleUnauthorized]);
+
+  async function resolveSupportMessage(id: string) {
+    setResolvingSupportId(id);
+    try {
+      const res = await fetch("/api/admin/support", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, status: "resolved" }),
+      });
+      if (res.ok) {
+        setSupportMessages((prev) => (prev ? prev.map((m) => (m.id === id ? { ...m, status: "resolved" } : m)) : prev));
+      }
+    } finally {
+      setResolvingSupportId(null);
+    }
+  }
 
   const loadFeatureFlags = useCallback(async () => {
     try {
@@ -444,6 +483,7 @@ export default function AdminDashboardPage() {
       loadLiveSecurityStatus(),
       loadBlogPosts(),
       loadFeatureFlags(),
+      loadSupportMessages(),
     ]).finally(() => setCheckedAuth(true));
     /* eslint-enable react-hooks/set-state-in-effect */
     // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount
@@ -1004,6 +1044,77 @@ export default function AdminDashboardPage() {
           </div>
         </section>
 
+        <section className="mb-8">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+              Support &amp; data requests
+              {supportMessages && supportMessages.filter((m) => m.status === "new").length > 0 && (
+                <span className="ml-2 rounded-pill bg-red-100 px-2 py-0.5 text-[10px] font-bold text-red-600">
+                  {supportMessages.filter((m) => m.status === "new").length} new
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {supportError ? (
+              <div className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-red-500" aria-hidden="true" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t load support messages.</p>
+              </div>
+            ) : !supportMessages ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : supportMessages.length === 0 ? (
+              <p className="text-sm text-ink-soft">No messages yet.</p>
+            ) : (
+              <div className="space-y-2">
+                {supportMessages.map((m) => (
+                  <div
+                    key={m.id}
+                    className={cn(
+                      "flex items-start justify-between gap-3 rounded-[12px] border p-3",
+                      m.status === "new" ? "border-[#ece5f5] bg-[#faf8fd]" : "border-[#f5f2fa]"
+                    )}
+                  >
+                    <div className="flex min-w-0 items-start gap-2.5">
+                      <Mail size={14} className="mt-0.5 shrink-0 text-[#a8a2bd]" />
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-medium text-ink">
+                          {m.subject || "No subject"}{" "}
+                          {m.subject === "Data export request" && (
+                            <span className="ml-1 rounded-pill bg-[#f2effa] px-2 py-0.5 text-[10px] font-semibold text-[#8b5cf6]">
+                              Export request
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-[11px] text-ink-faint">
+                          {m.email} · {new Date(m.created_at).toLocaleString()}
+                        </p>
+                        <p className="mt-1 whitespace-pre-wrap text-[12.5px] text-ink-soft">{m.message}</p>
+                      </div>
+                    </div>
+                    {m.status === "new" ? (
+                      <button
+                        onClick={() => resolveSupportMessage(m.id)}
+                        disabled={resolvingSupportId === m.id}
+                        className="shrink-0 whitespace-nowrap text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
+                      >
+                        Mark resolved
+                      </button>
+                    ) : (
+                      <span className="shrink-0 whitespace-nowrap text-[11px] text-ink-faint">Resolved</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] text-ink-faint">
+            Every submission lands here even if the notification email fails to send. For a &quot;Data export
+            request,&quot; find the user in the table below and click &quot;Export data&quot; to download their file.
+          </p>
+        </section>
 
         <section className="mb-8">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Recent blog posts</p>

@@ -106,6 +106,18 @@ export type MemoryMetadata = {
   // stay grounded in the actual transcript rather than re-reading it cold.
   selfMinimized: boolean;
   selfMinimizedReason: string | null;
+  // Recurring proper nouns worth remembering across memories -- a manager's
+  // or teammate's name, a team, a recurring project/product. Distinct from
+  // tags (generic lowercase keywords): this is specifically name-like
+  // things, aggregated later by listRecurringEntities() (lib/repo/memories.ts)
+  // into a lightweight personal glossary so the chat can say "how did the
+  // rollout with Priya go?" instead of generic phrasing -- the "someone who
+  // actually knows the people/projects in your life" layer, on top of
+  // warmthContext/nameContext below. 0-5 items, empty when the transcript
+  // has no genuinely name-like recurring thing in it (a one-off mention of
+  // "my friend" with no name isn't an entity; "Priya", "the Atlas team",
+  // "Project Falcon" are).
+  entities: string[];
 };
 
 const CATEGORY_OPTIONS: string[] = [...MEMORY_CATEGORIES_LIST];
@@ -175,6 +187,7 @@ export async function generateMemoryMetadata(
             "reflectiveQuestion (string or null): one short, genuinely curious follow-up question about THIS specific memory, SAME language as the transcript, the kind a thoughtful friend or coach would actually wonder after hearing this story -- grounded in a specific real detail from the transcript (name what happened, don't ask generically). Examples of the RIGHT kind of specificity: 'What made you decide to split it into two phases instead of pushing back the whole deadline?' -- NOT a generic template like 'How did that make you feel?' that could be pasted onto any memory. Return null if the memory is too thin or routine to meaningfully follow up on (e.g. a one-line status note with nothing left to explore) -- don't force a question onto everything. " +
             `futureCheckin (object or null): today's date is ${todayIso} (IST). ONLY when the transcript clearly mentions a SPECIFIC upcoming event that hasn't happened yet, with an identifiable timeframe -- an interview, a hard conversation, a performance review, a deadline, a decision, a result coming back. Examples: "I have my performance review next month", "talking to my manager about this on Friday", "we find out the results in two weeks". If so, return { question: string (SAME language as the transcript, short, specific, naming the actual event, phrased as something to ask AFTER it happens -- e.g. "How did the conversation with your manager go?", not "How do you feel about Friday?"), targetDate: string in YYYY-MM-DD format, your best-effort resolution of the relative timeframe against today's date -- e.g. "next Friday" or "in two weeks" becomes an actual calendar date. If only a vague timeframe is given (e.g. "sometime next month"), pick a single reasonable date within it rather than returning null over it. } Return null if there's no clear upcoming event, if the event already happened or is happening today, or if there's truly no timeframe at all to anchor a date to. This is rare -- most memories are about something already done, not something still coming, so null is the right answer far more often than not. Never invent an event that isn't actually mentioned. ` +
             "selfMinimized (boolean) and selfMinimizedReason (string or null): selfMinimized is true ONLY when the transcript describes a genuinely strong accomplishment -- real ownership, real impact, or a real difficulty actually overcome -- using flat, dismissive, or minimizing language about it: 'just', 'nothing much', 'anyone would have done that', 'it wasn't a big deal', or simply reporting something significant in a matter-of-fact tone with zero acknowledgment of its actual weight. This is NARROWER than competencies/praise above: a memory can genuinely have competencies while being described with ordinary pride or plain neutral reporting, which does NOT count here -- reserve true for a real, noticeable gap between what actually happened and how modestly the person framed it. Most memories are false here, including most memories with competencies -- this should fire rarely. When true, selfMinimizedReason is one short (<=20 words) English internal note naming the specific gap (e.g. 'Led a 3-team rollout solo but called it \"just helping out\"') -- never shown to the user directly, only used internally later. When false, selfMinimizedReason MUST be null. " +
+            "entities (array, 0-5 items): recurring proper nouns worth remembering from this transcript -- a specific person's name (a manager, teammate, friend, client), a team name, or a recurring project/product name. Only include something genuinely name-like -- a real name or a real proper-noun team/project name -- NOT a generic role or relation with no name attached ('my manager', 'a friend', 'the team' do NOT count on their own; 'Priya', 'the Atlas team', 'Project Falcon' do). Use the transcript's own casing/spelling. Skip entirely (empty array) if nothing in the transcript is a genuine named person/team/project -- this should be empty for a large share of memories. " +
             "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -229,6 +242,13 @@ export async function generateMemoryMetadata(
         parsed.selfMinimized === true && typeof parsed.selfMinimizedReason === "string"
           ? parsed.selfMinimizedReason.slice(0, 200)
           : null,
+      // No fixed taxonomy to filter against (unlike competencies/category) --
+      // these are free-form proper nouns -- so just bound the count and
+      // length per item to keep a hallucinating model from producing
+      // something huge.
+      entities: Array.isArray(parsed.entities)
+        ? parsed.entities.slice(0, 5).map((e: unknown) => String(e).slice(0, 80)).filter((e: string) => e.trim().length > 0)
+        : [],
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
@@ -750,17 +770,34 @@ function recalledMessagesContext(recalledMessages: RecalledMessage[]): string {
   return `\n\nThe user also said the following in OTHER past conversations. These were never saved as a formal memory -- they're just raw things the user mentioned in passing, with no title, category, or curation behind them, so treat them as lower-confidence than the memories above (or than a memory-based answer if there are no memories at all). Use one only if it's genuinely relevant to the current question; don't force it in. If you do rely on one to answer, briefly (one short clause, not a separate paragraph) suggest the user save it as a proper memory so it's easier to find next time.\n\n${items}`;
 }
 
+// The "someone who actually knows the people/projects in your life" layer:
+// names that recur across MULTIPLE memories (see listRecurringEntities in
+// lib/repo/memories.ts, which does the counting/filtering -- this function
+// only renders whatever it's handed). Deliberately separate from any single
+// memory's own Entities field in the context block below: a name mentioned
+// once isn't a "recurring" glossary entry, and the point of this layer is
+// specifically the recognition of a pattern across memories, not just
+// echoing back one memory's transcript. Same "occasionally, never forced"
+// framing as warmthContext/nameContext above.
+function recurringEntitiesContext(recurringEntities: { name: string; count: number }[]): string {
+  if (recurringEntities.length === 0) return "";
+  const names = recurringEntities.map((e) => e.name).join(", ");
+  return `\n\nNames/teams/projects that come up repeatedly across this user's memories: ${names}. When one of these is genuinely relevant to the current question, it's good to refer to it naturally by name (e.g. "how did the rollout with Priya go?") instead of generic phrasing ("your colleague") -- it reads as actually knowing them. Use this occasionally, only when it fits naturally; never force a name in, and never treat this list itself as something to explain or reference directly ("I see Priya comes up a lot") -- just use the names the way a person who already knew this context would.`;
+}
+
 export function buildSystemPrompt(
   memories: Memory[],
   now: Date = new Date(),
   firstName?: string | null,
-  recalledMessages: RecalledMessage[] = []
+  recalledMessages: RecalledMessage[] = [],
+  recurringEntities: { name: string; count: number }[] = []
 ): string {
   const dateContext = `\n\nToday's date is ${todayIstLabel(now)} (India Standard Time). Use this to correctly judge date-relative questions ("today," "yesterday," "this week," a specific date, etc.) against each memory's Date field below. If a memory's date genuinely falls in the period the user is asking about, treat it as relevant with confidence -- do not hedge or claim "no relevant memory" out of uncertainty about what day it is; you now know.`;
   const nameCtx = firstName ? nameContext(firstName) : "";
   const recalledCtx = recalledMessagesContext(recalledMessages);
+  const entitiesCtx = recurringEntitiesContext(recurringEntities);
   if (memories.length === 0) {
-    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.${recalledCtx}`;
+    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.${recalledCtx}${entitiesCtx}`;
   }
   const competencyContext = `\n\nEach memory below may list Competencies -- behavioral-interview qualities (Leadership, Problem-Solving, etc.) that memory was independently identified as genuinely demonstrating, generated when it was recorded (see generateMemoryMetadata). The user themselves may not realize a memory qualifies -- they might have just described a normal day, not framed it as a "leadership story." When asked for an example of a specific competency (e.g. "give me a leadership example," "tell me about a time you solved a problem"), actively use this field to find the match rather than only pattern-matching the user's own wording against the transcript, and you can point out to them that this is a strong example of that competency even if they didn't call it that themselves.`;
   const context = memories
@@ -770,7 +807,7 @@ export function buildSystemPrompt(
       return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}${entitiesCtx}`;
 }
 
 function safeParseStringArray(value: string | null): string[] {

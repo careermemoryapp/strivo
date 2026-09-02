@@ -740,6 +740,18 @@ function migrate(db: DatabaseSync) {
   if (!memoryColumns.includes("self_minimized_reason")) {
     db.exec(`ALTER TABLE memories ADD COLUMN self_minimized_reason TEXT;`);
   }
+  // JSON.stringify(string[]) of recurring proper nouns spotted in this
+  // memory -- a manager's name, a team, a recurring project/product (see
+  // entities in generateMemoryMetadata, lib/ai.ts). Distinct from tags
+  // (generic lowercase keywords): this is specifically name-like things
+  // worth remembering across memories, aggregated by
+  // listRecurringEntities() into a lightweight personal glossary so the
+  // chat can say "how did the rollout with Priya go?" instead of generic
+  // phrasing. Null for memories created before this existed -- no
+  // backfill, same rollout pattern as search_text/competencies before it.
+  if (!memoryColumns.includes("entities")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN entities TEXT;`);
+  }
 
   // Vector embedding of a user (not AI) message's content, same
   // JSON.stringify(number[]) format as memories.embedding above (see
