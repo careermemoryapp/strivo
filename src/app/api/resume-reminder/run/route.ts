@@ -8,13 +8,14 @@ import { notifyUser } from "@/lib/notify";
 // Called once a day by an external automation (same shape as
 // checkins/weekly-recap/growth-narrative/quarterly-benchmark/underplayed-win/
 // engagement-nudge/category-insight -- see RESUME_REMINDER_SECRET's comment
-// in lib/adminAuth.ts), or manually from an admin session. One-time nudge
-// (see isDueForResumeReminder, lib/resumeReminder.ts) for anyone who skipped
-// uploading a resume at /first-record and still hasn't added one a few days
-// later -- points them at Settings > Resume. Reuses the existing "nudge"
-// notification type (same one app/api/admin/nudge and the engagement-nudge
-// automation use) so it's covered by the same Settings toggle rather than
-// adding a new one just for this.
+// in lib/adminAuth.ts), or manually from an admin session. Recurring nudge
+// (see isDueForResumeReminder, lib/resumeReminder.ts -- first at day 3, then
+// every 10 days after that) for anyone who skipped uploading a resume at
+// /first-record and still hasn't added one -- points them at
+// Settings > Resume. Stops for good once resume_text is set. Reuses the
+// existing "nudge" notification type (same one app/api/admin/nudge and the
+// engagement-nudge automation use) so it's covered by the same Settings
+// toggle rather than adding a new one just for this.
 export async function POST(req: Request) {
   const authed = (await isAdminAuthed()) || checkResumeReminderSecret(req.headers.get("x-resume-reminder-secret"));
   if (!authed) {

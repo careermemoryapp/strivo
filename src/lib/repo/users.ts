@@ -47,8 +47,9 @@ export type User = {
   resume_text: string | null;
   resume_filename: string | null;
   resume_uploaded_at: string | null;
-  // One-time stamp -- see its own comment in lib/db.ts's migration. Null
-  // means the resume-reminder automation hasn't notified this user yet.
+  // Last-sent timestamp for the recurring resume-upload nudge -- see its
+  // own comment in lib/db.ts's migration and isDueForResumeReminder in
+  // lib/resumeReminder.ts. Null means never nudged yet.
   resume_reminder_sent_at: string | null;
   created_at: string;
 };

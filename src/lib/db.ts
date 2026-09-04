@@ -902,16 +902,15 @@ function migrate(db: DatabaseSync) {
     db.exec(`ALTER TABLE users ADD COLUMN resume_uploaded_at TEXT;`);
   }
 
-  // Stamped the one time the resume-reminder automation (see
-  // lib/resumeReminder.ts and /api/resume-reminder/run) notifies someone who
-  // skipped uploading a resume -- a ONE-TIME nudge, not a recurring cooldown
-  // like last_engagement_nudge_at/last_category_insight_at above, so a
-  // simple "has this ever been sent" timestamp is enough: the job's own
-  // isDueForResumeReminder check treats any non-null value here as "already
-  // sent, never send again," regardless of how long ago. Null means never
-  // sent. Deliberately NOT reset if the user later uploads a resume then
-  // removes it again -- getting nudged a second time after actively
-  // removing one they already had would read as Strivo not listening.
+  // Timestamp of the LAST time the resume-reminder automation (see
+  // lib/resumeReminder.ts and /api/resume-reminder/run) notified someone who
+  // still has no resume on file -- same shape as
+  // last_engagement_nudge_at/last_category_insight_at above: a recurring
+  // cooldown, not a one-time flag. First nudge fires off account age
+  // (FIRST_REMINDER_AFTER_DAYS since created_at) while this is still null;
+  // every nudge after that fires REPEAT_REMINDER_EVERY_DAYS since THIS
+  // timestamp. Null means never sent. Stops being updated (and stops being
+  // checked at all) once resume_text is set -- see isDueForResumeReminder.
   if (!userColumns.includes("resume_reminder_sent_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN resume_reminder_sent_at TEXT;`);
   }
