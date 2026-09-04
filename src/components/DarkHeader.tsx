@@ -55,10 +55,19 @@ export function DarkHeader({
       <div className="relative flex items-center justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
           {back && (
+            // h-11 w-11 (44px) is Google's/Apple's minimum recommended touch
+            // target -- the old h-8 w-8 (32px) box was fine visually but a
+            // genuinely small tap area, which is exactly the kind of thing
+            // that makes a button feel like it "sometimes doesn't respond"
+            // (the tap just misses). Icon size/position is unchanged --
+            // items-center/justify-center still centers it -- so this is a
+            // bigger invisible hit area, not a visual change. -ml-[14px]
+            // keeps the icon's own left edge exactly where it was at the
+            // old -ml-2/h-8 size, so the header layout doesn't shift.
             <button
               onClick={() => router.back()}
               aria-label="Back"
-              className="-ml-2 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-white/85 active:bg-white/10"
+              className="-ml-[14px] flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white/85 active:bg-white/10"
             >
               <ChevronLeft size={22} />
             </button>

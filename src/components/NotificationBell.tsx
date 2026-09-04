@@ -36,20 +36,31 @@ export function NotificationBell() {
   }, [pathname]);
 
   return (
+    // Outer button is h-11 w-11 (44px) -- Google's/Apple's minimum
+    // recommended touch target, up from the old h-8 w-8 (32px), which was a
+    // genuinely small tap area (this is the icon the founder specifically
+    // reported needing 2-3 taps on). The inner span keeps the original
+    // h-8 w-8 footprint so the Bell icon and its unread badge sit exactly
+    // where they always did -- items-center/justify-center on the outer
+    // button just centers that same-sized inner block inside a bigger
+    // invisible hit area, so this is a bigger tap target, not a layout
+    // change.
     <button
       onClick={() => router.push("/notifications")}
       aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
-      className="relative flex h-8 w-8 items-center justify-center rounded-full text-white/85 active:bg-white/10"
+      className="flex h-11 w-11 items-center justify-center rounded-full text-white/85 active:bg-white/10"
     >
-      <Bell size={19} />
-      {unreadCount > 0 && (
-        <span
-          className="absolute right-1 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
-          style={{ background: "#f43f5e" }}
-        >
-          {unreadCount > 9 ? "9+" : unreadCount}
-        </span>
-      )}
+      <span className="relative flex h-8 w-8 items-center justify-center">
+        <Bell size={19} />
+        {unreadCount > 0 && (
+          <span
+            className="absolute right-1 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full px-1 text-[9px] font-bold text-white"
+            style={{ background: "#f43f5e" }}
+          >
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </span>
     </button>
   );
 }
