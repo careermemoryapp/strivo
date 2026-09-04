@@ -182,3 +182,13 @@ export function checkCategoryInsightSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea again, for the one-time resume-upload reminder automation (see
+// /api/resume-reminder/run and lib/resumeReminder.ts) -- its own
+// credential, separate from every other secret above. Checked via a request
+// header (`x-resume-reminder-secret`).
+export function checkResumeReminderSecret(secret: string | null): boolean {
+  const expected = process.env.RESUME_REMINDER_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

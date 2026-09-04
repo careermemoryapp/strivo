@@ -35,6 +35,21 @@ export type User = {
   // lib/categoryInsight.ts, /api/category-insight/run). Null means never
   // sent.
   last_category_insight_at: string | null;
+  // Background context, not a Memory -- extracted text from a resume
+  // someone uploaded (see /api/profile/resume, settings/resume, and the
+  // "Upload Resume" option on /first-record). Threaded into
+  // buildSystemPrompt (lib/ai.ts) so chat answers can reference it, but
+  // deliberately never surfaced as its own memory card -- a whole resume
+  // dumped into the Memories list would sit oddly next to specific,
+  // story-style memories. All three resume_* fields are null until someone
+  // uploads one, and re-uploading overwrites all three together (see
+  // setResume below) -- there's no history of past resumes kept.
+  resume_text: string | null;
+  resume_filename: string | null;
+  resume_uploaded_at: string | null;
+  // One-time stamp -- see its own comment in lib/db.ts's migration. Null
+  // means the resume-reminder automation hasn't notified this user yet.
+  resume_reminder_sent_at: string | null;
   created_at: string;
 };
 
@@ -284,4 +299,29 @@ export function setLastEngagementNudgeAt(id: string, iso: string) {
 export function setLastCategoryInsightAt(id: string, iso: string) {
   const db = getDb();
   db.prepare(`UPDATE users SET last_category_insight_at = ? WHERE id = ?`).run(iso, id);
+}
+
+// Saves (or overwrites) the resume text extracted from an uploaded PDF --
+// see resume_text's own comment on the User type above for why this lives
+// on the user row rather than as a Memory. Overwrites all three fields
+// together; there's no history of past resumes kept, same as any other
+// "current state" profile field.
+export function setResume(id: string, text: string, filename: string, uploadedAtIso: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET resume_text = ?, resume_filename = ?, resume_uploaded_at = ? WHERE id = ?`).run(
+    text,
+    filename,
+    uploadedAtIso,
+    id
+  );
+}
+
+export function clearResume(id: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET resume_text = NULL, resume_filename = NULL, resume_uploaded_at = NULL WHERE id = ?`).run(id);
+}
+
+export function setResumeReminderSentAt(id: string, iso: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET resume_reminder_sent_at = ? WHERE id = ?`).run(iso, id);
 }

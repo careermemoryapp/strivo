@@ -56,7 +56,11 @@ function migrate(db: DatabaseSync) {
       profile_image TEXT,
       subscription_status TEXT NOT NULL DEFAULT 'trial',
       trial_ends_at TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      resume_text TEXT,
+      resume_filename TEXT,
+      resume_uploaded_at TEXT,
+      resume_reminder_sent_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS memories (
@@ -878,6 +882,38 @@ function migrate(db: DatabaseSync) {
   ).map((c) => c.name);
   if (!notificationPrefColumns.includes("category_insight")) {
     db.exec(`ALTER TABLE notification_prefs ADD COLUMN category_insight INTEGER NOT NULL DEFAULT 1;`);
+  }
+
+  // Resume upload (see /api/profile/resume, settings/resume, and the
+  // "Upload Resume" option on /first-record) -- stored as background
+  // context on the user row, not as a Memory, so it doesn't clutter the
+  // Memories list. resume_text feeds buildSystemPrompt (lib/ai.ts) so chat
+  // answers can reference it; resume_filename/resume_uploaded_at are just
+  // for the Settings UI to show what's on file. All null until someone
+  // uploads one; re-uploading overwrites all three together (see
+  // setResume in lib/repo/users.ts), there's no history of past resumes.
+  if (!userColumns.includes("resume_text")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_text TEXT;`);
+  }
+  if (!userColumns.includes("resume_filename")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_filename TEXT;`);
+  }
+  if (!userColumns.includes("resume_uploaded_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_uploaded_at TEXT;`);
+  }
+
+  // Stamped the one time the resume-reminder automation (see
+  // lib/resumeReminder.ts and /api/resume-reminder/run) notifies someone who
+  // skipped uploading a resume -- a ONE-TIME nudge, not a recurring cooldown
+  // like last_engagement_nudge_at/last_category_insight_at above, so a
+  // simple "has this ever been sent" timestamp is enough: the job's own
+  // isDueForResumeReminder check treats any non-null value here as "already
+  // sent, never send again," regardless of how long ago. Null means never
+  // sent. Deliberately NOT reset if the user later uploads a resume then
+  // removes it again -- getting nudged a second time after actively
+  // removing one they already had would read as Strivo not listening.
+  if (!userColumns.includes("resume_reminder_sent_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_reminder_sent_at TEXT;`);
   }
 }
 

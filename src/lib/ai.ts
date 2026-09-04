@@ -785,19 +785,37 @@ function recurringEntitiesContext(recurringEntities: { name: string; count: numb
   return `\n\nNames/teams/projects that come up repeatedly across this user's memories: ${names}. When one of these is genuinely relevant to the current question, it's good to refer to it naturally by name (e.g. "how did the rollout with Priya go?") instead of generic phrasing ("your colleague") -- it reads as actually knowing them. Use this occasionally, only when it fits naturally; never force a name in, and never treat this list itself as something to explain or reference directly ("I see Priya comes up a lot") -- just use the names the way a person who already knew this context would.`;
 }
 
+// Background context from an uploaded resume (see resume_text's comment in
+// repo/users.ts and /api/profile/resume) -- deliberately framed as
+// background the model already knows about the person, not something to
+// recite or reference explicitly ("according to your resume..."). Truncated
+// hard here as a second line of defense; /api/profile/resume already caps
+// what gets stored, but system-prompt token budget is a different concern
+// than storage, so this keeps a single long resume from crowding out actual
+// memories in the same prompt.
+const RESUME_CONTEXT_MAX_CHARS = 6000;
+
+function resumeContext(resumeText: string | null | undefined): string {
+  if (!resumeText) return "";
+  const text = resumeText.length > RESUME_CONTEXT_MAX_CHARS ? `${resumeText.slice(0, RESUME_CONTEXT_MAX_CHARS)}…` : resumeText;
+  return `\n\nThe user has also uploaded their resume, giving you background on their career so far (separate from their recorded memories below, which are specific first-person moments). Use it silently to understand their role, seniority, and history when relevant -- e.g. to make a resume line sound consistent with their actual experience, or to understand context a memory doesn't spell out -- but don't recite it back or announce that you're using it ("I see from your resume..."); just be someone who already knows their background.\n\nResume:\n${text}`;
+}
+
 export function buildSystemPrompt(
   memories: Memory[],
   now: Date = new Date(),
   firstName?: string | null,
   recalledMessages: RecalledMessage[] = [],
-  recurringEntities: { name: string; count: number }[] = []
+  recurringEntities: { name: string; count: number }[] = [],
+  resumeText?: string | null
 ): string {
   const dateContext = `\n\nToday's date is ${todayIstLabel(now)} (India Standard Time). Use this to correctly judge date-relative questions ("today," "yesterday," "this week," a specific date, etc.) against each memory's Date field below. If a memory's date genuinely falls in the period the user is asking about, treat it as relevant with confidence -- do not hedge or claim "no relevant memory" out of uncertainty about what day it is; you now know.`;
   const nameCtx = firstName ? nameContext(firstName) : "";
   const recalledCtx = recalledMessagesContext(recalledMessages);
   const entitiesCtx = recurringEntitiesContext(recurringEntities);
+  const resumeCtx = resumeContext(resumeText);
   if (memories.length === 0) {
-    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.${recalledCtx}${entitiesCtx}`;
+    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.${recalledCtx}${entitiesCtx}${resumeCtx}`;
   }
   const competencyContext = `\n\nEach memory below may list Competencies -- behavioral-interview qualities (Leadership, Problem-Solving, etc.) that memory was independently identified as genuinely demonstrating, generated when it was recorded (see generateMemoryMetadata). The user themselves may not realize a memory qualifies -- they might have just described a normal day, not framed it as a "leadership story." When asked for an example of a specific competency (e.g. "give me a leadership example," "tell me about a time you solved a problem"), actively use this field to find the match rather than only pattern-matching the user's own wording against the transcript, and you can point out to them that this is a strong example of that competency even if they didn't call it that themselves.`;
   const context = memories
@@ -807,7 +825,7 @@ export function buildSystemPrompt(
       return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}${entitiesCtx}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}${entitiesCtx}${resumeCtx}`;
 }
 
 function safeParseStringArray(value: string | null): string[] {

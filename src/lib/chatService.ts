@@ -96,13 +96,24 @@ export async function sendUserMessageAndGetReply(
   }
 
   // Best-effort: a lookup failure here just means the chat AI won't have a
-  // name to use, not something worth failing the whole reply over.
-  const firstName = getUserById(userId)?.first_name ?? null;
+  // name (or resume context) to use, not something worth failing the whole
+  // reply over. Single row fetch covers both -- see resume_text's comment
+  // in repo/users.ts for why it's threaded into the same buildSystemPrompt
+  // call rather than a separate lookup.
+  const user = getUserById(userId);
+  const firstName = user?.first_name ?? null;
   // Cheap synchronous DB read (see listRecurringEntities in
   // lib/repo/memories.ts) -- no extra AI call, so no need to parallelize
   // alongside retrieval above the way generatedTitle is.
   const recurringEntities = listRecurringEntities(userId);
-  const systemPrompt = buildSystemPrompt(retrieval.memories, new Date(), firstName, retrieval.recalledMessages, recurringEntities);
+  const systemPrompt = buildSystemPrompt(
+    retrieval.memories,
+    new Date(),
+    firstName,
+    retrieval.recalledMessages,
+    recurringEntities,
+    user?.resume_text ?? null
+  );
   const result = await chatCompletion(systemPrompt, history);
 
   if ("error" in result) {

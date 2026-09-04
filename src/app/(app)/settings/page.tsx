@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
   User, CreditCard, Download, Bell, Shield, Palette, HelpCircle, Info, LogOut, Trash2, ChevronRight, X, FileText,
-  Sparkles, CheckCircle2,
+  Sparkles, CheckCircle2, FileUp,
 } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
@@ -135,6 +135,7 @@ export default function SettingsPage() {
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[#a8a2bd]">Account</h3>
           <div className="rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
             <Row icon={<User size={18} />} label="Profile" onClick={() => router.push("/settings/profile")} />
+            <Row icon={<FileUp size={18} />} label="Resume" onClick={() => router.push("/settings/resume")} />
             <Row icon={<CreditCard size={18} />} label="Subscription" onClick={() => router.push("/settings/subscription")} />
             <Row icon={<Download size={18} />} label="Export Data" onClick={() => setExportOpen(true)} />
           </div>
