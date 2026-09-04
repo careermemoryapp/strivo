@@ -1,8 +1,10 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import * as Sentry from "@sentry/nextjs";
+import { FilePicker } from "@capawesome/capacitor-file-picker";
+import { Capacitor } from "@capacitor/core";
 import { Mic, Square, Sparkles, Copy, ClipboardCheck, ArrowRight, Award, FileUp, FileText } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
@@ -38,7 +40,6 @@ type Mode = "voice" | "type" | "resume";
 export default function FirstRecordPage() {
   const router = useRouter();
   const speech = useSpeechRecognition();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [mode, setMode] = useState<Mode>("voice");
   const [typedText, setTypedText] = useState("");
@@ -118,19 +119,36 @@ export default function FirstRecordPage() {
     }
   }
 
-  // Reuses the same extraction pipeline Record's file-upload mode and
-  // settings/resume use (/api/memories/extract) -- then saves the result as
-  // background profile context via /api/profile/resume rather than
-  // creating a memory, matching how a resume upload from Settings behaves.
-  async function handleResumeFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
+  // Uses @capawesome/capacitor-file-picker instead of a raw
+  // <input type="file"> -- that old approach was silently dropping selected
+  // files app-wide on Android (system picker opens, user picks a file,
+  // nothing happens, no error). See the matching comment in
+  // (app)/record/page.tsx's pickFile(). Reuses the same extraction pipeline
+  // Record's file-upload mode and settings/resume use
+  // (/api/memories/extract) -- then saves the result as background profile
+  // context via /api/profile/resume rather than creating a memory, matching
+  // how a resume upload from Settings behaves.
+  async function pickResumeFile() {
     setSaving(true);
     setSaveError(null);
     try {
+      const result = await FilePicker.pickFiles({ types: ["application/pdf"], limit: 1 });
+      const picked = result.files[0];
+      if (!picked) {
+        setSaving(false);
+        return; // user dismissed the picker without choosing a file
+      }
+
+      let blob: Blob;
+      if (picked.blob) {
+        blob = picked.blob;
+      } else {
+        const fileRes = await fetch(Capacitor.convertFileSrc(picked.path!));
+        blob = await fileRes.blob();
+      }
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", blob, picked.name);
       const extractRes = await fetch("/api/memories/extract", { method: "POST", body: formData });
       const extractData = await extractRes.json();
       if (!extractRes.ok) throw new Error(extractData.error ?? "Couldn't read that file.");
@@ -345,16 +363,6 @@ export default function FirstRecordPage() {
 
         {mode === "resume" && (
           <div className="flex flex-col items-center text-center">
-            {/* See the matching comment in settings/resume/page.tsx -- MIME
-                type included alongside the extension for Android file-picker
-                reliability. */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/pdf,.pdf"
-              className="hidden"
-              onChange={handleResumeFile}
-            />
             <div
               className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
               style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.2)" }}
@@ -366,7 +374,7 @@ export default function FirstRecordPage() {
               PDF only, up to 2MB. We&apos;ll use it as background context -- it won&apos;t show up as a memory.
             </p>
             <button
-              onClick={() => fileInputRef.current?.click()}
+              onClick={pickResumeFile}
               disabled={saving}
               className="mt-5 flex items-center gap-2 rounded-pill px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
               style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}

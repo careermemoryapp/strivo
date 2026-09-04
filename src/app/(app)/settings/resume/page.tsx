@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import * as Sentry from "@sentry/nextjs";
+import { FilePicker } from "@capawesome/capacitor-file-picker";
+import { Capacitor } from "@capacitor/core";
 import { FileUp, FileText, Trash2, CheckCircle2, Sparkles } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
@@ -24,7 +26,6 @@ type ResumeStatus = { hasResume: boolean; filename: string | null; uploadedAt: s
 // settings-list row -- this is a moment the user should feel good about, not
 // a form field to fill in.
 export default function ResumeSettingsPage() {
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<ResumeStatus | null>(null);
   const [loadError, setLoadError] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -39,16 +40,39 @@ export default function ResumeSettingsPage() {
       .catch(() => setLoadError(true));
   }, []);
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file later
-    if (!file) return;
+  // Uses @capawesome/capacitor-file-picker instead of a raw
+  // <input type="file"> -- that old approach (plus a hidden input + ref
+  // click) was silently dropping selected files app-wide on Android: the
+  // system picker opened, a file got chosen, and then nothing happened, no
+  // error, page just sat there looking like nothing was uploaded. This
+  // turned out to affect every file-upload flow in the app (Record's
+  // Upload tab too), not just Resume -- so this plugin replaces the flaky
+  // WebView file-chooser bridge everywhere rather than patching around it.
+  async function pickFile() {
     setUploading(true);
     setUploadError(null);
     setJustSaved(false);
     try {
+      const result = await FilePicker.pickFiles({ types: ["application/pdf"], limit: 1 });
+      const picked = result.files[0];
+      if (!picked) {
+        setUploading(false);
+        return; // user dismissed the picker without choosing a file
+      }
+
+      // On web the plugin returns a Blob directly; on Android/iOS it
+      // returns a native file path that has to be fetched as a blob via
+      // Capacitor's convertFileSrc().
+      let blob: Blob;
+      if (picked.blob) {
+        blob = picked.blob;
+      } else {
+        const fileRes = await fetch(Capacitor.convertFileSrc(picked.path!));
+        blob = await fileRes.blob();
+      }
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", blob, picked.name);
       const extractRes = await fetch("/api/memories/extract", { method: "POST", body: formData });
       const extractData = await extractRes.json();
       if (!extractRes.ok) throw new Error(extractData.error ?? "Couldn't read that file.");
@@ -97,21 +121,6 @@ export default function ResumeSettingsPage() {
           Upload a resume so Strivo already knows your background. It&apos;s never shown as a memory of its own —
           Strivo just uses it quietly to make chat answers and resume lines sharper.
         </p>
-
-        {/* MIME type included alongside the extension -- some Android file
-            picker sources (Drive, WhatsApp, Files) report a resume's MIME
-            type inconsistently, and an extension-only accept list has been
-            seen to make the WebView's document picker silently drop the
-            selection on some devices. Record's working upload tab (see
-            (app)/record/page.tsx's UPLOAD_ACCEPT) uses a similarly broad
-            list for the same reason. */}
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="application/pdf,.pdf"
-          className="hidden"
-          onChange={handleFileChange}
-        />
 
         {loadError && (
           <div className="mt-4">
@@ -162,7 +171,7 @@ export default function ResumeSettingsPage() {
 
                 <div className="mt-5 flex w-full gap-2.5">
                   <button
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={pickFile}
                     disabled={uploading}
                     className="flex flex-1 items-center justify-center gap-2 rounded-pill py-3 text-sm font-semibold text-white disabled:opacity-60"
                     style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
@@ -199,7 +208,7 @@ export default function ResumeSettingsPage() {
                 )}
 
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={pickFile}
                   disabled={uploading}
                   className={cn(
                     "mt-5 flex w-full items-center justify-center gap-2 rounded-pill py-3.5 text-sm font-semibold text-white disabled:opacity-60"

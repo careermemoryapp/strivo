@@ -1,7 +1,9 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
+import { FilePicker } from "@capawesome/capacitor-file-picker";
+import { Capacitor } from "@capacitor/core";
 import {
   Mic, Square, Check, ArrowRight, Home as HomeIcon, RotateCcw,
   Target, Sparkles as SparklesIcon, CheckCircle2, Lock, ChevronRight,
@@ -44,7 +46,18 @@ const AI_GENERATED_SUBTEXT = [
 const ONE_MORE_THING_LABELS = ["One more thing —", "Quick follow-up —", "Curious about one thing —"];
 
 const MAX_RECORD_SECONDS = 2 * 60;
-const UPLOAD_ACCEPT = ".pdf,.docx,.pptx,.xlsx,.xls,.csv,.txt";
+// IANA media types, for FilePicker's `types` option -- replaces the old
+// extension-based accept="..." string now that file picking goes through
+// @capawesome/capacitor-file-picker instead of a raw <input type="file">.
+const UPLOAD_TYPES = [
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.ms-excel",
+  "text/csv",
+  "text/plain",
+];
 
 function formatClock(totalSeconds: number): string {
   const m = Math.floor(totalSeconds / 60);
@@ -56,7 +69,6 @@ export default function RecordPage() {
   const router = useRouter();
   const speech = useSpeechRecognition();
   const user = useCurrentUser();
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [stage, setStage] = useState<Stage>("capture");
   const [mode, setMode] = useState<Mode>("voice");
@@ -151,20 +163,41 @@ export default function RecordPage() {
     setMode(next);
   }
 
-  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    e.target.value = ""; // allow re-selecting the same file later
-    if (!file) return;
+  // Uses @capawesome/capacitor-file-picker instead of a raw
+  // <input type="file"> + hidden ref + WebView file-chooser bridge -- that
+  // old approach was silently dropping selected files app-wide on Android
+  // (system picker opens, user picks a file, nothing happens, no error).
+  // This plugin talks to the OS picker directly instead of going through
+  // the flaky Chromium WebView file-input bridge.
+  async function pickFile() {
     setExtracting(true);
     setUploadError(null);
     setUploadText("");
     try {
+      const result = await FilePicker.pickFiles({ types: UPLOAD_TYPES, limit: 1 });
+      const picked = result.files[0];
+      if (!picked) {
+        setExtracting(false);
+        return; // user dismissed the picker without choosing a file
+      }
+
+      // On web, the plugin hands back a Blob directly. On Android/iOS, it
+      // hands back a native file path -- convertFileSrc() turns that into a
+      // URL the WebView can actually fetch, then we read it as a blob.
+      let blob: Blob;
+      if (picked.blob) {
+        blob = picked.blob;
+      } else {
+        const fileRes = await fetch(Capacitor.convertFileSrc(picked.path!));
+        blob = await fileRes.blob();
+      }
+
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", blob, picked.name);
       const res = await fetch("/api/memories/extract", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Couldn't read that file.");
-      setUploadedFileName(file.name);
+      setUploadedFileName(picked.name);
       setUploadText(data.text);
     } catch (e) {
       setUploadError(e instanceof Error ? e.message : "Couldn't read that file. Please try again.");
@@ -611,13 +644,6 @@ export default function RecordPage() {
 
           {mode === "upload" && (
             <div className="flex flex-col items-center text-center">
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept={UPLOAD_ACCEPT}
-                className="hidden"
-                onChange={handleFileChange}
-              />
               <div
                 className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
                 style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.2)" }}
@@ -643,7 +669,7 @@ export default function RecordPage() {
               )}
 
               <button
-                onClick={() => fileInputRef.current?.click()}
+                onClick={pickFile}
                 disabled={extracting}
                 className="mt-5 flex items-center gap-2 rounded-pill px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
                 style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
