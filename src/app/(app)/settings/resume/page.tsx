@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
-import { FileUp, FileText, Trash2, CheckCircle2 } from "lucide-react";
+import { FileUp, FileText, Trash2, CheckCircle2, Sparkles } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
-import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { cn } from "@/lib/utils";
 
 type ResumeStatus = { hasResume: boolean; filename: string | null; uploadedAt: string | null };
 
@@ -17,6 +17,11 @@ type ResumeStatus = { hasResume: boolean; filename: string | null; uploadedAt: s
 // resume_text's comment in repo/users.ts), not as a Memory -- it feeds chat
 // answers and future memory generation without cluttering the Memories list
 // with one giant resume-dump entry.
+//
+// Styled to match /first-record and /record's capture cards (gradient panel,
+// glow-shadowed icon circle, gradient pill buttons) rather than a flat
+// settings-list row -- this is a moment the user should feel good about, not
+// a form field to fill in.
 export default function ResumeSettingsPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<ResumeStatus | null>(null);
@@ -102,61 +107,95 @@ export default function ResumeSettingsPage() {
         )}
 
         {status && (
-          <div className="mt-5 rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+          <div className="mt-5 rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-6">
             {status.hasResume ? (
-              <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#f2effa] text-[#8b5cf6]">
-                  <FileText size={18} />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink">{status.filename}</p>
-                  {status.uploadedAt && (
-                    <p className="mt-0.5 text-xs text-ink-faint">
-                      Uploaded {formatDistanceToNow(new Date(status.uploadedAt), { addSuffix: true })}
-                    </p>
-                  )}
+              <div className="flex flex-col items-center text-center">
+                <div
+                  className="relative flex h-16 w-16 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
+                  style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.25)" }}
+                >
+                  <FileText size={26} />
                   {justSaved && (
-                    <p className="mt-1.5 flex items-center gap-1 text-xs font-semibold text-green-600">
-                      <CheckCircle2 size={13} /> Saved
-                    </p>
+                    <span
+                      className="absolute -right-1 -top-1 flex h-6 w-6 items-center justify-center rounded-full bg-green-500 text-white"
+                      style={{ boxShadow: "0 4px 10px rgba(34,197,94,0.4)" }}
+                    >
+                      <CheckCircle2 size={14} />
+                    </span>
                   )}
+                </div>
+
+                <p className="mt-4 flex items-center gap-1.5 text-sm font-semibold text-green-600">
+                  <Sparkles size={14} /> {justSaved ? "Saved — this version is live" : "Resume on file"}
+                </p>
+                <p className="mt-1 truncate text-sm font-medium text-[#3c3650] max-w-full px-2">{status.filename}</p>
+                {status.uploadedAt && (
+                  <p className="mt-0.5 text-xs text-[#8a82a8]">
+                    Uploaded {formatDistanceToNow(new Date(status.uploadedAt), { addSuffix: true })}
+                  </p>
+                )}
+
+                {uploadError && (
+                  <div className="w-full mt-4">
+                    <ErrorBanner message={uploadError} />
+                  </div>
+                )}
+
+                <div className="mt-5 flex w-full gap-2.5">
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploading}
+                    className="flex flex-1 items-center justify-center gap-2 rounded-pill py-3 text-sm font-semibold text-white disabled:opacity-60"
+                    style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                  >
+                    {uploading ? <Spinner className="border-white/40 border-t-white h-4 w-4" /> : <FileUp size={16} />}
+                    {uploading ? "Uploading…" : "Upload new version"}
+                  </button>
+                  <button
+                    onClick={handleRemove}
+                    disabled={removing}
+                    className="flex items-center justify-center gap-2 rounded-pill border border-[#ece5f5] bg-surface px-4 py-3 text-sm font-semibold text-[#8a82a8] disabled:opacity-60"
+                  >
+                    {removing ? <Spinner className="h-4 w-4" /> : <Trash2 size={16} />}
+                  </button>
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center py-4 text-center">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#f2effa] text-[#8b5cf6]">
-                  <FileUp size={22} />
+              <div className="flex flex-col items-center text-center">
+                <div
+                  className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
+                  style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.2)" }}
+                >
+                  <FileUp size={26} />
                 </div>
-                <p className="mt-3 text-sm font-semibold text-ink">No resume on file yet</p>
-                <p className="mt-1 text-xs text-ink-faint max-w-xs">Upload a PDF to get started.</p>
+                <p className="mt-4 text-base font-semibold text-[#3c3650]">No resume on file yet</p>
+                <p className="mt-1 text-xs text-[#8a82a8] max-w-xs">
+                  Upload a PDF and Strivo will quietly use it as background context in chats and memories.
+                </p>
+
+                {uploadError && (
+                  <div className="w-full mt-4">
+                    <ErrorBanner message={uploadError} />
+                  </div>
+                )}
+
+                <button
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={uploading}
+                  className={cn(
+                    "mt-5 flex w-full items-center justify-center gap-2 rounded-pill py-3.5 text-sm font-semibold text-white disabled:opacity-60"
+                  )}
+                  style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                >
+                  {uploading ? <Spinner className="border-white/40 border-t-white h-4 w-4" /> : <FileUp size={16} />}
+                  {uploading ? "Uploading…" : "Upload PDF"}
+                </button>
               </div>
             )}
-
-            {uploadError && (
-              <div className="mt-4">
-                <ErrorBanner message={uploadError} />
-              </div>
-            )}
-
-            <div className="mt-4 flex gap-2.5">
-              <Button
-                variant={status.hasResume ? "secondary" : "primary"}
-                className="flex-1"
-                onClick={() => fileInputRef.current?.click()}
-                loading={uploading}
-              >
-                <FileUp size={16} /> {status.hasResume ? "Replace" : "Upload PDF"}
-              </Button>
-              {status.hasResume && (
-                <Button variant="ghost" className="flex-1" onClick={handleRemove} loading={removing}>
-                  <Trash2 size={16} /> Remove
-                </Button>
-              )}
-            </div>
           </div>
         )}
 
-        <p className="mt-3 text-[11px] text-ink-faint">PDF only, up to 2MB.</p>
+        <p className="mt-3 text-center text-[11px] text-ink-faint">PDF only, up to 2MB.</p>
       </div>
     </div>
   );
