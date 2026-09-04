@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import BottomNav from "@/components/BottomNav";
 import { requireUserId } from "@/lib/serverAuth";
 import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
+import { countMemories } from "@/lib/repo/memories";
 import { CurrentUserProvider } from "@/lib/CurrentUserContext";
 
 // Server-rendered gate, not a client-side check: previously the "pick a
@@ -41,6 +42,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = userId ? getUserById(userId) : undefined;
   if (user) {
     if (user.preferred_plan === null) {
+      // Brand-new, hasn't recorded anything yet, and hasn't picked a plan --
+      // send them to the "hero action" screen (record one thing, see it
+      // turn into a resume line) BEFORE asking about billing, instead of
+      // the old order (plan picker first). Gated on memory count rather
+      // than a separate "onboarding done" flag: cheap (single indexed
+      // COUNT), and correctly skips anyone who already has memories (e.g.
+      // an existing tester who somehow still has preferred_plan null) --
+      // they've already had the "wow" moment, no need to force it again.
+      // countMemories(userId) is safe to call even for a userId that
+      // doesn't exist yet in edge cases, since it's just a COUNT query.
+      if (countMemories(userId!) === 0) {
+        redirect("/first-record");
+      }
       redirect("/welcome-trial");
     }
     const info = getSubscriptionInfo(user);
