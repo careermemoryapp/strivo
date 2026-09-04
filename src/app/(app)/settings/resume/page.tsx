@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatDistanceToNow } from "date-fns";
+import * as Sentry from "@sentry/nextjs";
 import { FileUp, FileText, Trash2, CheckCircle2, Sparkles } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
@@ -63,6 +64,11 @@ export default function ResumeSettingsPage() {
       setStatus({ hasResume: true, filename: saveData.filename, uploadedAt: saveData.uploadedAt });
       setJustSaved(true);
     } catch (e) {
+      // Reported live (unlike most catch blocks in this app) because this
+      // exact flow has failed silently in the field before with no visible
+      // error banner -- if it happens again we need a real stack trace
+      // instead of guessing, and this is cheap insurance either way.
+      Sentry.captureException(e, { tags: { flow: "resume-upload", surface: "settings" } });
       setUploadError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     } finally {
       setUploading(false);
@@ -92,7 +98,20 @@ export default function ResumeSettingsPage() {
           Strivo just uses it quietly to make chat answers and resume lines sharper.
         </p>
 
-        <input ref={fileInputRef} type="file" accept=".pdf" className="hidden" onChange={handleFileChange} />
+        {/* MIME type included alongside the extension -- some Android file
+            picker sources (Drive, WhatsApp, Files) report a resume's MIME
+            type inconsistently, and an extension-only accept list has been
+            seen to make the WebView's document picker silently drop the
+            selection on some devices. Record's working upload tab (see
+            (app)/record/page.tsx's UPLOAD_ACCEPT) uses a similarly broad
+            list for the same reason. */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="application/pdf,.pdf"
+          className="hidden"
+          onChange={handleFileChange}
+        />
 
         {loadError && (
           <div className="mt-4">

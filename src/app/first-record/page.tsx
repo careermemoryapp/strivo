@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useRef, useState } from "react";
+import * as Sentry from "@sentry/nextjs";
 import { Mic, Square, Sparkles, Copy, ClipboardCheck, ArrowRight, Award, FileUp, FileText } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
@@ -146,6 +147,10 @@ export default function FirstRecordPage() {
       setSavedVia("resume");
       setSaved(true);
     } catch (e) {
+      // See the matching comment in settings/resume/page.tsx -- this exact
+      // flow has failed silently in the field before, so it's worth real
+      // telemetry instead of guessing next time.
+      Sentry.captureException(e, { tags: { flow: "resume-upload", surface: "first-record" } });
       setSaveError(e instanceof Error ? e.message : "Something went wrong. Please try again.");
     } finally {
       setSaving(false);
@@ -340,7 +345,16 @@ export default function FirstRecordPage() {
 
         {mode === "resume" && (
           <div className="flex flex-col items-center text-center">
-            <input ref={fileInputRef} type="file" accept=".pdf" className="hidden" onChange={handleResumeFile} />
+            {/* See the matching comment in settings/resume/page.tsx -- MIME
+                type included alongside the extension for Android file-picker
+                reliability. */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/pdf,.pdf"
+              className="hidden"
+              onChange={handleResumeFile}
+            />
             <div
               className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
               style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.2)" }}
