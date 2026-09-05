@@ -5,7 +5,7 @@ import { formatDistanceToNow } from "date-fns";
 import * as Sentry from "@sentry/nextjs";
 import { FilePicker } from "@capawesome/capacitor-file-picker";
 import { Capacitor } from "@capacitor/core";
-import { FileUp, FileText, Trash2, CheckCircle2, Sparkles } from "lucide-react";
+import { FileUp, FileText, Trash2, CheckCircle2, Sparkles, MessageCircle, Target } from "lucide-react";
 import { markExpectedResume } from "@/lib/nativePlatform";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
@@ -13,6 +13,28 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/utils";
 
 type ResumeStatus = { hasResume: boolean; filename: string | null; uploadedAt: string | null };
+
+// What actually happens with an uploaded resume behind the scenes -- shown
+// as a "why this helps" list (same icon-chip/title/description rhythm as
+// Home's Quick Actions) so this page reads as a real feature with a payoff,
+// not just a bare upload control sitting under a paragraph of text.
+const RESUME_BENEFITS = [
+  {
+    icon: MessageCircle,
+    title: "Sharper chat answers",
+    description: "Strivo already knows your background, so it doesn't ask you to repeat it.",
+  },
+  {
+    icon: FileText,
+    title: "Stronger resume lines",
+    description: "New resume lines build on what's already there instead of starting blank.",
+  },
+  {
+    icon: Target,
+    title: "Faster interview prep",
+    description: "Your real experience shows up in answers without digging it back up.",
+  },
+] as const;
 
 // Lets someone upload (or replace/remove) a resume PDF at any time, not just
 // once during /first-record onboarding -- the same underlying pipeline
@@ -143,9 +165,22 @@ export default function ResumeSettingsPage() {
         )}
 
         {status && (
-          <div className="mt-5 rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-6">
+          <div className="relative mt-5 overflow-hidden rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-6">
+            {/* Ambient glow blobs -- same device the dark header and Home use
+                (see DarkHeader.tsx / HomeClient.tsx's DARK header), scaled
+                down and softened for a light card instead of a dark one, so
+                this page doesn't feel flat next to them. */}
+            <div
+              className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full bg-[#c4b5fd]/40 blur-3xl"
+              aria-hidden="true"
+            />
+            <div
+              className="pointer-events-none absolute -left-10 bottom-0 h-28 w-28 rounded-full bg-[#93c5fd]/30 blur-3xl"
+              aria-hidden="true"
+            />
+
             {status.hasResume ? (
-              <div className="flex flex-col items-center text-center">
+              <div className="relative flex flex-col items-center text-center">
                 <div
                   className="relative flex h-16 w-16 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
                   style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.25)" }}
@@ -170,6 +205,19 @@ export default function ResumeSettingsPage() {
                     Uploaded {formatDistanceToNow(new Date(status.uploadedAt), { addSuffix: true })}
                   </p>
                 )}
+
+                {/* Quick reminder of what this file is actually doing for
+                    them, right where they can see it -- otherwise a resume
+                    that's just "on file" can feel like it vanished into a
+                    settings screen and did nothing. */}
+                <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+                  <span className="flex items-center gap-1 rounded-pill bg-surface/70 px-2.5 py-1 text-[10.5px] font-semibold text-[#6d5fa8]">
+                    <MessageCircle size={11} /> Chat answers
+                  </span>
+                  <span className="flex items-center gap-1 rounded-pill bg-surface/70 px-2.5 py-1 text-[10.5px] font-semibold text-[#6d5fa8]">
+                    <Sparkles size={11} /> Resume lines
+                  </span>
+                </div>
 
                 {uploadError && (
                   <div className="w-full mt-4">
@@ -197,7 +245,7 @@ export default function ResumeSettingsPage() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col items-center text-center">
+              <div className="relative flex flex-col items-center text-center">
                 <div
                   className="flex h-16 w-16 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
                   style={{ boxShadow: "0 12px 32px rgba(139,92,246,0.2)" }}
@@ -232,6 +280,33 @@ export default function ResumeSettingsPage() {
         )}
 
         <p className="mt-3 text-center text-[11px] text-ink-faint">PDF only, up to 2MB.</p>
+
+        {/* Why this helps -- same accent-bar + icon-chip rhythm as Home's
+            "Continue"/Quick Actions sections, so this page reads as a real
+            feature with a payoff rather than a bare upload control. Shown
+            regardless of upload state -- it's the pitch for someone who
+            hasn't uploaded yet, and the receipt for someone who already
+            has. */}
+        <div className="mt-7">
+          <div
+            className="mb-4 h-[3px] w-14 rounded-full"
+            style={{ background: "linear-gradient(90deg,#a78bfa,#60a5fa)" }}
+          />
+          <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Why this helps</p>
+          <div>
+            {RESUME_BENEFITS.map((benefit) => (
+              <div key={benefit.title} className="flex items-start gap-3 border-t border-[#f0ecf7] py-3 last:border-b">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-[#f2effa] text-[#8b5cf6]">
+                  <benefit.icon size={17} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[13px] font-medium text-ink">{benefit.title}</p>
+                  <p className="text-[11px] text-ink-faint">{benefit.description}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );
