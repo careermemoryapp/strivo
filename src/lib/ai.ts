@@ -630,6 +630,51 @@ export async function embedText(text: string): Promise<number[] | null> {
 const TRANSCRIBE_PROMPT =
   "यह एक व्यक्तिगत वॉयस नोट है। This is a personal voice memo, sometimes in Hindi, sometimes in English, sometimes both mixed together.";
 
+// Whisper treats the `prompt` above purely as a steering hint, but on audio
+// it can't transcribe with confidence (too quiet, background noise, a bad
+// mic capture on some devices, or a clip that's short/ambiguous for other
+// reasons) it can fall back to echoing pieces of that prompt back as if it
+// were the transcription, instead of returning empty text or erroring. That
+// surfaced as a real bug: a user spoke ~15-20s of clear English and got back
+// "व्यक्तिगत वॉयस नोट है." -- a verbatim chunk of TRANSCRIBE_PROMPT itself,
+// not a translation or hallucination unrelated to it. Guard against that
+// specific failure mode by checking whether the returned text is itself
+// (mostly) contained in the prompt we fed in; if so, treat it the same as a
+// failed transcription rather than silently handing the user back our own
+// steering text. The length floor avoids false-positives on short genuine
+// transcriptions that happen to share a common word ("English", "voice")
+// with the prompt.
+function looksLikePromptEcho(text: string): boolean {
+  const normalize = (s: string) =>
+    s
+      .toLowerCase()
+      .replace(/[।.,!?"'‘’“”]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const normalizedText = normalize(text);
+  if (normalizedText.length < 6) return false;
+  const normalizedPrompt = normalize(TRANSCRIBE_PROMPT);
+  return normalizedPrompt.includes(normalizedText);
+}
+
+// A second, broader hallucination guard on top of looksLikePromptEcho. The
+// prompt-echo check only catches Whisper regurgitating OUR steering text --
+// it doesn't catch the other well-documented Whisper failure mode: on
+// silent, near-silent, or noise-only audio it can hallucinate entirely
+// fluent, grammatically-plausible sentences in some language (often skewed
+// toward whatever language the `prompt` hint nudged it toward, which is
+// exactly why a bad/quiet mic capture on this feature tends to come back as
+// confident-sounding but nonsensical Hindi). Requesting `verbose_json`
+// exposes Whisper's own per-segment confidence signals, which is the
+// documented way to catch this: a segment is considered silent/hallucinated
+// when it reports high `no_speech_prob` together with low `avg_logprob`
+// (OpenAI's own guidance for this pair of fields). If every segment in the
+// response fails that test, the whole "transcription" is discarded rather
+// than handed to the user as if it were their real speech.
+function isLikelySilentSegment(segment: { no_speech_prob: number; avg_logprob: number }): boolean {
+  return segment.no_speech_prob > 0.6 && segment.avg_logprob < -1;
+}
+
 export async function transcribeAudio(file: File): Promise<string | null> {
   const openai = getClient();
   if (!openai) return null;
@@ -638,8 +683,33 @@ export async function transcribeAudio(file: File): Promise<string | null> {
       file,
       model: "whisper-1",
       prompt: TRANSCRIBE_PROMPT,
+      response_format: "verbose_json",
     });
-    return (result.text ?? "").trim();
+    let text = (result.text ?? "").trim();
+
+    const segments = result.segments;
+    if (segments && segments.length > 0) {
+      if (segments.every(isLikelySilentSegment)) {
+        console.error("transcribeAudio: all segments low-confidence/no-speech, discarding hallucination:", text);
+        Sentry.captureMessage("transcribeAudio no-speech hallucination", { extra: { text } });
+        return null;
+      }
+      // Some recordings mix a real spoken portion with a silent lead-in/
+      // trailing gap that Whisper still hallucinates over -- keep only the
+      // segments that actually look like speech.
+      text = segments
+        .filter((s) => !isLikelySilentSegment(s))
+        .map((s) => s.text.trim())
+        .join(" ")
+        .trim();
+    }
+
+    if (looksLikePromptEcho(text)) {
+      console.error("transcribeAudio: discarding prompt-echo hallucination:", text);
+      Sentry.captureMessage("transcribeAudio prompt-echo hallucination", { extra: { text } });
+      return null;
+    }
+    return text;
   } catch (err) {
     console.error("transcribeAudio failed:", err);
     Sentry.captureException(err);
