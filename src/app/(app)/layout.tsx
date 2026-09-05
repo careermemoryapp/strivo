@@ -39,40 +39,51 @@ import { CurrentUserProvider } from "@/lib/CurrentUserContext";
 // should see the hard stop, not the softer "still deciding" nudge.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const userId = await requireUserId();
-  const user = userId ? getUserById(userId) : undefined;
-  if (user) {
-    if (user.preferred_plan === null) {
-      // Brand-new, hasn't recorded anything yet, and hasn't picked a plan --
-      // send them to the "hero action" screen (record one thing, see it
-      // turn into a resume line) BEFORE asking about billing, instead of
-      // the old order (plan picker first). Gated on memory count rather
-      // than a separate "onboarding done" flag: cheap (single indexed
-      // COUNT), and correctly skips anyone who already has memories (e.g.
-      // an existing tester who somehow still has preferred_plan null) --
-      // they've already had the "wow" moment, no need to force it again.
-      // countMemories(userId) is safe to call even for a userId that
-      // doesn't exist yet in edge cases, since it's just a COUNT query.
-      if (countMemories(userId!) === 0) {
-        redirect("/first-record");
-      }
-      redirect("/welcome-trial");
+  // proxy.ts's middleware already redirects a request with no session
+  // cookie at all to /login, but it can't check isTokenRevoked() (see its
+  // own comment) since that needs a database read and middleware runs on
+  // the Edge runtime. A revoked-but-structurally-valid token (the stale,
+  // post-logout cookie this whole mechanism exists to catch -- see
+  // logged_out_at's comment on the User type in repo/users.ts) slips past
+  // that check and lands here instead, where requireUserId() -- a real
+  // Node Server Component, no Edge restriction -- returns null for it via
+  // the session callback in lib/auth.ts. Redirecting here closes that gap
+  // before any protected content or BottomNav ever renders.
+  if (!userId) {
+    redirect("/login");
+  }
+  const user = getUserById(userId);
+  if (!user) {
+    redirect("/login");
+  }
+
+  if (user.preferred_plan === null) {
+    // Brand-new, hasn't recorded anything yet, and hasn't picked a plan --
+    // send them to the "hero action" screen (record one thing, see it
+    // turn into a resume line) BEFORE asking about billing, instead of
+    // the old order (plan picker first). Gated on memory count rather
+    // than a separate "onboarding done" flag: cheap (single indexed
+    // COUNT), and correctly skips anyone who already has memories (e.g.
+    // an existing tester who somehow still has preferred_plan null) --
+    // they've already had the "wow" moment, no need to force it again.
+    if (countMemories(userId) === 0) {
+      redirect("/first-record");
     }
-    const info = getSubscriptionInfo(user);
-    if (info.status === "expired") {
-      redirect("/trial-ended");
-    }
-    if (info.needsPlanNudge) {
-      redirect("/plan-nudge");
-    }
+    redirect("/welcome-trial");
+  }
+  const info = getSubscriptionInfo(user);
+  if (info.status === "expired") {
+    redirect("/trial-ended");
+  }
+  if (info.needsPlanNudge) {
+    redirect("/plan-nudge");
   }
 
   // Same lookup this layout already needs for the gating checks above, so
   // handing it to every page's header avatar via context is free -- see
   // CurrentUserContext.tsx for what this fixes (the "?" flash on tab
   // switches).
-  const currentUser = user
-    ? { firstName: user.first_name, lastName: user.last_name, email: user.email }
-    : null;
+  const currentUser = { firstName: user.first_name, lastName: user.last_name, email: user.email };
 
   return (
     <CurrentUserProvider user={currentUser}>

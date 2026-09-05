@@ -50,6 +50,28 @@ public class MainActivity extends BridgeActivity {
         handleAuthCallbackIntent(intent);
     }
 
+    @Override
+    public void onPause() {
+        super.onPause();
+
+        // Android's WebView doesn't write cookie changes to disk right away
+        // -- it batches them and flushes periodically. Log Out (signOut() in
+        // settings/page.tsx) clears the session cookie the moment it runs,
+        // but that deletion only lives in memory until the next flush. If
+        // this app's process gets killed while backgrounded -- which is
+        // completely normal, and especially likely in the few seconds right
+        // after someone logs out and immediately closes the app -- the
+        // deletion never makes it to disk. The next cold start then reads
+        // the *old*, still-valid session cookie back off disk, and the
+        // person who just logged out finds themselves silently signed back
+        // in without ever seeing the Google sign-in screen. Flushing here,
+        // every time the app leaves the foreground (not just on logout --
+        // there's no cheap way to hook "right after logout" specifically
+        // from native code), closes that window for logout and for every
+        // other cookie change alike.
+        CookieManager.getInstance().flush();
+    }
+
     // Google also blocks its own sign-in *screen* inside embedded WebViews
     // (separately from the cookie issue above) — the "Continue" button just
     // renders disabled there. So Google sign-in for this app runs in the

@@ -51,6 +51,13 @@ export type User = {
   // own comment in lib/db.ts's migration and isDueForResumeReminder in
   // lib/resumeReminder.ts. Null means never nudged yet.
   resume_reminder_sent_at: string | null;
+  // Stamped every time this user signs out (see events.signOut in
+  // lib/auth.ts). Not "are they currently logged out" -- it's just the
+  // timestamp of their most recent sign-out, checked against each session
+  // token's own token.loginAt in lib/auth.ts's callbacks and proxy.ts's
+  // middleware. See the matching comment on this column's migration in
+  // lib/db.ts for the Android cookie-flush bug this exists to close.
+  logged_out_at: string | null;
   created_at: string;
 };
 
@@ -325,4 +332,14 @@ export function clearResume(id: string) {
 export function setResumeReminderSentAt(id: string, iso: string) {
   const db = getDb();
   db.prepare(`UPDATE users SET resume_reminder_sent_at = ? WHERE id = ?`).run(iso, id);
+}
+
+// Called from authOptions.events.signOut (lib/auth.ts) every time anyone
+// signs out, from any device. See logged_out_at's comment on the User type
+// above -- this is the server-side backstop that makes Log Out actually
+// stick even if a client (most notably Android's WebView) never manages to
+// durably delete its own copy of the session cookie.
+export function markLoggedOut(id: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET logged_out_at = ? WHERE id = ?`).run(nowIso(), id);
 }

@@ -914,6 +914,26 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("resume_reminder_sent_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN resume_reminder_sent_at TEXT;`);
   }
+
+  // Server-side companion to Log Out. Strivo's sessions are stateless JWTs
+  // (see the comment on authOptions.session in lib/auth.ts) -- normally
+  // "logging out" only works by deleting the cookie, which has no
+  // server-side backstop if that deletion is ever lost. On Android that
+  // deletion genuinely can be lost: WebView batches cookie writes to disk
+  // rather than committing them immediately, so if the app's process gets
+  // killed shortly after Log Out (very ordinary -- it's exactly what
+  // happens when someone logs out and then closes the app), the deletion
+  // never reaches disk and the next cold start reads the old, still-valid
+  // cookie back and silently signs them back in. Stamping this on every
+  // sign-out (see events.signOut in lib/auth.ts) and checking it against
+  // each token's own login time (token.loginAt) in both the jwt/session
+  // callbacks and proxy.ts's page middleware means a replayed pre-logout
+  // token is rejected by the SERVER regardless of whether the client ever
+  // actually got rid of the cookie -- fixing this with no dependency on
+  // Android cookie-flush timing at all.
+  if (!userColumns.includes("logged_out_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN logged_out_at TEXT;`);
+  }
 }
 
 export function getDb(): DatabaseSync {
