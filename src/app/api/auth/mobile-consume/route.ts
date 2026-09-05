@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { consumeMobileAuthToken } from "@/lib/repo/mobileAuth";
 
 const SECURE_COOKIE = "__Secure-next-auth.session-token";
@@ -19,6 +20,16 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   const result = token ? consumeMobileAuthToken(token) : undefined;
   if (!result) {
+    // Real signal for the flaky "Google sign-in sometimes needs several
+    // tries on Android" issue -- MainActivity.java's cold-start race (fixed
+    // separately) was the main suspect, but this makes any remaining
+    // no-token/expired/already-used case visible in Sentry too instead of
+    // just silently bouncing back to /login with no trace.
+    Sentry.captureMessage("mobile-consume: token missing, expired, or already used", {
+      level: "warning",
+      tags: { flow: "mobile-google-signin" },
+      extra: { hadToken: !!token },
+    });
     return NextResponse.redirect(new URL("/login", SITE_URL));
   }
   const res = NextResponse.redirect(new URL("/home", SITE_URL));

@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/nextjs";
 import { FilePicker } from "@capawesome/capacitor-file-picker";
 import { Capacitor } from "@capacitor/core";
 import { Mic, Square, Sparkles, Copy, ClipboardCheck, ArrowRight, Award, FileUp, FileText } from "lucide-react";
+import { markExpectedResume } from "@/lib/nativePlatform";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -132,6 +133,10 @@ export default function FirstRecordPage() {
     setSaving(true);
     setSaveError(null);
     try {
+      // See the matching comment in settings/resume/page.tsx -- has to mark
+      // this resume as expected or Providers.tsx's reload-on-resume wipes
+      // this in-flight pick before it finishes.
+      markExpectedResume();
       const result = await FilePicker.pickFiles({ types: ["application/pdf"], limit: 1 });
       const picked = result.files[0];
       if (!picked) {

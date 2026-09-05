@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/nextjs";
 import { FilePicker } from "@capawesome/capacitor-file-picker";
 import { Capacitor } from "@capacitor/core";
 import { FileUp, FileText, Trash2, CheckCircle2, Sparkles } from "lucide-react";
+import { markExpectedResume } from "@/lib/nativePlatform";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -53,6 +54,13 @@ export default function ResumeSettingsPage() {
     setUploadError(null);
     setJustSaved(false);
     try {
+      // Opening the native picker backgrounds the app, which fires
+      // Capacitor's "resume" event when it returns -- see
+      // lib/nativePlatform.ts for why this has to be marked as expected
+      // (otherwise Providers.tsx's reload-on-resume wipes this whole
+      // in-flight pick before it can finish, which was the real cause of
+      // the "picker opens, then reverts" bug).
+      markExpectedResume();
       const result = await FilePicker.pickFiles({ types: ["application/pdf"], limit: 1 });
       const picked = result.files[0];
       if (!picked) {

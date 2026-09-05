@@ -78,9 +78,9 @@
     <!-- @capawesome/capacitor-file-picker (see Resume upload / Record's
          Upload tab): replaces the old <input type="file"> + WebView
          file-chooser bridge, which was silently dropping selected files
-         app-wide (picker opens, user picks a file, nothing happens -- no
+         app-wide (picker opens, user picks a file, nothing happens, no
          error, no upload). Picking a file itself needs no runtime
-         permission (the OS presents the picker on the app's behalf) --
+         permission (the OS presents the picker on the app's behalf);
          these two are only for optional extras the plugin supports
          (unredacted photo EXIF location, and reading files from legacy
          external storage on older Android versions). Harmless to declare

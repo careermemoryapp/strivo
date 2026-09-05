@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as Sentry from "@sentry/nextjs";
 import { createMobileAuthToken } from "@/lib/repo/mobileAuth";
 
 // NextAuth names its session cookie based on whether NEXTAUTH_URL is https.
@@ -29,6 +30,16 @@ const SITE_URL = process.env.NEXTAUTH_URL || "https://strivo.ai";
 export async function GET(req: NextRequest) {
   const sessionCookie = req.cookies.get(SECURE_COOKIE)?.value ?? req.cookies.get(PLAIN_COOKIE)?.value;
   if (!sessionCookie) {
+    // Google OAuth reported success (NextAuth's own callback sent the
+    // browser here) but no session cookie showed up on this request --
+    // this branch has been suspected (see task history around Android
+    // Google sign-in) but never actually confirmed to fire. Logging it so
+    // a real occurrence shows up in Sentry instead of just silently
+    // bouncing the user back to /login with no trace of why.
+    Sentry.captureMessage("mobile-bridge: no session cookie present after Google OAuth", {
+      level: "warning",
+      tags: { flow: "mobile-google-signin" },
+    });
     return NextResponse.redirect(new URL("/login", SITE_URL));
   }
   const { token } = createMobileAuthToken(sessionCookie);

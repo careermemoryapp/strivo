@@ -9,7 +9,7 @@ import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME } from "@/lib/config";
-import { isNativeApp } from "@/lib/nativePlatform";
+import { isNativeApp, markExpectedResume } from "@/lib/nativePlatform";
 
 function GoogleIcon() {
   return (
@@ -63,6 +63,14 @@ function LoginForm() {
     if (isNativeApp()) {
       const bridgeUrl = `${window.location.origin}/mobile-google-start`;
       try {
+        // Opening the system browser backgrounds the app the same way the
+        // native file picker does, and returning from it fires the exact
+        // same Capacitor "resume" event -- which used to trigger
+        // Providers.tsx's reload-on-resume and could stomp on the
+        // auth-callback deep link that's about to land. See
+        // lib/nativePlatform.ts for the full explanation; this is very
+        // likely why sign-in sometimes needed several tries.
+        markExpectedResume();
         await Browser.open({ url: bridgeUrl });
       } catch {
         // Most likely cause: this device still has an older build of the

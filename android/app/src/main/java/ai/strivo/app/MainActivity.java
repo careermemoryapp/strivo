@@ -25,7 +25,22 @@ public class MainActivity extends BridgeActivity {
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(webView, true);
 
-        handleAuthCallbackIntent(getIntent());
+        // On a cold start (app process wasn't already running when the
+        // ai.strivo.app://auth-callback deep link arrived -- the common case
+        // right after a multi-second Google account picker/2FA round trip in
+        // the system browser, which is exactly when Android is most likely
+        // to have killed the backgrounded app to reclaim memory), calling
+        // handleAuthCallbackIntent() synchronously here means its
+        // webView.loadUrl(consumeUrl) call races against the WebView load
+        // that super.onCreate() (Capacitor's BridgeActivity) just kicked off
+        // for the app's normal server.url. Whichever load "wins" that race
+        // was timing-dependent -- explaining why sign-in worked on some
+        // attempts and silently landed back on /login on others. Posting
+        // this to the WebView's own message queue instead of calling it
+        // immediately lets Capacitor's initial load get dispatched first, so
+        // this one reliably runs after it and wins every time instead of
+        // sometimes.
+        webView.post(() -> handleAuthCallbackIntent(getIntent()));
     }
 
     @Override

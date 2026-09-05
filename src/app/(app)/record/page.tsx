@@ -10,6 +10,7 @@ import {
   Upload, Paperclip, Copy, ClipboardCheck, Award, MessageCircleQuestion,
 } from "lucide-react";
 import { safeJsonParse, pickVariant } from "@/lib/utils";
+import { markExpectedResume } from "@/lib/nativePlatform";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -174,6 +175,10 @@ export default function RecordPage() {
     setUploadError(null);
     setUploadText("");
     try {
+      // See lib/nativePlatform.ts -- has to mark this resume as expected or
+      // Providers.tsx's reload-on-resume wipes this in-flight pick before
+      // it finishes.
+      markExpectedResume();
       const result = await FilePicker.pickFiles({ types: UPLOAD_TYPES, limit: 1 });
       const picked = result.files[0];
       if (!picked) {
