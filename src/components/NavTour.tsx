@@ -259,8 +259,17 @@ function SpotlightCard({
 
   const tooltipWidth = 260;
   const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 375;
+  const viewportHeight = typeof window !== "undefined" ? window.innerHeight : 800;
   let tooltipLeft = cx + cw / 2 - tooltipWidth / 2;
   tooltipLeft = Math.max(12, Math.min(tooltipLeft, viewportWidth - tooltipWidth - 12));
+  // Anchored by its BOTTOM edge (distance up from the spotlighted rect),
+  // not a hardcoded top offset -- nav items sit right at the bottom of the
+  // screen, so a fixed top offset combined with a taller card (longer body
+  // text on some steps) pushed the card's bottom edge down far enough to
+  // overlap the bottom nav itself. Anchoring to bottom lets the card grow
+  // upward by however tall it actually is, always leaving the same gap
+  // above the nav bar.
+  const tooltipBottom = viewportHeight - cy + 12;
 
   return (
     <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="App tour">
@@ -284,7 +293,7 @@ function SpotlightCard({
 
       <div
         className="absolute rounded-[16px] bg-[#1c1830] p-4 shadow-xl"
-        style={{ left: tooltipLeft, top: Math.max(12, cy - 150), width: tooltipWidth }}
+        style={{ left: tooltipLeft, bottom: tooltipBottom, width: tooltipWidth, maxHeight: `calc(100vh - ${tooltipBottom}px - 12px)`, overflowY: "auto" }}
       >
         <TourCardChrome
           step={step}
