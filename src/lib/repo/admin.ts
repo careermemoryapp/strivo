@@ -166,6 +166,12 @@ export type AdminUserRow = {
   email: string;
   status: "trial" | "active" | "expired";
   daysLeft: number | null;
+  // Doubles as "trial ends" (status trial/expired) and "renews" (status
+  // active, i.e. admin-granted) -- see the same field's comment on
+  // getSubscriptionInfo in repo/users.ts. Shown for every user regardless of
+  // status so the admin table always answers "when does this account next
+  // need attention," not just for gifted accounts.
+  trialEndsAt: string | null;
   createdAt: string;
   memoryCount: number;
   chatCount: number;
@@ -223,6 +229,7 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
       email: u.email,
       status: info.status,
       daysLeft: info.daysLeft,
+      trialEndsAt: info.trialEndsAt,
       createdAt: u.created_at,
       memoryCount: memoryCounts.get(u.id) ?? 0,
       chatCount: chatCounts.get(u.id) ?? 0,

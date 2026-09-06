@@ -15,7 +15,7 @@ import {
   Newspaper,
   Power,
 } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
+import { formatDistanceToNow, format } from "date-fns";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -46,6 +46,16 @@ function planSuffix(plan: "monthly" | "annual" | "later" | null): string {
   if (!plan) return "";
   if (plan === "later") return " · Deciding";
   return ` · ${plan === "annual" ? "Yearly" : "Monthly"}`;
+}
+
+// trialEndsAt doubles as "trial end" for trial/expired users and "renewal
+// date" for admin-granted active users (see the same field's comment on
+// AdminUserRow in repo/admin.ts) -- label it accordingly so the one column
+// reads correctly for every status, not just gifted accounts.
+function renewalLabel(status: "trial" | "active" | "expired"): string {
+  if (status === "active") return "Renews";
+  if (status === "expired") return "Trial ended";
+  return "Trial ends";
 }
 
 const SEGMENT_OPTIONS: { value: NudgeSegment; label: string; hint: string }[] = [
@@ -1752,6 +1762,7 @@ export default function AdminDashboardPage() {
                           <th className="px-4 py-3 font-semibold">Name</th>
                           <th className="px-4 py-3 font-semibold">Email</th>
                           <th className="px-4 py-3 font-semibold">Status</th>
+                          <th className="px-4 py-3 font-semibold">Renews / Trial ends</th>
                           <th className="px-4 py-3 font-semibold">Memories</th>
                           <th className="px-4 py-3 font-semibold">Chats</th>
                           <th className="px-4 py-3 font-semibold">App version</th>
@@ -1781,6 +1792,16 @@ export default function AdminDashboardPage() {
                                     ? `Trial · ${u.daysLeft}d left${planSuffix(u.preferredPlan)}`
                                     : `Expired${planSuffix(u.preferredPlan)}`}
                               </span>
+                            </td>
+                            <td className="px-4 py-3 text-ink-soft whitespace-nowrap">
+                              {u.trialEndsAt ? (
+                                <span className="text-[12px]">
+                                  <span className="text-ink-faint">{renewalLabel(u.status)} </span>
+                                  {format(new Date(u.trialEndsAt), "MMM d, yyyy")}
+                                </span>
+                              ) : (
+                                <span className="text-[12px] text-ink-faint">—</span>
+                              )}
                             </td>
                             <td className="px-4 py-3 text-ink-soft">{u.memoryCount}</td>
                             <td className="px-4 py-3 text-ink-soft">{u.chatCount}</td>
