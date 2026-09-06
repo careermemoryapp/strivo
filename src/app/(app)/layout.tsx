@@ -4,6 +4,7 @@ import { requireUserId } from "@/lib/serverAuth";
 import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
 import { countMemories } from "@/lib/repo/memories";
 import { CurrentUserProvider } from "@/lib/CurrentUserContext";
+import { NavTourProvider } from "@/components/NavTour";
 
 // Server-rendered gate, not a client-side check: previously the "pick a
 // plan first" redirect only lived inside home/page.tsx's own fetch effect,
@@ -87,10 +88,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <CurrentUserProvider user={currentUser}>
-      <div className="flex min-h-screen flex-col bg-bg">
-        <main className="mx-auto w-full max-w-md flex-1 pb-20">{children}</main>
-        <BottomNav />
-      </div>
+      {/* Mounted at this level (not inside a single page) so the record ->
+          save -> chat tour's progress survives client-side navigation
+          between Home/Record/Chats -- see NavTour.tsx. Only a plain number
+          crosses the Server -> Client boundary here, so this doesn't run
+          into the node:sqlite-row restriction described in CLAUDE.md. */}
+      <NavTourProvider initialStep={user.nav_tour_step}>
+        <div className="flex min-h-screen flex-col bg-bg">
+          <main className="mx-auto w-full max-w-md flex-1 pb-20">{children}</main>
+          <BottomNav />
+        </div>
+      </NavTourProvider>
     </CurrentUserProvider>
   );
 }

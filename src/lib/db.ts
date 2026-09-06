@@ -934,6 +934,24 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("logged_out_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN logged_out_at TEXT;`);
   }
+
+  // First-run product tour built around the actual record -> save -> chat
+  // loop, not a static walk of the nav bar. Three checkpoints, tracked as a
+  // single step counter rather than a boolean so progress survives across
+  // Home/Record/Chats tab switches (see NavTourProvider in NavTour.tsx,
+  // which is what actually reads/advances this):
+  //   0 = not started -> spotlight the Record tab.
+  //   1 = tapped through step 0, hasn't saved a memory yet -> no overlay;
+  //       record/page.tsx shows the "that's saved" callout the moment their
+  //       first memory finishes saving, which advances to 2.
+  //   2 = spotlight the Chats tab.
+  //   3 = done (completed OR skipped at any point) -> never shown again.
+  // Deliberately separate from /first-record (which already covers "record
+  // your first memory and see the wow") -- this only points them at WHERE
+  // things live once that's done. See /api/tour/step for the write path.
+  if (!userColumns.includes("nav_tour_step")) {
+    db.exec(`ALTER TABLE users ADD COLUMN nav_tour_step INTEGER NOT NULL DEFAULT 0;`);
+  }
 }
 
 export function getDb(): DatabaseSync {

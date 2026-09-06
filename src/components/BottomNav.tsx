@@ -5,11 +5,14 @@ import { usePathname } from "next/navigation";
 import { Home, MessageSquare, Brain, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+// tourId values are read by HomeTour.tsx (document.querySelector
+// (`[data-tour-id="..."]`)) to find each item's DOM node to spotlight --
+// keep these in sync with HomeTour's NAV_TOUR_STEPS if either changes.
 const ITEMS = [
-  { href: "/home", label: "Home", icon: Home },
-  { href: "/chats", label: "Chats", icon: MessageSquare },
-  { href: "/memories", label: "Memories", icon: Brain },
-  { href: "/record", label: "Record", icon: Mic },
+  { href: "/home", label: "Home", icon: Home, tourId: "nav-home" },
+  { href: "/chats", label: "Chats", icon: MessageSquare, tourId: "nav-chats" },
+  { href: "/memories", label: "Memories", icon: Brain, tourId: "nav-memories" },
+  { href: "/record", label: "Record", icon: Mic, tourId: "nav-record" },
 ];
 
 // Same dark tone as every screen's header now (see DARK in DarkHeader.tsx)
@@ -35,7 +38,7 @@ export default function BottomNav() {
             const activeColor = "text-white";
             const inactiveColor = "text-white/40";
             return (
-              <li key={item.href} className="flex-1">
+              <li key={item.href} className="flex-1" data-tour-id={item.tourId}>
                 <Link
                   href={item.href}
                   aria-label={item.label}

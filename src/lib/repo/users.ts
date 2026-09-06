@@ -58,6 +58,15 @@ export type User = {
   // middleware. See the matching comment on this column's migration in
   // lib/db.ts for the Android cookie-flush bug this exists to close.
   logged_out_at: string | null;
+  // Progress through the record -> save -> chat first-run tour: 0 = not
+  // started, 1 = spotlighted Record already, waiting on their first save,
+  // 2 = spotlighted Chats already, 3 = done (completed or skipped). See the
+  // matching comment on this column's migration in lib/db.ts and
+  // NavTour.tsx for how it's read/advanced. Deliberately separate from
+  // preferred_plan/first-record gating in (app)/layout.tsx: this only
+  // controls what NavTourProvider renders on top of the app shell, it never
+  // blocks or redirects.
+  nav_tour_step: number;
   created_at: string;
 };
 
@@ -342,4 +351,14 @@ export function setResumeReminderSentAt(id: string, iso: string) {
 export function markLoggedOut(id: string) {
   const db = getDb();
   db.prepare(`UPDATE users SET logged_out_at = ? WHERE id = ?`).run(nowIso(), id);
+}
+
+// Advances (or resets, though nothing does that today) the record -> save
+// -> chat tour to an arbitrary step -- see the column's own comment on the
+// User type above. Deliberately takes the target step rather than just
+// incrementing, since NavTour.tsx's Skip path jumps straight to 3 (done)
+// from wherever the user currently is, not just +1.
+export function setNavTourStep(id: string, step: number) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET nav_tour_step = ? WHERE id = ?`).run(step, id);
 }
