@@ -15,6 +15,13 @@
 // Pure functions, no server-only imports -- safe to reuse from an admin
 // preview tool, same as emailWelcome.ts.
 
+// Matches the "MMMM d, yyyy" format used for the trial-end date on
+// settings/subscription/page.tsx (date-fns there), without pulling that
+// dependency into this otherwise-dependency-free template file.
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
 function escapeHtml(input: string): string {
   return input
     .replace(/&/g, "&amp;")
@@ -57,10 +64,16 @@ function planLabel(plan: GiftPlan): string {
 // MONTHLY_PRICE_LABEL/ANNUAL_PRICE_LABEL from repo/users.ts) -- kept as a
 // param rather than imported here so this file stays a pure/no-server-import
 // template, same as emailWelcome.ts.
-export function renderGiftEmailHtml(params: { firstName: string; plan: GiftPlan; priceLabel: string }): string {
+export function renderGiftEmailHtml(params: {
+  firstName: string;
+  plan: GiftPlan;
+  priceLabel: string;
+  renewalDateIso: string;
+}): string {
   const name = escapeHtml(params.firstName);
   const plan = planLabel(params.plan);
   const price = escapeHtml(params.priceLabel);
+  const renewalDate = formatDate(params.renewalDateIso);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -104,6 +117,7 @@ export function renderGiftEmailHtml(params: { firstName: string; plan: GiftPlan;
                   <td style="padding:16px 18px;">
                     <p style="margin:0;font-size:14px;font-weight:700;color:${ACCENT};">${plan} plan</p>
                     <p style="margin:2px 0 0;font-size:12.5px;color:#6b6577;">${price} value — on us</p>
+                    <p style="margin:6px 0 0;font-size:12.5px;color:#6b6577;">Renews ${renewalDate}</p>
                   </td>
                 </tr>
               </table>
@@ -141,13 +155,20 @@ export function renderGiftEmailHtml(params: { firstName: string; plan: GiftPlan;
 </html>`;
 }
 
-export function renderGiftEmailText(params: { firstName: string; plan: GiftPlan; priceLabel: string }): string {
+export function renderGiftEmailText(params: {
+  firstName: string;
+  plan: GiftPlan;
+  priceLabel: string;
+  renewalDateIso: string;
+}): string {
   const plan = planLabel(params.plan);
+  const renewalDate = formatDate(params.renewalDateIso);
   return `You've been gifted Strivo Plus, ${params.firstName}
 
 Granted by the Strivo team -- no payment needed.
 
 ${plan} plan -- ${params.priceLabel} value -- on us
+Renews ${renewalDate}
 
 What's included:
 ${PERKS.map((p) => `- ${p}`).join("\n")}

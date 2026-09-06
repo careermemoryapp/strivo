@@ -133,7 +133,8 @@ export default function SubscriptionPage() {
               )}
               {sub.status === "active" && (
                 <p className="mt-2 text-sm text-white/80">
-                  You&apos;re all set — renews at {sub.priceLabel}.
+                  You&apos;re all set — renews at {sub.priceLabel}
+                  {sub.trialEndsAt ? ` on ${format(new Date(sub.trialEndsAt), "MMMM d, yyyy")}` : ""}.
                 </p>
               )}
               {sub.status === "expired" && (
@@ -169,6 +170,9 @@ export default function SubscriptionPage() {
                       {sub.preferredPlan === "monthly" ? "Monthly" : "Annual"} plan
                     </p>
                     <p className="text-xs text-ink-soft">Granted by the Strivo team — no payment needed.</p>
+                    {sub.trialEndsAt && (
+                      <p className="text-xs text-ink-soft">Renews {format(new Date(sub.trialEndsAt), "MMMM d, yyyy")}</p>
+                    )}
                   </div>
 
                   <div className="mt-4 space-y-2.5">

@@ -164,15 +164,23 @@ function SpotlightCard({
 
   return (
     <div className="fixed inset-0 z-[100]" role="dialog" aria-modal="true" aria-label="App tour">
-      {/* Four dimmed rectangles around the cutout rather than a CSS mask --
-          avoids relying on mask-image support inside the Android WebView
-          this app also runs in. */}
-      <div className="absolute bg-black/70" style={{ top: 0, left: 0, right: 0, height: Math.max(0, cy) }} />
-      <div className="absolute bg-black/70" style={{ top: cy, left: 0, width: Math.max(0, cx), height: ch }} />
-      <div className="absolute bg-black/70" style={{ top: cy, left: cx + cw, right: 0, height: ch }} />
-      <div className="absolute bg-black/70" style={{ top: cy + ch, left: 0, right: 0, bottom: 0 }} />
-
-      <div className="absolute rounded-2xl ring-2 ring-white/80" style={{ top: cy, left: cx, width: cw, height: ch }} />
+      {/* Single "spotlight hole" div via an oversized box-shadow, rather than
+          four hand-computed dark rectangles around the cutout -- that
+          approach mixed top/left/right/bottom offsets on the same element
+          in a way that's easy to get subtly wrong (and did: the darkening
+          wasn't reliably showing on-device). A huge spread box-shadow is
+          the standard, much harder-to-get-wrong way to do this: the shadow
+          covers the entire viewport, this element's own background stays
+          transparent, and pointer-events-none means it never blocks taps
+          on the real nav underneath. */}
+      <div
+        className="absolute rounded-2xl pointer-events-none"
+        style={{ top: cy, left: cx, width: cw, height: ch, boxShadow: "0 0 0 9999px rgba(0,0,0,0.75)" }}
+      />
+      <div
+        className="absolute rounded-2xl ring-2 ring-white/80 pointer-events-none"
+        style={{ top: cy, left: cx, width: cw, height: ch }}
+      />
 
       <div
         className="absolute rounded-[16px] bg-[#1c1830] p-4 shadow-xl"

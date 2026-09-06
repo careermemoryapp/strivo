@@ -1,7 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAdminAuthed } from "@/lib/adminAuth";
-import { setUserSubscriptionStatus, setPreferredPlan, MONTHLY_PRICE_LABEL, ANNUAL_LIST_PRICE_LABEL } from "@/lib/repo/users";
+import {
+  setUserSubscriptionStatus,
+  setPreferredPlan,
+  setTrialEndsAt,
+  computeGiftRenewalDate,
+  MONTHLY_PRICE_LABEL,
+  ANNUAL_LIST_PRICE_LABEL,
+  TRIAL_MONTHS,
+} from "@/lib/repo/users";
 import { sendGiftEmail } from "@/lib/email";
 
 // `plan` is optional and only meaningful alongside status "active" -- it's
@@ -37,6 +45,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // sendWelcomeEmail firing alongside signup; never throws, so a failed
   // send can't block the grant itself from taking effect.
   if (parsed.data.status === "active" && parsed.data.plan) {
+    // Extends from the account's PRE-grant trial_ends_at (user.trial_ends_at
+    // here is still the original value -- setUserSubscriptionStatus never
+    // touches this column) so a mid-trial grant keeps the remaining trial
+    // AND adds the full plan on top -- see computeGiftRenewalDate's own
+    // comment in repo/users.ts for the exact math this reproduces.
+    const renewalIso = computeGiftRenewalDate(user.trial_ends_at, parsed.data.plan);
+    setTrialEndsAt(id, renewalIso);
+
     // Annual uses the LIST price (ANNUAL_LIST_PRICE_LABEL, "$83.88/year"),
     // not the already-discounted ANNUAL_PRICE_LABEL ("$41.99/year") --
     // the whole point of a gifted plan is showing what it's actually worth
@@ -49,7 +65,19 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       firstName: user.first_name,
       plan: parsed.data.plan,
       priceLabel,
+      renewalDateIso: renewalIso,
     });
+  } else if (parsed.data.status === "trial") {
+    // Revoking a (possibly previously-gifted) account back to plain trial.
+    // Without this, trial_ends_at would still hold whatever far-future
+    // renewal date a PRIOR grant computed above, which getSubscriptionInfo
+    // would then misread as "your trial ends in 14 months" -- reset it back
+    // to the standard TRIAL_MONTHS window from account creation, the same
+    // value createUser() would have set if they'd never been granted
+    // anything.
+    const resetDate = new Date(user.created_at);
+    resetDate.setMonth(resetDate.getMonth() + TRIAL_MONTHS);
+    setTrialEndsAt(id, resetDate.toISOString());
   }
   return NextResponse.json({ ok: true });
 }

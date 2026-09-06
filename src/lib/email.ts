@@ -172,6 +172,7 @@ export async function sendGiftEmail(params: {
   firstName: string;
   plan: GiftPlan;
   priceLabel: string;
+  renewalDateIso: string;
 }): Promise<boolean> {
   if (!sesConfigured()) {
     console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping gift email.");
@@ -189,8 +190,24 @@ export async function sendGiftEmail(params: {
         Message: {
           Subject: { Data: `You've been gifted Strivo Plus (${planName})`, Charset: "UTF-8" },
           Body: {
-            Html: { Data: renderGiftEmailHtml({ firstName: name, plan: params.plan, priceLabel: params.priceLabel }), Charset: "UTF-8" },
-            Text: { Data: renderGiftEmailText({ firstName: name, plan: params.plan, priceLabel: params.priceLabel }), Charset: "UTF-8" },
+            Html: {
+              Data: renderGiftEmailHtml({
+                firstName: name,
+                plan: params.plan,
+                priceLabel: params.priceLabel,
+                renewalDateIso: params.renewalDateIso,
+              }),
+              Charset: "UTF-8",
+            },
+            Text: {
+              Data: renderGiftEmailText({
+                firstName: name,
+                plan: params.plan,
+                priceLabel: params.priceLabel,
+                renewalDateIso: params.renewalDateIso,
+              }),
+              Charset: "UTF-8",
+            },
           },
         },
       })

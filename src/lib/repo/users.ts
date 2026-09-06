@@ -249,6 +249,28 @@ export function setUserSubscriptionStatus(id: string, status: "trial" | "active"
   return getUserById(id);
 }
 
+export function setTrialEndsAt(id: string, iso: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET trial_ends_at = ? WHERE id = ?`).run(iso, id);
+}
+
+// Computes the renewal date for an admin-granted plan (see the Grant
+// Monthly/Grant Yearly buttons in the admin panel, /api/admin/users/[id]).
+// Extends from whichever is LATER: the account's current trial_ends_at (so
+// granting mid-trial doesn't cut the remaining free trial short -- they
+// keep it AND get the full plan on top) or right now (so granting to an
+// already-expired account still gets the full plan duration starting
+// today, not a date already in the past). Example: sign up today (trial
+// ends in 2 months) + gifted Annual (12 months) = renews 14 months from
+// today; + gifted Monthly (1 month) = renews 3 months from today.
+export function computeGiftRenewalDate(currentTrialEndsAt: string | null, plan: "monthly" | "annual"): string {
+  const now = Date.now();
+  const currentMs = currentTrialEndsAt ? new Date(currentTrialEndsAt).getTime() : null;
+  const base = new Date(currentMs && currentMs > now ? currentMs : now);
+  base.setMonth(base.getMonth() + (plan === "annual" ? 12 : 1));
+  return base.toISOString();
+}
+
 // Records the plan a user picked on the first-run trial screen (see
 // app/welcome-trial). This doesn't charge anything or start a different
 // trial -- everyone already gets TRIAL_MONTHS free from createUser() above
