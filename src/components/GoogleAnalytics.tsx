@@ -2,7 +2,14 @@
 import Script from "next/script";
 import { CONSENT_STORAGE_KEY } from "./CookieConsent";
 
-const GA_MEASUREMENT_ID = "G-D9XNPG16TH";
+// Corrected 2026-09-06: this was "G-D9XNPG16TH", which doesn't match the
+// actual live web data stream's Google tag shown in GA4 admin (Admin > Data
+// streams > this stream > Google tag) -- that's the authoritative source
+// for the ID, not the one echoed on the Home "no data received" screen. The
+// wrong ID here is why zero data ever reached GA4 regardless of the consent
+// fix above: every hit was being sent to a stream Google wasn't listening
+// on for this property.
+const GA_MEASUREMENT_ID = "G-7XJBK501FH";
 
 // Loads gtag.js behind Google's Consent Mode. Everything here runs as one
 // plain-JS inline script (not React state) so there's no server/client
