@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAdminAuthed } from "@/lib/adminAuth";
-import { setUserSubscriptionStatus, setPreferredPlan } from "@/lib/repo/users";
+import { setUserSubscriptionStatus, setPreferredPlan, MONTHLY_PRICE_LABEL, ANNUAL_LIST_PRICE_LABEL } from "@/lib/repo/users";
+import { sendGiftEmail } from "@/lib/email";
 
 // `plan` is optional and only meaningful alongside status "active" -- it's
 // how the admin records which plan a manually-granted (comped) Strivo Plus
@@ -25,6 +26,30 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (parsed.data.plan) {
     setPreferredPlan(id, parsed.data.plan);
+  }
+  // Fires on every Grant Monthly/Grant Yearly click -- deliberately not
+  // gated on "was this a genuinely new grant" (e.g. re-clicking Grant on an
+  // already-active same-plan account still re-sends). This action is a
+  // deliberate, infrequent admin click, not something that fires from user
+  // behavior, so a duplicate send in the rare re-click case is harmless --
+  // simpler than tracking prior state just to suppress it. Awaited (not
+  // fire-and-forget) since this IS the whole point of the request, unlike
+  // sendWelcomeEmail firing alongside signup; never throws, so a failed
+  // send can't block the grant itself from taking effect.
+  if (parsed.data.status === "active" && parsed.data.plan) {
+    // Annual uses the LIST price (ANNUAL_LIST_PRICE_LABEL, "$83.88/year"),
+    // not the already-discounted ANNUAL_PRICE_LABEL ("$41.99/year") --
+    // the whole point of a gifted plan is showing what it's actually worth
+    // before the 50%-off annual discount, not the discounted price someone
+    // would've paid anyway. Monthly has no separate list/discounted
+    // distinction, so it keeps using MONTHLY_PRICE_LABEL as-is.
+    const priceLabel = parsed.data.plan === "annual" ? ANNUAL_LIST_PRICE_LABEL : MONTHLY_PRICE_LABEL;
+    await sendGiftEmail({
+      toEmail: user.email,
+      firstName: user.first_name,
+      plan: parsed.data.plan,
+      priceLabel,
+    });
   }
   return NextResponse.json({ ok: true });
 }

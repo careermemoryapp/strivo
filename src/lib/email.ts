@@ -3,6 +3,7 @@ import * as Sentry from "@sentry/nextjs";
 import { createUnsubscribeToken } from "@/lib/emailUnsubscribe";
 import { personalize, renderMarkdownLiteToHtml, renderMarkdownLiteToText, wrapBrandedEmail } from "@/lib/emailTemplate";
 import { renderWelcomeEmailHtml, renderWelcomeEmailText } from "@/lib/emailWelcome";
+import { renderGiftEmailHtml, renderGiftEmailText, type GiftPlan } from "@/lib/emailGift";
 
 // Sends outbound email via AWS SES. Uses the standard AWS SDK env vars
 // (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) so it picks up
@@ -153,6 +154,51 @@ export async function sendWelcomeEmail(params: { toEmail: string; firstName: str
     return true;
   } catch (e) {
     console.error(`Failed to send welcome email to ${params.toEmail} via SES:`, e);
+    Sentry.captureException(e);
+    return false;
+  }
+}
+
+// Sent the moment an admin grants a comped Strivo Plus account (see
+// /api/admin/users/[id]/route.ts's PATCH handler, triggered by the Grant
+// Monthly/Grant Yearly buttons in the admin panel). Deliberately separate
+// from sendWelcomeEmail/sendCampaignEmail: it's transactional, tied to one
+// specific admin action, and uses its own template (emailGift.ts) whose
+// wording mirrors the in-app "gifted" messaging on
+// settings/subscription/page.tsx. Never throws; returns false on any
+// failure so a failed send can't block the admin's grant action itself.
+export async function sendGiftEmail(params: {
+  toEmail: string;
+  firstName: string;
+  plan: GiftPlan;
+  priceLabel: string;
+}): Promise<boolean> {
+  if (!sesConfigured()) {
+    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping gift email.");
+    return false;
+  }
+
+  const name = params.firstName.trim() || "there";
+  const planName = params.plan === "annual" ? "Annual" : "Monthly";
+
+  try {
+    await getClient().send(
+      new SendEmailCommand({
+        Source: FROM_EMAIL,
+        Destination: { ToAddresses: [params.toEmail] },
+        Message: {
+          Subject: { Data: `You've been gifted Strivo Plus (${planName})`, Charset: "UTF-8" },
+          Body: {
+            Html: { Data: renderGiftEmailHtml({ firstName: name, plan: params.plan, priceLabel: params.priceLabel }), Charset: "UTF-8" },
+            Text: { Data: renderGiftEmailText({ firstName: name, plan: params.plan, priceLabel: params.priceLabel }), Charset: "UTF-8" },
+          },
+        },
+      })
+    );
+    console.log(`Gift email sent to ${params.toEmail} via SES.`);
+    return true;
+  } catch (e) {
+    console.error(`Failed to send gift email to ${params.toEmail} via SES:`, e);
     Sentry.captureException(e);
     return false;
   }
