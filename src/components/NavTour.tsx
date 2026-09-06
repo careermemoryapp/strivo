@@ -2,15 +2,18 @@
 
 import { createContext, useContext, useEffect, useState } from "react";
 
-// First-run product tour, redesigned around the actual record→save→chat
-// loop instead of a static tour of the nav bar. Three checkpoints:
-//   0 -> not started: spotlight the Record tab, telling them to start there.
-//   1 -> mid-flow: no overlay here (they're busy recording). The Record
-//        page itself (see record/page.tsx) shows a "that's saved" callout
-//        the moment their FIRST memory finishes saving, and advances to 2.
-//   2 -> spotlight the Chats tab, telling them they can ask about it there.
-//        Shown wherever BottomNav renders, including right on the Record
-//        success screen -- no navigation required for this step to appear.
+// First-run product tour: a self-paced, upfront 3-step walkthrough of the
+// record -> save -> chat loop. Deliberately NOT gated on the user actually
+// doing anything -- earlier versions waited for a real memory to be saved
+// before showing step 2, which just looked broken ("I clicked Got it and
+// nothing happened") because nothing visibly changed until the user went
+// and performed the action themselves. Now all 3 steps play out purely from
+// button taps, back-to-back, right where the user already is -- they see
+// the whole flow explained up front, then go use the app afterward.
+//   0 -> "Step 1 of 3": spotlight the Record tab.
+//   1 -> "Step 2 of 3": centered card (no nav target) explaining that
+//        whatever they record is saved as a memory.
+//   2 -> "Step 3 of 3": spotlight the Chats tab.
 //   3 -> done. Never shown again (see nav_tour_step's own comment on the
 //        User type in repo/users.ts).
 // Lives at (app)/layout.tsx's level (same lifetime as CurrentUserProvider)
@@ -67,17 +70,27 @@ export function NavTourProvider({
   );
 }
 
-const SPOTLIGHT_STEPS: Record<number, { tourId: string; title: string; body: string; cta: string }> = {
+const TOTAL_STEPS = 3;
+
+// tourId present -> spotlight that nav item (measured via SpotlightCard).
+// tourId absent -> a plain centered card with no cutout, for the middle
+// step that doesn't correspond to a specific nav element.
+const SPOTLIGHT_STEPS: Record<number, { tourId?: string; title: string; body: string; cta: string }> = {
   0: {
     tourId: "nav-record",
-    title: "Start here",
-    body: "Tap Record and tell Strivo about something that just happened — a win, a piece of feedback, anything.",
-    cta: "Got it",
+    title: "Record",
+    body: "Tap Record and tell Strivo about something that just happened — a win, a piece of feedback, anything worth remembering.",
+    cta: "Next",
+  },
+  1: {
+    title: "Saved as a memory",
+    body: "Everything you record is saved as a memory — organized and searchable, so you never have to write it down anywhere else.",
+    cta: "Next",
   },
   2: {
     tourId: "nav-chats",
-    title: "Now try this",
-    body: "Head to Chats and ask Strivo anything about what you just recorded — or anything else about your career.",
+    title: "Ask anything",
+    body: "Head to Chats anytime to ask Strivo about your career — it answers using everything you've recorded.",
     cta: "Got it",
   },
 };
@@ -91,13 +104,61 @@ function measure(tourId: string): Rect | null {
   return { top: r.top, left: r.left, width: r.width, height: r.height };
 }
 
+// Step counter + Skip/Next row, shared by both the spotlight card and the
+// centered (no-target) card so "every step marked 1/2/3" reads the same way
+// regardless of which layout that step uses.
+function TourCardChrome({
+  step,
+  title,
+  body,
+  cta,
+  onNext,
+  onSkip,
+}: {
+  step: number;
+  title: string;
+  body: string;
+  cta: string;
+  onNext: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <>
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-white/50">
+          Step {step + 1} of {TOTAL_STEPS}
+        </span>
+        <div className="flex items-center gap-1">
+          {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
+            <span
+              key={i}
+              className="h-1.5 w-1.5 rounded-full"
+              style={{ background: i === step ? "#a78bfa" : "rgba(255,255,255,0.25)" }}
+            />
+          ))}
+        </div>
+      </div>
+      <p className="mt-2 text-[14px] font-bold text-white">{title}</p>
+      <p className="mt-1 text-[12.5px] leading-snug text-white/70">{body}</p>
+      <div className="mt-3 flex items-center justify-between">
+        <button onClick={onSkip} className="text-[12px] font-semibold text-white/50">
+          Skip
+        </button>
+        <button
+          onClick={onNext}
+          className="rounded-full px-4 py-1.5 text-[12.5px] font-semibold text-white"
+          style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+        >
+          {cta}
+        </button>
+      </div>
+    </>
+  );
+}
+
 // Thin selector with no state of its own -- just picks which config (if
-// any) applies to the current step. The actual measuring lives in
-// SpotlightCard below, remounted fresh via `key` whenever the target
-// changes, so there's no stale rect from a PREVIOUS step to explicitly
-// clear (avoids a synchronous setState(null) at the top of an effect,
-// which react-hooks/set-state-in-effect flags even though it's harmless
-// here -- a fresh mount gets a clean useState(null) for free instead).
+// any) applies to the current step, and which layout (spotlight vs
+// centered) that config needs.
 function NavTourSpotlight({
   step,
   onNext,
@@ -109,7 +170,45 @@ function NavTourSpotlight({
 }) {
   const config = SPOTLIGHT_STEPS[step];
   if (!config) return null;
-  return <SpotlightCard key={config.tourId} config={config} step={step} onNext={onNext} onSkip={onSkip} />;
+  if (config.tourId) {
+    return <SpotlightCard key={config.tourId} config={{ ...config, tourId: config.tourId }} step={step} onNext={onNext} onSkip={onSkip} />;
+  }
+  return <CenteredTourCard key={`step-${step}`} config={config} step={step} onNext={onNext} onSkip={onSkip} />;
+}
+
+// The middle step doesn't point at a nav element, so it's just a plain
+// dimmed overlay with a centered card -- same visual language (dark card,
+// step counter, Skip/Next) as the spotlight steps either side of it.
+function CenteredTourCard({
+  config,
+  step,
+  onNext,
+  onSkip,
+}: {
+  config: { title: string; body: string; cta: string };
+  step: number;
+  onNext: (next: number) => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/75 px-6"
+      role="dialog"
+      aria-modal="true"
+      aria-label="App tour"
+    >
+      <div className="w-full max-w-[300px] rounded-[16px] bg-[#1c1830] p-4 shadow-xl">
+        <TourCardChrome
+          step={step}
+          title={config.title}
+          body={config.body}
+          cta={config.cta}
+          onNext={() => onNext(step + 1)}
+          onSkip={onSkip}
+        />
+      </div>
+    </div>
+  );
 }
 
 function SpotlightCard({
@@ -184,22 +283,16 @@ function SpotlightCard({
 
       <div
         className="absolute rounded-[16px] bg-[#1c1830] p-4 shadow-xl"
-        style={{ left: tooltipLeft, top: Math.max(12, cy - 132), width: tooltipWidth }}
+        style={{ left: tooltipLeft, top: Math.max(12, cy - 150), width: tooltipWidth }}
       >
-        <p className="text-[14px] font-bold text-white">{config.title}</p>
-        <p className="mt-1 text-[12.5px] leading-snug text-white/70">{config.body}</p>
-        <div className="mt-3 flex items-center justify-between">
-          <button onClick={onSkip} className="text-[12px] font-semibold text-white/50">
-            Skip
-          </button>
-          <button
-            onClick={() => onNext(step + 1)}
-            className="rounded-full px-4 py-1.5 text-[12.5px] font-semibold text-white"
-            style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
-          >
-            {config.cta}
-          </button>
-        </div>
+        <TourCardChrome
+          step={step}
+          title={config.title}
+          body={config.body}
+          cta={config.cta}
+          onNext={() => onNext(step + 1)}
+          onSkip={onSkip}
+        />
       </div>
     </div>
   );

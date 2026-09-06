@@ -20,7 +20,6 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/utils";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import { useNavTour } from "@/components/NavTour";
 
 type Stage = "capture" | "success";
 type Mode = "voice" | "type" | "upload";
@@ -71,7 +70,6 @@ export default function RecordPage() {
   const router = useRouter();
   const speech = useSpeechRecognition();
   const user = useCurrentUser();
-  const { step: tourStep, advance: advanceTour } = useNavTour();
 
   const [stage, setStage] = useState<Stage>("capture");
   const [mode, setMode] = useState<Mode>("voice");
@@ -414,53 +412,10 @@ export default function RecordPage() {
             a milestone like "10th memory recorded" can land on a memory
             with no competency praise attached at all, so this can't be
             gated on savedPraise alone. */}
-        {/* Tour step 1/3 (see NavTour.tsx): the "that's saved" checkpoint.
-            Only shown for someone actually mid-tour, and only when there's
-            no competency/milestone popup about to cover the exact same
-            moment -- see the tourStep===1 branch inside the praise popup's
-            own dismiss handlers below for how that overlapping case is
-            handled instead. Advancing to step 2 is what makes the global
-            Chats-tab spotlight (mounted via NavTourProvider in
-            (app)/layout.tsx, present on this very page through BottomNav)
-            appear next -- no navigation required. */}
-        {tourStep === 1 && !(savedPraise || savedMilestones.length > 0) && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 px-5 pb-5 sm:items-center sm:pb-0">
-            <div
-              className="w-full max-w-sm rounded-[22px] bg-surface p-6 text-center"
-              style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.28)" }}
-            >
-              <div
-                className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full bg-green-50 text-green-600"
-                style={{ boxShadow: "0 8px 20px rgba(34,197,94,0.2)" }}
-              >
-                <Check size={26} />
-              </div>
-              <p className="text-[15px] font-semibold text-ink">That&apos;s your first memory saved</p>
-              <p className="mt-1.5 text-sm text-ink-soft">
-                Strivo will remember it for you — no need to write it down anywhere else.
-              </p>
-              <button
-                onClick={() => advanceTour(2)}
-                className="mt-5 w-full rounded-pill py-3 text-sm font-semibold text-white"
-                style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
-              >
-                Next
-              </button>
-            </div>
-          </div>
-        )}
-
         {showPraisePopup && (savedPraise || savedMilestones.length > 0) && (
           <div
             className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-5 pb-5 sm:items-center sm:pb-0"
-            onClick={() => {
-              setShowPraisePopup(false);
-              // See the standalone tourStep===1 callout above for why this
-              // popup's own dismissal is the trigger in this branch instead
-              // -- avoids two dim-backdrop cards stacking for the same
-              // "you just saved a memory" moment.
-              if (tourStep === 1) advanceTour(2);
-            }}
+            onClick={() => setShowPraisePopup(false)}
           >
             <div
               className="w-full max-w-sm rounded-[22px] bg-surface p-6 text-center"
@@ -531,10 +486,7 @@ export default function RecordPage() {
               )}
 
               <button
-                onClick={() => {
-                  setShowPraisePopup(false);
-                  if (tourStep === 1) advanceTour(2);
-                }}
+                onClick={() => setShowPraisePopup(false)}
                 className="mt-5 w-full rounded-pill py-3 text-sm font-semibold text-white"
                 style={{
                   background: savedPraise
