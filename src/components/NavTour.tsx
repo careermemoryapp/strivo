@@ -83,8 +83,9 @@ const SPOTLIGHT_STEPS: Record<number, { tourId?: string; title: string; body: st
     cta: "Next",
   },
   1: {
+    tourId: "nav-memories",
     title: "Saved as a memory",
-    body: "Everything you record is saved as a memory — organized and searchable, so you never have to write it down anywhere else.",
+    body: "Everything you record is saved here in Memories — organized and searchable, so you never have to write it down anywhere else.",
     cta: "Next",
   },
   2: {
