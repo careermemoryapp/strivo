@@ -12,25 +12,33 @@ export function getStoredConsent(): "granted" | "denied" | null {
   return v === "granted" || v === "denied" ? v : null;
 }
 
-// Accept/decline banner for the marketing site's GA4 tag. Shown once, on
-// first visit, until a decision is stored. GoogleAnalytics.tsx already
-// starts gtag in "denied" mode by default (Google Consent Mode), so nothing
-// is tracked before someone actually clicks Accept here.
+// Accept/decline banner for the marketing site's ad-related consent signals
+// only. GoogleAnalytics.tsx grants analytics_storage unconditionally now
+// (see its own comment for why basic anonymized measurement doesn't need
+// this gate) -- this banner exists solely for ad_storage/ad_user_data/
+// ad_personalization, which genuinely are consent-relevant even though
+// Strivo doesn't run ads/remarketing yet. Shown once, on first visit, until
+// a decision is stored.
 export default function CookieConsent() {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
+    // Reads localStorage on mount only (client-only value, avoids a
+    // server/client hydration mismatch) -- not a render loop.
+    /* eslint-disable react-hooks/set-state-in-effect */
     setVisible(getStoredConsent() === null);
   }, []);
 
   function decide(status: "granted" | "denied") {
     window.localStorage.setItem(CONSENT_STORAGE_KEY, status);
     const w = window as typeof window & { gtag?: (...args: unknown[]) => void };
+    // Deliberately omits analytics_storage -- it's already unconditionally
+    // "granted" at init (see GoogleAnalytics.tsx) and should stay that way
+    // regardless of what someone picks here, including Decline.
     w.gtag?.("consent", "update", {
       ad_storage: status,
       ad_user_data: status,
       ad_personalization: status,
-      analytics_storage: status,
     });
     setVisible(false);
   }
@@ -62,8 +70,8 @@ export default function CookieConsent() {
       }}
     >
       <p style={{ margin: 0 }}>
-        We use cookies to understand how visitors use strivo.ai and improve the site. Nothing
-        is tracked until you accept. See our{" "}
+        We use anonymous analytics to understand how visitors use strivo.ai. Accept to also
+        allow ad personalization (optional) -- see our{" "}
         <a href="/privacy" style={{ color: "#c4b5fd", textDecoration: "underline" }}>
           Privacy Policy
         </a>
