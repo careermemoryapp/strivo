@@ -16,6 +16,17 @@ module.exports = {
       cwd: __dirname,
       exec_mode: "cluster",
       instances: 2,
+      // Added 2026-09-06: with real launch traffic now hitting the server,
+      // free RAM has been trending down (server is a small instance -- see
+      // the admin Security Status panel's "Server has headroom" check). If
+      // either worker's memory footprint ever balloons (a request that
+      // leaks, a slow client holding a big response in memory, etc.), pm2
+      // now kills and restarts JUST that one worker once it crosses 450MB,
+      // instead of the whole box running low on RAM, falling into swap, and
+      // going slow or 502ing for everyone -- the same kind of outage seen
+      // earlier today. The other cluster worker keeps serving traffic
+      // during the ~1-2s restart, so this is invisible to users.
+      max_memory_restart: "450M",
       env: {
         NODE_ENV: "production",
       },
