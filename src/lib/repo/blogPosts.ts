@@ -13,6 +13,13 @@ export const BLOG_CATEGORIES = [
 ] as const;
 export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
 
+// Valid in-app destinations for a post's CTA -- kept as a fixed allow-list
+// (not free-text) so a bad value from the writing automation can never
+// produce a CTA button that links somewhere broken or off-app. See
+// cta_path's own comment in lib/db.ts's migration.
+export const BLOG_CTA_PATHS = ["/record", "/memories", "/chats", "/home"] as const;
+export type BlogCtaPath = (typeof BLOG_CTA_PATHS)[number];
+
 export type BlogPost = {
   id: string;
   slug: string;
@@ -23,6 +30,12 @@ export type BlogPost = {
   excerpt: string;
   content_html: string;
   keywords: string | null;
+  // Both null unless the writing automation (or a human publishing
+  // manually) explicitly set them -- see cta_label/cta_path's shared
+  // comment on their migration in lib/db.ts. Null means "use the generic
+  // fallback CTA," not "no CTA at all."
+  cta_label: string | null;
+  cta_path: string | null;
   created_at: string;
 };
 
@@ -119,6 +132,12 @@ export function createBlogPost(input: {
   excerpt: string;
   contentHtml: string;
   keywords?: string;
+  // Both optional -- see cta_label/cta_path's comment on the BlogPost type
+  // above. ctaPath is validated against BLOG_CTA_PATHS by the caller
+  // (/api/blog/publish's zod schema); this function trusts it's already a
+  // safe value by the time it gets here, same as every other field.
+  ctaLabel?: string;
+  ctaPath?: string;
 }): BlogPost {
   const db = getDb();
   const id = newId("blog");
@@ -136,8 +155,8 @@ export function createBlogPost(input: {
   }
 
   db.prepare(
-    `INSERT INTO blog_posts (id, slug, title, meta_title, meta_description, category, excerpt, content_html, keywords, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO blog_posts (id, slug, title, meta_title, meta_description, category, excerpt, content_html, keywords, cta_label, cta_path, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(
     id,
     slug,
@@ -148,6 +167,8 @@ export function createBlogPost(input: {
     input.excerpt.trim(),
     sanitizeBlogHtml(input.contentHtml),
     input.keywords?.trim() || null,
+    input.ctaLabel?.trim() || null,
+    input.ctaPath?.trim() || null,
     created_at
   );
 

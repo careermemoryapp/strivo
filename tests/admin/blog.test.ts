@@ -33,6 +33,8 @@ describe("GET /api/admin/blog", () => {
         excerpt: "...",
         content_html: "<p>...</p>",
         keywords: null,
+        cta_label: null,
+        cta_path: null,
         created_at: new Date().toISOString(),
       },
     ]);

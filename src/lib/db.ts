@@ -974,6 +974,25 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("product_update_last_sent_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN product_update_last_sent_at TEXT;`);
   }
+
+  // Per-post CTA override for the Product Updates email drip (see
+  // emailProductUpdate.ts and /api/product-update-drip/run) -- lets a post
+  // about the Record feature end its email with "Record your first
+  // memory" linking to /record, one about Memories end with "Create a
+  // memory" linking to /memories, one about Chat end with "Ask Strivo
+  // something" linking to /chats, etc., instead of every drip email ending
+  // on the same generic "Open Strivo" link regardless of what it's about.
+  // Both nullable: older posts published before this existed (and any post
+  // the writing automation doesn't set these on) fall back to a generic
+  // "Open Strivo" -> /home CTA in the email-sending code rather than
+  // erroring or showing a blank button.
+  const blogPostColumns = (db.prepare(`PRAGMA table_info(blog_posts)`).all() as { name: string }[]).map((c) => c.name);
+  if (!blogPostColumns.includes("cta_label")) {
+    db.exec(`ALTER TABLE blog_posts ADD COLUMN cta_label TEXT;`);
+  }
+  if (!blogPostColumns.includes("cta_path")) {
+    db.exec(`ALTER TABLE blog_posts ADD COLUMN cta_path TEXT;`);
+  }
 }
 
 export function getDb(): DatabaseSync {

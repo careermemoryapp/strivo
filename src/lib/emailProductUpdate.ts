@@ -83,6 +83,15 @@ export type ProductUpdateEmailParams = {
   postContentHtml: string;
   postUrl: string;
   unsubscribeUrl: string;
+  // Customized per post -- e.g. a Record-feature post ends with "Record
+  // your first memory" -> /record, a Memories post with "Create a memory"
+  // -> /memories, a Chat post with "Ask Strivo something" -> /chats. The
+  // caller (see /api/product-update-drip/run and the test-send route) is
+  // responsible for resolving these from the post's cta_label/cta_path
+  // columns with a generic "Open Strivo" -> /home fallback when a post
+  // doesn't set them -- this file just renders whatever it's given.
+  ctaLabel: string;
+  ctaUrl: string;
 };
 
 export function renderProductUpdateEmailHtml(params: ProductUpdateEmailParams): string {
@@ -90,6 +99,7 @@ export function renderProductUpdateEmailHtml(params: ProductUpdateEmailParams): 
   const title = escapeHtml(params.postTitle);
   const excerpt = escapeHtml(params.postExcerpt);
   const content = styleForEmail(params.postContentHtml);
+  const ctaLabel = escapeHtml(params.ctaLabel);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -150,9 +160,24 @@ export function renderProductUpdateEmailHtml(params: ProductUpdateEmailParams): 
             </td>
           </tr>
 
+          <!-- Customized CTA -- what to DO next, not just where to read
+               more (the full article is already inline above). Points at
+               a plain https://strivo.ai path; on a phone with the app
+               installed this currently opens the mobile browser rather
+               than the native app itself (no Android App Links/deep-link
+               verification wired up yet for arbitrary in-app routes --
+               only the one-off OAuth callback deep link exists today, see
+               AndroidManifest.xml). Logged-in users land straight on the
+               right screen there either way. -->
           <tr>
-            <td style="padding:8px 36px 8px;">
-              <a href="${params.postUrl}" style="font-size:12.5px;font-weight:600;color:${ACCENT};text-decoration:underline;">View this update on strivo.ai</a>
+            <td style="padding:22px 36px 6px;">
+              <a href="${params.ctaUrl}" style="display:inline-block;background:${ACCENT};color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 26px;border-radius:999px;">${ctaLabel}</a>
+            </td>
+          </tr>
+
+          <tr>
+            <td style="padding:4px 36px 8px;">
+              <a href="${params.postUrl}" style="font-size:12px;font-weight:500;color:#a39bb0;text-decoration:underline;">Read this update on strivo.ai</a>
             </td>
           </tr>
 
@@ -183,7 +208,8 @@ Hey ${params.firstName} -- ${params.postExcerpt}
 
 ${htmlToPlainText(params.postContentHtml)}
 
-View this update on strivo.ai: ${params.postUrl}
+${params.ctaLabel}: ${params.ctaUrl}
+Read this update on strivo.ai: ${params.postUrl}
 
 ---
 You're getting one of these a day as we catch you up on what's new in Strivo.

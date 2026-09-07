@@ -243,6 +243,13 @@ export async function sendProductUpdateEmail(params: {
   postExcerpt: string;
   postContentHtml: string;
   postUrl: string;
+  // From the post's cta_label/cta_path columns (see repo/blogPosts.ts) --
+  // both undefined for posts published before this existed, or any post
+  // the writing automation didn't set them on. Falls back to a generic
+  // "Open Strivo" -> /home CTA in that case rather than requiring every
+  // caller to duplicate that fallback.
+  ctaLabel?: string;
+  ctaPath?: string;
 }): Promise<boolean> {
   if (!sesConfigured()) {
     console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping product update email.");
@@ -251,6 +258,8 @@ export async function sendProductUpdateEmail(params: {
 
   const name = params.firstName.trim() || "there";
   const unsubscribeUrl = `${APP_ORIGIN}/api/email/unsubscribe?t=${createUnsubscribeToken(params.toUserId)}`;
+  const ctaLabel = params.ctaLabel?.trim() || "Open Strivo";
+  const ctaUrl = `${APP_ORIGIN}${params.ctaPath?.trim() || "/home"}`;
 
   try {
     await getClient().send(
@@ -268,6 +277,8 @@ export async function sendProductUpdateEmail(params: {
                 postContentHtml: params.postContentHtml,
                 postUrl: params.postUrl,
                 unsubscribeUrl,
+                ctaLabel,
+                ctaUrl,
               }),
               Charset: "UTF-8",
             },
@@ -279,6 +290,8 @@ export async function sendProductUpdateEmail(params: {
                 postContentHtml: params.postContentHtml,
                 postUrl: params.postUrl,
                 unsubscribeUrl,
+                ctaLabel,
+                ctaUrl,
               }),
               Charset: "UTF-8",
             },

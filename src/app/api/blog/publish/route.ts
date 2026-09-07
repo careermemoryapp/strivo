@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { isAdminAuthed, checkBlogAutomationSecret } from "@/lib/adminAuth";
-import { createBlogPost, listBlogPostTitles, BLOG_CATEGORIES } from "@/lib/repo/blogPosts";
+import { createBlogPost, listBlogPostTitles, BLOG_CATEGORIES, BLOG_CTA_PATHS } from "@/lib/repo/blogPosts";
 
 // GET is unauthenticated — the daily automation calls this first to see
 // what's already been published, so it doesn't repeat a topic. Titles/
@@ -18,6 +18,13 @@ const schema = z.object({
   excerpt: z.string().trim().min(20).max(300),
   contentHtml: z.string().trim().min(200),
   keywords: z.string().trim().max(300).optional(),
+  // Both optional -- powers the customized CTA button on the Product
+  // Updates email drip (see emailProductUpdate.ts). ctaPath is restricted
+  // to BLOG_CTA_PATHS so the automation can't produce a button linking
+  // somewhere broken/off-app; ctaLabel is free text (e.g. "Record your
+  // first memory") since the right wording varies per post.
+  ctaLabel: z.string().trim().min(3).max(40).optional(),
+  ctaPath: z.enum(BLOG_CTA_PATHS).optional(),
 });
 
 export async function POST(req: Request) {

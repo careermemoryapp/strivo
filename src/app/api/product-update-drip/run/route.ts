@@ -79,6 +79,8 @@ export async function POST(req: Request) {
       postExcerpt: nextPost.excerpt,
       postContentHtml: nextPost.content_html,
       postUrl: `https://strivo.ai/blog/${nextPost.slug}`,
+      ctaLabel: nextPost.cta_label ?? undefined,
+      ctaPath: nextPost.cta_path ?? undefined,
     });
 
     if (ok) {

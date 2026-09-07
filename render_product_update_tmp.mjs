@@ -31,6 +31,8 @@ fs.writeFileSync(
     postContentHtml: sampleContentHtml,
     postUrl: "https://strivo.ai/blog/strivo-now-catches-the-wins-you-talk-yourself-out-of",
     unsubscribeUrl: "https://strivo.ai/api/email/unsubscribe?t=preview",
+    ctaLabel: "Record your first memory",
+    ctaUrl: "https://strivo.ai/record",
   })
 );
 console.log("done");
