@@ -4,6 +4,7 @@ import { createUnsubscribeToken } from "@/lib/emailUnsubscribe";
 import { personalize, renderMarkdownLiteToHtml, renderMarkdownLiteToText, wrapBrandedEmail } from "@/lib/emailTemplate";
 import { renderWelcomeEmailHtml, renderWelcomeEmailText } from "@/lib/emailWelcome";
 import { renderGiftEmailHtml, renderGiftEmailText, type GiftPlan } from "@/lib/emailGift";
+import { renderProductUpdateEmailHtml, renderProductUpdateEmailText } from "@/lib/emailProductUpdate";
 
 // Sends outbound email via AWS SES. Uses the standard AWS SDK env vars
 // (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) so it picks up
@@ -216,6 +217,79 @@ export async function sendGiftEmail(params: {
     return true;
   } catch (e) {
     console.error(`Failed to send gift email to ${params.toEmail} via SES:`, e);
+    Sentry.captureException(e);
+    return false;
+  }
+}
+
+// Sent once a day per user by the Product Updates drip cron (see
+// /api/product-update-drip/run) -- each recipient gets whichever Product
+// Updates post is next in THEIR OWN sequence (see
+// listUsersDueForProductUpdateDrip/markProductUpdateSent in repo/users.ts),
+// with the full article body embedded in the email itself rather than just
+// a link, per the founder's explicit call that a mere "read more" link
+// wouldn't get opened. Subject is literally the post's title. Respects the
+// same email_opt_out unsubscribe flag every other campaign/marketing send
+// does (filtered at the query level in listUsersDueForProductUpdateDrip,
+// same as recipientsForSegment() in emailCampaigns.ts) -- also carries a
+// real per-user unsubscribe link in the footer like every other marketing
+// email. Never throws; returns false on any failure so one bad send can't
+// abort the rest of the day's batch.
+export async function sendProductUpdateEmail(params: {
+  toEmail: string;
+  toUserId: string;
+  firstName: string;
+  postTitle: string;
+  postExcerpt: string;
+  postContentHtml: string;
+  postUrl: string;
+}): Promise<boolean> {
+  if (!sesConfigured()) {
+    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping product update email.");
+    return false;
+  }
+
+  const name = params.firstName.trim() || "there";
+  const unsubscribeUrl = `${APP_ORIGIN}/api/email/unsubscribe?t=${createUnsubscribeToken(params.toUserId)}`;
+
+  try {
+    await getClient().send(
+      new SendEmailCommand({
+        Source: FROM_EMAIL,
+        Destination: { ToAddresses: [params.toEmail] },
+        Message: {
+          Subject: { Data: params.postTitle, Charset: "UTF-8" },
+          Body: {
+            Html: {
+              Data: renderProductUpdateEmailHtml({
+                firstName: name,
+                postTitle: params.postTitle,
+                postExcerpt: params.postExcerpt,
+                postContentHtml: params.postContentHtml,
+                postUrl: params.postUrl,
+                unsubscribeUrl,
+              }),
+              Charset: "UTF-8",
+            },
+            Text: {
+              Data: renderProductUpdateEmailText({
+                firstName: name,
+                postTitle: params.postTitle,
+                postExcerpt: params.postExcerpt,
+                postContentHtml: params.postContentHtml,
+                postUrl: params.postUrl,
+                unsubscribeUrl,
+              }),
+              Charset: "UTF-8",
+            },
+          },
+        },
+      })
+    );
+    console.log(`Product update email sent to ${params.toEmail} via SES.`);
+    return true;
+  } catch (e) {
+    console.error(`Failed to send product update email to ${params.toEmail} via SES:`, e);
     Sentry.captureException(e);
     return false;
   }

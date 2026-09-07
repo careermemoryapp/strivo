@@ -84,6 +84,17 @@ export function listBlogPosts(opts: { category?: string; limit?: number } = {}):
   return db.prepare(`SELECT * FROM blog_posts ORDER BY created_at DESC LIMIT ?`).all(opts.limit ?? 100) as BlogPost[];
 }
 
+// Oldest-first, unlike listBlogPosts() above (which is newest-first for the
+// public /blog listing) -- this feeds the daily Product Updates email drip
+// (see /api/product-update-drip/run), where each user works through the
+// backlog in publish order starting from post #1, not newest-first.
+export function listProductUpdatePostsOrdered(): BlogPost[] {
+  const db = getDb();
+  return db
+    .prepare(`SELECT * FROM blog_posts WHERE category = 'Product Updates' ORDER BY created_at ASC`)
+    .all() as BlogPost[];
+}
+
 export function getBlogPostBySlug(slug: string): BlogPost | undefined {
   const db = getDb();
   return db.prepare(`SELECT * FROM blog_posts WHERE slug = ?`).get(slug) as BlogPost | undefined;

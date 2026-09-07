@@ -952,6 +952,28 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("nav_tour_step")) {
     db.exec(`ALTER TABLE users ADD COLUMN nav_tour_step INTEGER NOT NULL DEFAULT 0;`);
   }
+
+  // Daily "Product Updates" email drip (see /api/product-update-drip/run
+  // and lib/productUpdateDrip.ts). Deliberately has NO "drip started at"
+  // column -- each user's personal day-1 falls out naturally from these two
+  // fields instead of needing to be tracked explicitly: on any day the cron
+  // runs, a user is due for their next post if
+  // product_update_last_sent_at is null (never sent one) OR far enough in
+  // the past (>= ~20h, so timing drift in the daily cron can't skip a day
+  // or double-send). product_update_sent_count doubles as BOTH "how many
+  // they've received" and the 0-based index into the Product Updates
+  // category ordered oldest-first (see listProductUpdatePostsOrdered in
+  // repo/blogPosts.ts) -- posts[sent_count] is always their next one. This
+  // is what makes two users who joined on different days land on different
+  // posts automatically: someone who joined today starts at index 0 today;
+  // someone who joined a week ago is already partway through and never
+  // repeats what they've seen, with zero per-user "start date" bookkeeping.
+  if (!userColumns.includes("product_update_sent_count")) {
+    db.exec(`ALTER TABLE users ADD COLUMN product_update_sent_count INTEGER NOT NULL DEFAULT 0;`);
+  }
+  if (!userColumns.includes("product_update_last_sent_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN product_update_last_sent_at TEXT;`);
+  }
 }
 
 export function getDb(): DatabaseSync {

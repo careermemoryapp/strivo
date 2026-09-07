@@ -192,3 +192,13 @@ export function checkResumeReminderSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea again, for the daily Product Updates drip automation (see
+// /api/product-update-drip/run) -- its own credential, separate from every
+// other secret above. Checked via a request header
+// (`x-product-update-drip-secret`).
+export function checkProductUpdateDripSecret(secret: string | null): boolean {
+  const expected = process.env.PRODUCT_UPDATE_DRIP_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

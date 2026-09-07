@@ -67,6 +67,14 @@ export type User = {
   // controls what NavTourProvider renders on top of the app shell, it never
   // blocks or redirects.
   nav_tour_step: number;
+  // How many Product Updates drip emails this user has received so far --
+  // also doubles as the 0-based index into the ordered (oldest-first)
+  // Product Updates post list for "which one is next for them." See the
+  // longer comment on this column's migration in lib/db.ts for why there's
+  // deliberately no separate "drip started at" column.
+  product_update_sent_count: number;
+  // Null means never sent one yet. See product_update_sent_count above.
+  product_update_last_sent_at: string | null;
   created_at: string;
 };
 
@@ -338,6 +346,53 @@ export function setLastEngagementNudgeAt(id: string, iso: string) {
 export function setLastCategoryInsightAt(id: string, iso: string) {
   const db = getDb();
   db.prepare(`UPDATE users SET last_category_insight_at = ? WHERE id = ?`).run(iso, id);
+}
+
+// Everyone eligible for today's Product Updates drip send -- opted in to
+// marketing email, AND due for their next email.
+//
+// TWO different cutoffs, for two different questions, deliberately NOT the
+// same value:
+//
+// - sentAtCutoffIso ("now minus ~20h", a rolling window) gates repeat
+//   sends: someone is due again once their last email was far enough in the
+//   past that daily-cron timing drift can't skip a day or double-send them
+//   within the same run. A ~24h gap between consecutive daily runs always
+//   clears this easily.
+//
+// - firstSendCutoffIso (midnight IST at the START of today, a calendar-day
+//   boundary, computed by the caller) gates a brand-new signup's FIRST
+//   email: `created_at < firstSendCutoffIso` means "signed up on some
+//   earlier calendar day," not "signed up at least N hours ago." A rolling
+//   hours-based buffer here was tried and rejected -- it made the outcome
+//   depend on what TIME of day someone signed up (e.g. a 2pm signup could
+//   need 2 full days before a ~20h buffer cleared, while a 10am signup only
+//   needed one), which isn't what "your day 1 starts the day after you
+//   register" means to a person reading it. The calendar-day boundary gives
+//   the same answer for anyone who signs up on the 10th, whether that's
+//   00:01 or 23:59: their day 1 is the 11th, full stop.
+//
+// Ordered oldest-account-first purely so a manual re-run/log read is easier
+// to eyeball -- send order within a run doesn't otherwise matter since
+// every user gets exactly one email.
+export function listUsersDueForProductUpdateDrip(sentAtCutoffIso: string, firstSendCutoffIso: string): User[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT * FROM users
+       WHERE email_opt_out = 0
+         AND created_at < ?
+         AND (product_update_last_sent_at IS NULL OR product_update_last_sent_at <= ?)
+       ORDER BY created_at ASC`
+    )
+    .all(firstSendCutoffIso, sentAtCutoffIso) as User[];
+}
+
+export function markProductUpdateSent(id: string, iso: string) {
+  const db = getDb();
+  db.prepare(
+    `UPDATE users SET product_update_sent_count = product_update_sent_count + 1, product_update_last_sent_at = ? WHERE id = ?`
+  ).run(iso, id);
 }
 
 // Saves (or overwrites) the resume text extracted from an uploaded PDF --
