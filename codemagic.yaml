@@ -22,6 +22,14 @@ workflows:
       xcode: latest
       cocoapods: default
       node: latest
+    # Names the App Store Connect integration this workflow will use for
+    # signing and publishing. "strivo_appstore" doesn't need to exist yet --
+    # it's just a label. Once Apple Developer enrollment (Phase 1) is done,
+    # create the integration in Codemagic under Team settings > Integrations
+    # > Apple Developer Portal, using this exact name, and this workflow
+    # will pick it up automatically.
+    integrations:
+      app_store_connect: strivo_appstore
     triggering:
       events:
         - push
