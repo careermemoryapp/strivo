@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { MoreVertical, ArrowUp, Sparkles, Trash2, Mic, Square } from "lucide-react";
+import { motion } from "framer-motion";
+import { MoreVertical, ArrowUp, Sparkles, Trash2, Mic, Square, Zap } from "lucide-react";
 import { ChatBubble } from "@/components/ChatBubble";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
@@ -207,19 +208,42 @@ export function ChatDetailClient({
           // get an honest "I don't have that on file yet" from the AI (see
           // buildSystemPrompt in lib/ai.ts) -- a flat first impression for a
           // brand-new user. This nudge steers them to Record before that
-          // happens, instead of just falling back to the generic prompt below.
-          <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <p className="text-sm text-ink-soft">
-              You haven&apos;t recorded any memories yet — try Record first for personalized answers.
+          // happens. Deliberately does NOT say chat requires memories --
+          // general career questions work with zero memories on file, this
+          // just offers the upgrade to personalized answers, so a new user
+          // never reads this and assumes typing below won't do anything.
+          // Same dark-gradient-card language as the Features page hero
+          // (settings/features/page.tsx) instead of a flat gray placeholder
+          // line, so this reads as one of the app's "good" moments.
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="relative overflow-hidden rounded-[20px] p-5"
+            style={{ background: "linear-gradient(135deg,#2a1550,#1c1435 60%,#150c2e)" }}
+          >
+            <div
+              className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full"
+              style={{ background: "radial-gradient(circle, rgba(167,139,250,0.35), transparent 70%)" }}
+            />
+            <div className="relative flex items-center gap-2">
+              <Zap size={14} className="text-[#c9bdf0]" />
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#c9bdf0]">New here?</p>
+            </div>
+            <p className="relative mt-2 text-[17px] font-bold leading-snug text-white">
+              Ask away — general career questions work right now, no setup needed.
+            </p>
+            <p className="relative mt-1.5 text-sm leading-relaxed text-white/60">
+              Want answers built from your own wins and stories instead? Record a memory and I&apos;ll start
+              getting personal.
             </p>
             <button
               onClick={() => router.push("/record")}
-              className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-white"
-              style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+              className="relative mt-4 flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-[#26213c]"
             >
               <Mic size={15} /> Record a memory
             </button>
-          </div>
+          </motion.div>
         )}
         {messages.length === 0 && memoryCount > 0 && (
           <p className="text-center text-sm text-ink-soft py-10">

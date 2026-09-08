@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { Search, Plus, X, MessageSquare } from "lucide-react";
+import { motion } from "framer-motion";
+import { Search, Plus, X, MessageSquare, Zap, Mic } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -23,7 +24,17 @@ import type { Chat } from "@/lib/repo/chats";
 // can't be known ahead of time; only the very first render (which used to
 // always re-fetch the exact same default list a moment after mount) is
 // skipped now.
-export function ChatsListClient({ initialChats }: { initialChats: Chat[] }) {
+export function ChatsListClient({
+  initialChats,
+  memoryCount,
+}: {
+  initialChats: Chat[];
+  // Count of the user's saved memories, not chats -- used only to decide
+  // whether the true zero-chats empty state below shows the energetic
+  // "record your first memory" nudge instead of the plain generic one. See
+  // page.tsx for why this is a cheap COUNT rather than the full memory list.
+  memoryCount: number;
+}) {
   const router = useRouter();
   const user = useCurrentUser();
   const [chats, setChats] = useState<Chat[] | null>(initialChats);
@@ -144,7 +155,54 @@ export function ChatsListClient({ initialChats }: { initialChats: Chat[] }) {
           </div>
         )}
 
-        {chats && chats.length === 0 && (
+        {chats && chats.length === 0 && !search && category === "All" && memoryCount === 0 && (
+          // Truly zero chats (not just a search/category filter with no
+          // matches) AND zero memories -- the very first thing a brand-new
+          // user sees on this tab, so worth more than the plain gray
+          // placeholder below. Same dark-gradient-card language as the
+          // Features page hero and the matching nudge inside an open empty
+          // chat (see ChatDetailClient.tsx) -- deliberately doesn't say chat
+          // *requires* memories, since general questions work immediately.
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="relative overflow-hidden rounded-[20px] p-5"
+            style={{ background: "linear-gradient(135deg,#2a1550,#1c1435 60%,#150c2e)" }}
+          >
+            <div
+              className="pointer-events-none absolute -right-8 -top-10 h-32 w-32 rounded-full"
+              style={{ background: "radial-gradient(circle, rgba(167,139,250,0.35), transparent 70%)" }}
+            />
+            <div className="relative flex items-center gap-2">
+              <Zap size={14} className="text-[#c9bdf0]" />
+              <p className="text-[11px] font-bold uppercase tracking-wide text-[#c9bdf0]">Get started</p>
+            </div>
+            <p className="relative mt-2 text-[19px] font-bold leading-snug text-white">
+              Ask away — I&apos;m ready when you are.
+            </p>
+            <p className="relative mt-1.5 text-sm leading-relaxed text-white/60">
+              General career questions work right now, no setup needed. Record a memory or two and I&apos;ll
+              start giving answers built from your own wins and stories.
+            </p>
+            <div className="relative mt-4 flex flex-wrap gap-2.5">
+              <button
+                onClick={() => router.push("/record")}
+                className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-sm font-bold text-[#26213c]"
+              >
+                <Mic size={15} /> Record a memory
+              </button>
+              <button
+                onClick={() => setShowNewChat(true)}
+                className="flex items-center gap-1.5 rounded-full border border-white/20 px-4 py-2.5 text-sm font-semibold text-white"
+              >
+                Just ask something
+              </button>
+            </div>
+          </motion.div>
+        )}
+
+        {chats && chats.length === 0 && !(!search && category === "All" && memoryCount === 0) && (
           <EmptyState
             icon={<MessageSquare size={22} />}
             title="No conversations yet"
