@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
   User, CreditCard, Download, Bell, Shield, Palette, HelpCircle, Info, LogOut, Trash2, ChevronRight, X, FileText,
-  Sparkles, CheckCircle2, FileUp,
+  Sparkles, CheckCircle2, FileUp, Newspaper,
 } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
@@ -153,6 +153,13 @@ export default function SettingsPage() {
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[#a8a2bd]">Discover</h3>
           <div className="rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
             <Row icon={<Sparkles size={18} />} label="Features" onClick={() => router.push("/settings/features")} />
+            {/* Opens in the system browser, not in-app — same
+                window.open(..., "_blank") pattern as Terms & Privacy below.
+                The blog lives at strivo.ai/blog (marketing site, outside the
+                app's own (app) route group), so there's no in-app page to
+                navigate to; window.open with a relative path still resolves
+                against the WebView's strivo.ai origin correctly. */}
+            <Row icon={<Newspaper size={18} />} label="Blog" onClick={() => window.open("/blog", "_blank")} />
           </div>
         </div>
 
