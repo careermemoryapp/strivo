@@ -32,6 +32,31 @@
                 <data android:scheme="ai.strivo.app" android:host="auth-callback" />
             </intent-filter>
 
+            <!-- Android App Links: makes a plain https://strivo.ai/... link
+                 (e.g. tapped from the Product Updates drip email, see
+                 emailProductUpdate.ts) open THIS APP directly instead of the
+                 phone's browser, for anyone who already has it installed.
+                 autoVerify="true" tells Android to check, at install time,
+                 that this app is genuinely authorized to handle strivo.ai
+                 links by fetching https://strivo.ai/.well-known/assetlinks.json
+                 and matching this app's signing certificate against it (see
+                 that file's own comment, and MainActivity's
+                 handleAppLinkIntent for what happens once the link lands
+                 here). Deliberately NOT restricted to specific paths --
+                 covering the whole host is simpler and correct here since
+                 every strivo.ai page a logged-in user could land on already
+                 works fine loaded inside this app's own WebView (see
+                 capacitor.config.ts's server.url). Verification only
+                 actually activates for people who install/update to a build
+                 containing this manifest change -- see this feature's own
+                 rollout notes. -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="strivo.ai" />
+            </intent-filter>
+
         </activity>
 
         <provider
