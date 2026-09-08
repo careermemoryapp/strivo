@@ -1,0 +1,61 @@
+workflows:
+  ios-workflow:
+    name: Strivo iOS
+    max_build_duration: 60
+    instance_type: mac_mini_m2
+    environment:
+      # "appstore_credentials" is a Codemagic environment variable GROUP, not
+      # a file in this repo -- create it in the Codemagic dashboard under
+      # Teams > Group variables once the Apple Developer Program enrollment
+      # (Phase 1) is done. It should hold an App Store Connect API key
+      # (Users and Access > Integrations > App Store Connect API in
+      # appstoreconnect.apple.com), added to Codemagic under
+      # Team settings > Integrations > Apple Developer Portal. Until that
+      # key exists, this workflow will fail at the signing step -- that's
+      # expected, not a bug in this file.
+      groups:
+        - appstore_credentials
+      vars:
+        BUNDLE_ID: "ai.strivo.app"
+        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        XCODE_SCHEME: "App"
+      xcode: latest
+      cocoapods: default
+      node: latest
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+    scripts:
+      - name: Install npm dependencies
+        script: npm install
+      # This app is a "live" wrapper (see capacitor.config.ts's server.url
+      # comment) -- there's no static web build to bundle, so this only
+      # needs to sync Capacitor's native config/plugins into the already-
+      # committed ios/ project, not run `next build`.
+      - name: Sync Capacitor iOS project
+        script: npx cap sync ios
+      - name: Install CocoaPods dependencies
+        script: |
+          cd ios/App && pod install
+      - name: Set up code signing (automatic, via App Store Connect API key)
+        script: |
+          xcode-project use-profiles
+      - name: Build .ipa
+        script: |
+          xcode-project build-ipa \
+            --workspace "$XCODE_WORKSPACE" \
+            --scheme "$XCODE_SCHEME"
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      # Sends every successful build straight to TestFlight (Phase 5) --
+      # remove or gate this behind a manual trigger once App Store
+      # submissions (Phase 7) start, so a routine push doesn't accidentally
+      # ship a build straight to reviewers.
+      app_store_connect:
+        auth: integration
+        submit_to_testflight: true
