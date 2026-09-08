@@ -42,19 +42,35 @@
                  and matching this app's signing certificate against it (see
                  that file's own comment, and MainActivity's
                  handleAppLinkIntent for what happens once the link lands
-                 here). Deliberately NOT restricted to specific paths;
-                 covering the whole host is simpler and correct here since
-                 every strivo.ai page a logged-in user could land on already
-                 works fine loaded inside this app's own WebView (see
-                 capacitor.config.ts's server.url). Verification only
-                 actually activates for people who install/update to a build
-                 containing this manifest change; see this feature's own
-                 rollout notes. -->
+                 here).
+
+                 IMPORTANT: scoped to only the specific paths real emails
+                 link to (/blog, /record, /memories, /chats, /home; see
+                 BLOG_CTA_PATHS in repo/blogPosts.ts), NOT the whole host.
+                 An earlier version of this filter covered all of
+                 https://strivo.ai/*, which broke Google Sign-In for every
+                 user once verification finished propagating: the sign-in
+                 flow opens the system browser to /mobile-google-start,
+                 Google eventually redirects that browser tab to
+                 https://strivo.ai/api/auth/callback/google, and once this
+                 app is a verified handler for strivo.ai, Android hijacks
+                 that in-browser redirect into this app's own WebView mid
+                 OAuth flow; a different cookie jar than the browser tab
+                 that started the flow, so NextAuth's state-cookie check
+                 fails and the user just bounces back to the login screen,
+                 for every account, every time. Scoping to specific paths
+                 keeps the email-deep-link feature working while leaving
+                 /api/auth/*, /mobile-google-start, and /login alone so
+                 they're never eligible for this interception. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="https" android:host="strivo.ai" />
+                <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/blog" />
+                <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/record" />
+                <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/memories" />
+                <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/chats" />
+                <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/home" />
             </intent-filter>
 
         </activity>
