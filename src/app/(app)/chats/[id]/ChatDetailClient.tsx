@@ -28,10 +28,15 @@ export function ChatDetailClient({
   chatId,
   initialChat,
   initialMessages,
+  memoryCount,
 }: {
   chatId: string;
   initialChat: Chat;
   initialMessages: Message[];
+  // Count of the user's saved memories (not this chat's messages) -- used
+  // only to decide which empty-state text to show below. See page.tsx for
+  // why this is a cheap COUNT rather than the full memory list.
+  memoryCount: number;
 }) {
   const router = useRouter();
 
@@ -197,7 +202,26 @@ export function ChatDetailClient({
       </div>
 
       <div className="flex-1 px-5 py-4 space-y-4">
-        {messages.length === 0 && (
+        {messages.length === 0 && memoryCount === 0 && (
+          // Zero memories means every personal question in this chat will
+          // get an honest "I don't have that on file yet" from the AI (see
+          // buildSystemPrompt in lib/ai.ts) -- a flat first impression for a
+          // brand-new user. This nudge steers them to Record before that
+          // happens, instead of just falling back to the generic prompt below.
+          <div className="flex flex-col items-center gap-3 py-10 text-center">
+            <p className="text-sm text-ink-soft">
+              You haven&apos;t recorded any memories yet — try Record first for personalized answers.
+            </p>
+            <button
+              onClick={() => router.push("/record")}
+              className="flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-white"
+              style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+            >
+              <Mic size={15} /> Record a memory
+            </button>
+          </div>
+        )}
+        {messages.length === 0 && memoryCount > 0 && (
           <p className="text-center text-sm text-ink-soft py-10">
             Ask your AI about your career or experiences to get started.
           </p>

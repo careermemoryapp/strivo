@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUserId } from "@/lib/serverAuth";
 import { getChatById } from "@/lib/repo/chats";
 import { listMessages } from "@/lib/repo/messages";
+import { countMemories } from "@/lib/repo/memories";
 import { ChatDetailClient } from "./ChatDetailClient";
 
 // Server Component: fetches the chat + its messages here, before anything
@@ -21,6 +22,15 @@ export default async function ChatDetailPage({ params }: { params: Promise<{ id:
   if (!chat) redirect("/chats");
 
   const messages = listMessages(userId, id);
+  // Cheap COUNT query (not listMemories, which would fetch full rows) --
+  // only used to decide whether ChatDetailClient shows the "record your
+  // first memory" nudge on an empty chat instead of the generic starter
+  // text. See that component's comment for why this matters: without any
+  // memories, the AI's answers to personal questions are necessarily
+  // "I don't have that on file yet," which is an honest but flat first
+  // impression right when a new user is deciding whether the product's
+  // worth their time.
+  const memoryCount = countMemories(userId);
 
   // node:sqlite rows aren't plain objects (they fail the "only plain
   // objects can cross the Server -> Client boundary" check Next.js does),
@@ -31,6 +41,7 @@ export default async function ChatDetailPage({ params }: { params: Promise<{ id:
       chatId={id}
       initialChat={{ ...chat }}
       initialMessages={messages.map((m) => ({ ...m }))}
+      memoryCount={memoryCount}
     />
   );
 }
