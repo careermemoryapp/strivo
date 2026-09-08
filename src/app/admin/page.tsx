@@ -1766,6 +1766,7 @@ export default function AdminDashboardPage() {
                           <th className="px-4 py-3 font-semibold">Memories</th>
                           <th className="px-4 py-3 font-semibold">Chats</th>
                           <th className="px-4 py-3 font-semibold">App version</th>
+                          <th className="px-4 py-3 font-semibold">Emails</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
                           <th className="px-4 py-3 font-semibold"></th>
                         </tr>
@@ -1813,6 +1814,19 @@ export default function AdminDashboardPage() {
                                 </span>
                               ) : (
                                 <span className="text-[12px] text-ink-faint">Not seen yet</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {u.emailSubscribed ? (
+                                <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                                  Subscribed
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-faint">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-[#cec7dd]" aria-hidden="true" />
+                                  Unsubscribed
+                                </span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-ink-soft whitespace-nowrap">

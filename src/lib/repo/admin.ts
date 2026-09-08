@@ -185,6 +185,14 @@ export type AdminUserRow = {
   // picking a plan; null means they haven't been asked yet (shouldn't
   // really persist for long now that welcome-trial gates every app route).
   preferredPlan: "monthly" | "annual" | "later" | null;
+  // Whether this person can still receive campaign emails (product update
+  // drip, broadcast campaigns, etc.) -- false once they've clicked the
+  // unsubscribe link (see /api/email/unsubscribe and emailCampaigns.ts's
+  // candidateRows(), which excludes opted-out users at the SQL level before
+  // any segment filtering runs). Surfaced here so an admin looking at a
+  // specific user can tell, at a glance, why that person isn't showing up
+  // in a campaign's recipient count.
+  emailSubscribed: boolean;
 };
 
 export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
@@ -235,6 +243,7 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
       chatCount: chatCounts.get(u.id) ?? 0,
       appVersion: u.app_version,
       preferredPlan: info.preferredPlan,
+      emailSubscribed: !u.email_opt_out,
     };
   });
 }
