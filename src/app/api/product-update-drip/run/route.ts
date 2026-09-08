@@ -17,10 +17,19 @@ import { sendProductUpdateEmail } from "@/lib/email";
 // Same shape as every other cron-secret-gated automation (weekly-recap,
 // engagement-nudge, category-insight, resume-reminder): admin session OR
 // this route's own secret header.
-const APPROX_ONE_DAY_MS = 20 * 60 * 60 * 1000; // 20h, not 24h -- gives the daily
-// cron room to drift earlier/later run-to-run without ever skipping a day
-// (waiting a full 24h would occasionally push someone to every-other-day if
-// a run landed a few minutes late). Used only for the REPEAT-send gate
+// Repeat sends are gated on elapsed time since product_update_last_sent_at,
+// NOT on how often this route gets called -- the cron trigger (server
+// crontab, 9am IST daily, see scripts/deploy.sh's README notes) can keep
+// firing every day exactly as it always has; this constant alone controls
+// how often any given user actually receives an email. Deliberately sized
+// as "just under 2 days" rather than exactly 48h, for the same reason the
+// original daily version used 20h instead of 24h: it gives the cron room to
+// land a little early/late run-to-run without a send ever slipping to a
+// 3-day gap. Sequence/content order (posts[user.product_update_sent_count])
+// is untouched by this -- only the cadence between sends changed.
+const REPEAT_SEND_GATE_MS = 44 * 60 * 60 * 1000; // ~44h -- alternate-day cadence
+// (was 20h/daily; founder's call: daily felt like too much, same sequence,
+// just every other day now). Used only for the REPEAT-send gate
 // (product_update_last_sent_at) -- see listUsersDueForProductUpdateDrip's
 // own comment for why the FIRST-send gate uses a calendar-day boundary
 // instead of this same rolling window.
@@ -52,7 +61,7 @@ export async function POST(req: Request) {
   }
 
   const now = new Date();
-  const sentAtCutoffIso = new Date(now.getTime() - APPROX_ONE_DAY_MS).toISOString();
+  const sentAtCutoffIso = new Date(now.getTime() - REPEAT_SEND_GATE_MS).toISOString();
   const firstSendCutoffIso = todayIstMidnightUtc(now).toISOString();
   const candidates = listUsersDueForProductUpdateDrip(sentAtCutoffIso, firstSendCutoffIso);
 
