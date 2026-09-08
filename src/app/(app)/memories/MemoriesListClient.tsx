@@ -34,7 +34,9 @@ export function MemoriesListClient({ initialMemories }: { initialMemories: Memor
   const [filters, setFilters] = useState<Filters>({ category: "All", competency: "All" });
   const [error, setError] = useState<string | null>(null);
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
+  const [sortMenuPos, setSortMenuPos] = useState<{ top: number; right: number } | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  const sortButtonRef = useRef<HTMLButtonElement>(null);
   const isFirstRun = useRef(true);
 
   const load = useCallback(async (searchTerm: string, sortOrder: "newest" | "oldest", f: Filters) => {
@@ -132,34 +134,52 @@ export function MemoriesListClient({ initialMemories }: { initialMemories: Memor
           </button>
           <div className="relative shrink-0">
             <button
-              onClick={() => setSortMenuOpen((v) => !v)}
+              ref={sortButtonRef}
+              onClick={() => {
+                // DarkHeader clips overflow (for its glow decorations — see
+                // DarkHeader.tsx), which was cutting this dropdown off
+                // instead of letting it float over the page below. Rendering
+                // it fixed-positioned, outside DarkHeader entirely (see below
+                // the closing tag), sidesteps that clipping; the button's
+                // on-screen position is captured here so the menu can still
+                // anchor itself under the button.
+                const rect = sortButtonRef.current?.getBoundingClientRect();
+                if (rect) {
+                  setSortMenuPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+                }
+                setSortMenuOpen((v) => !v);
+              }}
               className="flex items-center gap-1 rounded-[13px] border border-white/10 bg-white/8 px-3 py-3 text-sm font-medium text-white/70"
             >
               {sort === "newest" ? "Newest" : "Oldest"}
               <ChevronDown size={15} />
             </button>
-            {sortMenuOpen && (
-              <div
-                className="absolute right-0 top-12 z-10 w-32 rounded-card border border-border bg-surface p-1"
-                style={{ boxShadow: "var(--shadow-card)" }}
-              >
-                {(["newest", "oldest"] as const).map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => {
-                      setSort(s);
-                      setSortMenuOpen(false);
-                    }}
-                    className="flex w-full items-center rounded-input px-3 py-2 text-sm text-ink hover:bg-bg capitalize"
-                  >
-                    {s}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
       </DarkHeader>
+
+      {sortMenuOpen && sortMenuPos && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setSortMenuOpen(false)} />
+          <div
+            className="fixed z-50 w-32 rounded-card border border-border bg-surface p-1"
+            style={{ top: sortMenuPos.top, right: sortMenuPos.right, boxShadow: "var(--shadow-card)" }}
+          >
+            {(["newest", "oldest"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => {
+                  setSort(s);
+                  setSortMenuOpen(false);
+                }}
+                className="flex w-full items-center rounded-input px-3 py-2 text-sm text-ink hover:bg-bg capitalize"
+              >
+                {s}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
 
       <div className="px-5 pt-5">
         {error && <ErrorBanner message={error} onRetry={() => load(search, sort, filters)} />}

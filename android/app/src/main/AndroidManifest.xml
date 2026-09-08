@@ -42,13 +42,13 @@
                  and matching this app's signing certificate against it (see
                  that file's own comment, and MainActivity's
                  handleAppLinkIntent for what happens once the link lands
-                 here). Deliberately NOT restricted to specific paths --
+                 here). Deliberately NOT restricted to specific paths;
                  covering the whole host is simpler and correct here since
                  every strivo.ai page a logged-in user could land on already
                  works fine loaded inside this app's own WebView (see
                  capacitor.config.ts's server.url). Verification only
                  actually activates for people who install/update to a build
-                 containing this manifest change -- see this feature's own
+                 containing this manifest change; see this feature's own
                  rollout notes. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
