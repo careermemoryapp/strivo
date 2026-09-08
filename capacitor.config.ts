@@ -19,6 +19,12 @@ const config: CapacitorConfig = {
   server: {
     url: 'https://strivo.ai/app',
     androidScheme: 'https',
+    // Same reason as androidScheme: NextAuth's session cookie is marked
+    // Secure, which only gets sent over an origin the WebView considers
+    // https. Without this, iOS defaults to the "capacitor://" scheme and
+    // login would silently fail to persist a session inside the app,
+    // exactly the class of bug androidScheme already fixed on Android.
+    iosScheme: 'https',
   },
 };
 
