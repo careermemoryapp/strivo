@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback, useMemo, type ReactNode, type FormEvent } from "react";
+import { useEffect, useState, useCallback, useMemo, useRef, type ReactNode, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
   LogOut,
@@ -14,6 +14,8 @@ import {
   Mail,
   Newspaper,
   Power,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import { LogoMark } from "@/components/Logo";
@@ -235,6 +237,12 @@ export default function AdminDashboardPage() {
   const router = useRouter();
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [users, setUsers] = useState<AdminUserRow[] | null>(null);
+  // 20 rows/page -- see repo/admin.ts's listUsersForAdmin comment for why.
+  // usersTotal is the full count matching the current search (not just
+  // this page's length), used to compute how many pages exist.
+  const [usersPage, setUsersPage] = useState(1);
+  const [usersTotal, setUsersTotal] = useState(0);
+  const USERS_PAGE_SIZE = 20;
   const [search, setSearch] = useState("");
   const [recentNudges, setRecentNudges] = useState<Nudge[]>([]);
   const [nudgeTitle, setNudgeTitle] = useState("");
@@ -467,13 +475,16 @@ export default function AdminDashboardPage() {
   }, [handleUnauthorized]);
 
   const loadUsers = useCallback(
-    async (term: string) => {
-      const params = term ? `?search=${encodeURIComponent(term)}` : "";
-      const res = await fetch(`/api/admin/users${params}`);
+    async (term: string, page = 1) => {
+      const params = new URLSearchParams();
+      if (term) params.set("search", term);
+      params.set("page", String(page));
+      const res = await fetch(`/api/admin/users?${params.toString()}`);
       if (res.status === 401) return handleUnauthorized();
       if (!res.ok) return;
       const data = await res.json();
       setUsers(data.users);
+      setUsersTotal(data.total ?? 0);
     },
     [handleUnauthorized]
   );
@@ -514,9 +525,28 @@ export default function AdminDashboardPage() {
   }, [loadSentryIssues]);
 
   useEffect(() => {
-    const t = setTimeout(() => loadUsers(search), 250);
+    // A new search term invalidates whatever page we were on -- always
+    // jump back to page 1 rather than e.g. staying on page 3 of a search
+    // that now only has one page of results.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setUsersPage(1);
+    /* eslint-enable react-hooks/set-state-in-effect */
+    const t = setTimeout(() => loadUsers(search, 1), 250);
     return () => clearTimeout(t);
   }, [search, loadUsers]);
+
+  // Separate from the search effect above so paging doesn't re-trigger the
+  // 250ms debounce or reset back to page 1 -- this only fires when the
+  // admin actually clicks Prev/Next.
+  const isFirstUsersPageLoad = useRef(true);
+  useEffect(() => {
+    if (isFirstUsersPageLoad.current) {
+      isFirstUsersPageLoad.current = false;
+      return;
+    }
+    loadUsers(search, usersPage);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only page changes should trigger this; search changes are handled by the effect above
+  }, [usersPage]);
 
   async function handleLogout() {
     await fetch("/api/admin/logout", { method: "POST" });
@@ -1767,6 +1797,7 @@ export default function AdminDashboardPage() {
                           <th className="px-4 py-3 font-semibold">Chats</th>
                           <th className="px-4 py-3 font-semibold">App version</th>
                           <th className="px-4 py-3 font-semibold">Emails</th>
+                          <th className="px-4 py-3 font-semibold">Last seen</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
                           <th className="px-4 py-3 font-semibold"></th>
                         </tr>
@@ -1829,6 +1860,15 @@ export default function AdminDashboardPage() {
                                 </span>
                               )}
                             </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {u.lastActiveAt ? (
+                                <span className="text-[12px] text-ink-soft">
+                                  {formatDistanceToNow(new Date(u.lastActiveAt), { addSuffix: true })}
+                                </span>
+                              ) : (
+                                <span className="text-[12px] text-ink-faint">Never</span>
+                              )}
+                            </td>
                             <td className="px-4 py-3 text-ink-soft whitespace-nowrap">
                               {new Date(u.createdAt).toLocaleDateString()}
                             </td>
@@ -1883,6 +1923,38 @@ export default function AdminDashboardPage() {
                   </div>
                 )}
               </div>
+
+              {usersTotal > USERS_PAGE_SIZE && (
+                <div className="mt-3 flex items-center justify-between">
+                  <p className="text-[12px] text-ink-faint">
+                    {(usersPage - 1) * USERS_PAGE_SIZE + 1}–
+                    {Math.min(usersPage * USERS_PAGE_SIZE, usersTotal)} of {usersTotal} users
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setUsersPage((p) => Math.max(1, p - 1))}
+                      disabled={usersPage <= 1}
+                      className="flex items-center gap-1 rounded-pill border border-[#ece5f5] px-3 py-1.5 text-xs font-semibold text-ink-soft disabled:opacity-40"
+                    >
+                      <ChevronLeft size={14} />
+                      Prev
+                    </button>
+                    <p className="text-xs text-ink-faint">
+                      Page {usersPage} of {Math.max(1, Math.ceil(usersTotal / USERS_PAGE_SIZE))}
+                    </p>
+                    <button
+                      onClick={() =>
+                        setUsersPage((p) => Math.min(Math.ceil(usersTotal / USERS_PAGE_SIZE), p + 1))
+                      }
+                      disabled={usersPage >= Math.ceil(usersTotal / USERS_PAGE_SIZE)}
+                      className="flex items-center gap-1 rounded-pill border border-[#ece5f5] px-3 py-1.5 text-xs font-semibold text-ink-soft disabled:opacity-40"
+                    >
+                      Next
+                      <ChevronRight size={14} />
+                    </button>
+                  </div>
+                </div>
+              )}
             </section>
 
             {recentNudges.length > 0 && (

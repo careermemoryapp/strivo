@@ -47,3 +47,15 @@ project. Follow them every time, not just when convenient.
   single row, `rows.map((r) => ({ ...r }))` for an array, before handing
   it to a client component's props.
 
+## Marketing content — never expose security/infra detail
+
+- Blog posts, emails, social posts (WhatsApp/LinkedIn/Twitter/Instagram),
+  promo scripts, and any other user-facing or promotional content must
+  never mention security or infrastructure specifics: no server/hosting
+  provider names, IPs, domains beyond strivo.ai, database/tech stack
+  internals, admin panel URLs or existence, API keys/secrets/partner IDs
+  (e.g. BillDesk Partner ID), auth mechanisms, or details of any past
+  incident/outage/vulnerability. Keep this content strictly product- and
+  value-focused. If a draft would naturally reference any of this,
+  generalize it or leave it out rather than including it.
+

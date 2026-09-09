@@ -193,19 +193,50 @@ export type AdminUserRow = {
   // specific user can tell, at a glance, why that person isn't showing up
   // in a campaign's recipient count.
   emailSubscribed: boolean;
+  // Last time this person actually opened the app -- stamped by
+  // setUserAppVersion() on every native app open/resume (see
+  // useAppVersionPing.ts). Null means either a web-only user or someone who
+  // hasn't opened the native app since this shipped. Distinct from
+  // createdAt (signup date): this is "when were they last here," which is
+  // what the admin panel actually wants to know at a glance.
+  lastActiveAt: string | null;
 };
 
-export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
+export type AdminUsersPage = {
+  users: AdminUserRow[];
+  // Total rows matching the current search (ignoring pagination) -- the
+  // page needs this to render "44 users" / compute how many pages exist,
+  // since the LIMIT/OFFSET query below only ever returns one page's worth.
+  total: number;
+};
+
+// pageSize is intentionally small (20) -- the admin Users table used to
+// load every signup in one unbounded query, which was fine at a handful of
+// users but turned into a very long unpaginated page as signups grew.
+// Real pagination (LIMIT/OFFSET on the DB side, not "render everything and
+// hide most of it in CSS") keeps each request small regardless of how many
+// total users there are.
+export function listUsersForAdmin(search?: string, page = 1, pageSize = 20): AdminUsersPage {
   const db = getDb();
   const term = search?.trim();
+  const offset = Math.max(0, (page - 1) * pageSize);
+
+  const total = term
+    ? (
+        db
+          .prepare(`SELECT COUNT(*) as c FROM users WHERE email LIKE ? OR first_name LIKE ? OR last_name LIKE ?`)
+          .get(`%${term}%`, `%${term}%`, `%${term}%`) as { c: number }
+      ).c
+    : (db.prepare(`SELECT COUNT(*) as c FROM users`).get() as { c: number }).c;
+
   const rows = (
     term
       ? db
           .prepare(
-            `SELECT * FROM users WHERE email LIKE ? OR first_name LIKE ? OR last_name LIKE ? ORDER BY created_at DESC LIMIT ?`
+            `SELECT * FROM users WHERE email LIKE ? OR first_name LIKE ? OR last_name LIKE ? ORDER BY created_at DESC LIMIT ? OFFSET ?`
           )
-          .all(`%${term}%`, `%${term}%`, `%${term}%`, limit)
-      : db.prepare(`SELECT * FROM users ORDER BY created_at DESC LIMIT ?`).all(limit)
+          .all(`%${term}%`, `%${term}%`, `%${term}%`, pageSize, offset)
+      : db.prepare(`SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?`).all(pageSize, offset)
   ) as User[];
 
   // N+1 fix: this used to run two COUNT queries per row inside the .map()
@@ -228,7 +259,7 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
     ).forEach((r) => chatCounts.set(r.user_id, r.c));
   }
 
-  return rows.map((u) => {
+  const users = rows.map((u) => {
     const info = getSubscriptionInfo(u);
     return {
       id: u.id,
@@ -244,6 +275,9 @@ export function listUsersForAdmin(search?: string, limit = 50): AdminUserRow[] {
       appVersion: u.app_version,
       preferredPlan: info.preferredPlan,
       emailSubscribed: !u.email_opt_out,
+      lastActiveAt: u.last_active_at,
     };
   });
+
+  return { users, total };
 }
