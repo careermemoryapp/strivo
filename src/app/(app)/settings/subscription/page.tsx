@@ -9,6 +9,7 @@ import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { Tabs } from "@/components/Tabs";
 import { format } from "date-fns";
+import { getNativePlatform } from "@/lib/nativePlatform";
 
 type Subscription = {
   status: "trial" | "active" | "expired";
@@ -94,6 +95,20 @@ export default function SubscriptionPage() {
   const activePriceLabel = sub ? (billing === "Monthly" ? sub.monthlyPriceLabel : sub.annualPriceLabel) : "";
   const reservedBilling = sub ? planToBilling(sub.preferredPlan) : null;
   const isPreviewingDifferentPlan = reservedBilling != null && billing !== reservedBilling;
+
+  // Real purchases don't exist yet (see the "coming soon" button below), so
+  // this text is inert today -- but it was hardcoded to "Google Play"
+  // regardless of platform, which would show wrong-storefront copy to an
+  // iPhone user once iOS Phase 6 wires up real Apple IAP via RevenueCat.
+  // See docs/apple-app-store-checklist.md item 9 / CLAUDE.md's App Store
+  // section. RevenueCat itself always routes the actual purchase to the
+  // correct backend per-platform -- this only fixes the copy, not billing
+  // logic.
+  const platform = getNativePlatform();
+  const billingCopy =
+    platform === "ios"
+      ? "via the App Store. Cancel anytime before it renews from Settings → your name → Subscriptions."
+      : "via Google Play. Cancel anytime before it renews from Google Play → Subscriptions.";
 
   return (
     <div className="pb-8">
@@ -211,8 +226,7 @@ export default function SubscriptionPage() {
                     )}
                   </div>
                   <p className="text-xs text-ink-soft">
-                    {billing === "Annually" ? "Billed annually" : "Billed monthly"} via Google Play. Cancel anytime
-                    before it renews from Google Play → Subscriptions.
+                    {billing === "Annually" ? "Billed annually" : "Billed monthly"} {billingCopy}
                   </p>
                   {sub.status !== "active" && reservedBilling && (
                     <div className="mt-3 flex flex-col items-center gap-1.5 rounded-[12px] bg-[#f2effa] px-3 py-2.5 text-center">

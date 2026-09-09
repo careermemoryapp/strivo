@@ -24,6 +24,17 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Strivo's Record screen captures raw audio via getUserMedia inside the
+	     WKWebView (see useSpeechRecognition.ts: MediaRecorder plus upload to
+	     /api/memories/transcribe for Whisper transcription, not the native
+	     Speech framework, so no NSSpeechRecognitionUsageDescription is
+	     needed). Without this key, requesting mic access crashes the app
+	     immediately instead of showing the OS permission prompt: this
+	     isn't just an App Review risk, it's a hard crash on first tap of
+	     Record on a real device. See docs/apple-app-store-checklist.md
+	     item 7 / task #390. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Strivo uses your microphone to record voice memories you choose to save.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

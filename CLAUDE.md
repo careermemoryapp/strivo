@@ -47,6 +47,17 @@ project. Follow them every time, not just when convenient.
   single row, `rows.map((r) => ({ ...r }))` for an array, before handing
   it to a client component's props.
 
+## Apple App Store submission (iOS Phase 6/7)
+
+- Before filling out App Store Connect's App Privacy questionnaire or
+  submitting the iOS build for review, read
+  `docs/apple-app-store-checklist.md`. It covers the 4.2.3 "repackaged
+  website" risk (capacitor.config.ts loads a live URL — mitigations and
+  App Review Notes strategy are in there), the exact data types to
+  disclose in the privacy questionnaire, and where the EULA link needs to
+  go in the store listing. Account deletion and the in-app EULA link are
+  already done — don't re-implement them, just verify.
+
 ## Marketing content — never expose security/infra detail
 
 - Blog posts, emails, social posts (WhatsApp/LinkedIn/Twitter/Instagram),

@@ -1,3 +1,5 @@
+import { Capacitor } from "@capacitor/core";
+
 // Minimal shape of the global Capacitor injects into every page loaded
 // inside the native app's WebView (including this remote strivo.ai page —
 // the bridge is attached to the WebView itself, not to locally-bundled
@@ -13,6 +15,18 @@ declare global {
 
 export function isNativeApp(): boolean {
   return typeof window !== "undefined" && Boolean(window.Capacitor?.isNativePlatform?.());
+}
+
+// "ios" | "android" | "web" -- lets platform-specific copy (e.g. which
+// storefront a subscription renews through) render correctly instead of
+// hardcoding one platform's wording for everyone. Uses the real
+// @capacitor/core Capacitor object (not the minimal CapacitorGlobal shape
+// above) since getPlatform() isn't part of that trimmed-down type; safe to
+// import at module scope because @capacitor/core no-ops to "web" outside a
+// native shell rather than throwing, so this works identically in a plain
+// desktop/mobile browser.
+export function getNativePlatform(): "ios" | "android" | "web" {
+  return Capacitor.getPlatform() as "ios" | "android" | "web";
 }
 
 // A handful of legitimate in-app actions deliberately send the app to the
