@@ -18,6 +18,16 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
+import {
+  ResponsiveContainer,
+  LineChart as RechartsLineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+} from "recharts";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -134,39 +144,76 @@ type AdminHealth = {
   checkedAt: string;
 };
 
-// Simple day-by-day bar chart, no charting library — keeps this a pure web
-// deploy with zero new npm dependencies. The most recent bar is highlighted
-// with the brand gradient, older bars are a flat muted tint.
-function BarChart({ data }: { data: { date: string; count: number }[] }) {
-  const max = Math.max(1, ...data.map((d) => d.count));
-  const barWidth = 26;
-  const gap = 8;
-  const height = 84;
-  const width = data.length * (barWidth + gap) - gap;
+// Shared tick/tooltip date formatting -- "Sep 5" rather than the raw
+// "2026-09-05" key, for every chart on this page.
+function shortDate(dateKey: string): string {
+  return format(new Date(`${dateKey}T00:00:00`), "MMM d");
+}
+
+// Real line chart (Recharts) with connected data points -- replaced the
+// original hand-rolled SVG bar chart, whose non-final bars used a flat
+// near-background tint and were effectively invisible against the card's
+// white background. One line, one metric, e.g. daily signups or daily
+// memories captured.
+function TrendLineChart({ data, color = "#8b5cf6" }: { data: { date: string; count: number }[]; color?: string }) {
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} width="100%" height={height} preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <linearGradient id="barGradient" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#a78bfa" />
-          <stop offset="100%" stopColor="#60a5fa" />
-        </linearGradient>
-      </defs>
-      {data.map((d, i) => {
-        const h = Math.max(3, (d.count / max) * height);
-        const isLast = i === data.length - 1;
-        return (
-          <rect
-            key={d.date}
-            x={i * (barWidth + gap)}
-            y={height - h}
-            width={barWidth}
-            height={h}
-            rx={4}
-            fill={isLast ? "url(#barGradient)" : "#ece5f5"}
-          />
-        );
-      })}
-    </svg>
+    <ResponsiveContainer width="100%" height={180}>
+      <RechartsLineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -20 }}>
+        <CartesianGrid stroke="#f0ecf7" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tickFormatter={shortDate}
+          tick={{ fontSize: 11, fill: "#a8a2bd" }}
+          axisLine={{ stroke: "#f0ecf7" }}
+          tickLine={false}
+          interval="preserveStartEnd"
+        />
+        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#a8a2bd" }} axisLine={false} tickLine={false} />
+        <Tooltip
+          labelFormatter={(v: ReactNode) => (typeof v === "string" ? shortDate(v) : String(v ?? ""))}
+          contentStyle={{ borderRadius: 10, borderColor: "#ece5f5", fontSize: 12 }}
+        />
+        <Line
+          type="monotone"
+          dataKey="count"
+          stroke={color}
+          strokeWidth={2.5}
+          dot={{ r: 3, fill: color, strokeWidth: 0 }}
+          activeDot={{ r: 5 }}
+        />
+      </RechartsLineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// Real DAU/WAU/MAU trend as three connected lines on one chart -- see
+// repo/admin.ts's activeUsersTrend() for what each line actually measures
+// (trailing 1/7/30-day windows ending on that day, not that day in
+// isolation).
+function ActiveUsersLineChart({ data }: { data: { date: string; dau: number; wau: number; mau: number }[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={220}>
+      <RechartsLineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -20 }}>
+        <CartesianGrid stroke="#f0ecf7" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tickFormatter={shortDate}
+          tick={{ fontSize: 11, fill: "#a8a2bd" }}
+          axisLine={{ stroke: "#f0ecf7" }}
+          tickLine={false}
+          interval="preserveStartEnd"
+        />
+        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#a8a2bd" }} axisLine={false} tickLine={false} />
+        <Tooltip
+          labelFormatter={(v: ReactNode) => (typeof v === "string" ? shortDate(v) : String(v ?? ""))}
+          contentStyle={{ borderRadius: 10, borderColor: "#ece5f5", fontSize: 12 }}
+        />
+        <Legend wrapperStyle={{ fontSize: 12 }} formatter={(value: string) => value.toUpperCase()} />
+        <Line type="monotone" dataKey="dau" name="DAU" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3 }} />
+        <Line type="monotone" dataKey="wau" name="WAU" stroke="#60a5fa" strokeWidth={2.5} dot={{ r: 3 }} />
+        <Line type="monotone" dataKey="mau" name="MAU" stroke="#34d399" strokeWidth={2.5} dot={{ r: 3 }} />
+      </RechartsLineChart>
+    </ResponsiveContainer>
   );
 }
 
@@ -1218,7 +1265,7 @@ export default function AdminDashboardPage() {
               </div>
               <div className="mt-3">
                 <ChartCard title="Signups — last 14 days">
-                  <BarChart data={metrics.dailySignups} />
+                  <TrendLineChart data={metrics.dailySignups} />
                 </ChartCard>
               </div>
             </section>
@@ -1272,9 +1319,14 @@ export default function AdminDashboardPage() {
                   hint="Daily / weekly / monthly"
                 />
               </div>
+              <div className="mt-3">
+                <ChartCard title="Active users — DAU / WAU / MAU, last 14 days">
+                  <ActiveUsersLineChart data={metrics.activeUsersTrend} />
+                </ChartCard>
+              </div>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <ChartCard title="Memories captured — last 14 days">
-                  <BarChart data={metrics.dailyMemories} />
+                  <TrendLineChart data={metrics.dailyMemories} color="#60a5fa" />
                 </ChartCard>
                 <ChartCard title="How memories are captured">
                   <div className="flex flex-col gap-2.5">

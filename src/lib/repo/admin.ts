@@ -27,6 +27,10 @@ export type AdminMetrics = {
   // the admin dashboard.
   dailySignups: { date: string; count: number }[];
   dailyMemories: { date: string; count: number }[];
+  // Day-by-day DAU/WAU/MAU, oldest first -- see activeUsersTrend() below
+  // for how each day's three numbers are computed (trailing 1/7/30-day
+  // windows ENDING on that day, not the day's own activity in isolation).
+  activeUsersTrend: { date: string; dau: number; wau: number; mau: number }[];
   memorySourceBreakdown: { voice: number; text: number; file: number };
   topCategories: { category: string; count: number }[];
   // Signed up but never recorded a single memory — the clearest signal of
@@ -79,6 +83,54 @@ function dailyCounts(table: "users" | "memories", days = 14): { date: string; co
   for (let i = days - 1; i >= 0; i--) {
     const key = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
     out.push({ date: key, count: byDate.get(key) ?? 0 });
+  }
+  return out;
+}
+
+// Real DAU/WAU/MAU trend, oldest first -- for each of the last `days` days,
+// computes distinct active users (same memories/chats/messages union as
+// activeUsersSince above) in a trailing 1-day / 7-day / 30-day window
+// ENDING on that day. This is what "DAU on day X" actually means (active
+// in the 24h ending on X), not "rows created on day X in isolation."
+//
+// Deliberately one bounded SQL query (everything touched in the last
+// `days - 1 + 29` days, since the oldest day's MAU window reaches back 30
+// days before it) rather than up to `days * 3` separate COUNT queries --
+// same N+1-avoidance reasoning as listUsersForAdmin's memory/chat count
+// merge above. The per-day set math then happens in memory, which is cheap
+// at this data scale (a young product's total activity rows, not millions).
+function activeUsersTrend(days = 14): { date: string; dau: number; wau: number; mau: number }[] {
+  const db = getDb();
+  const lookbackIso = isoDaysAgo(days - 1 + 29);
+  const rows = db
+    .prepare(
+      `SELECT user_id, created_at FROM memories WHERE created_at >= ?
+       UNION ALL
+       SELECT user_id, created_at FROM chats WHERE created_at >= ?
+       UNION ALL
+       SELECT user_id, created_at FROM messages WHERE created_at >= ?`
+    )
+    .all(lookbackIso, lookbackIso, lookbackIso) as { user_id: string; created_at: string }[];
+
+  const out: { date: string; dau: number; wau: number; mau: number }[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const windowEnd = new Date(Date.now() - i * 86400000);
+    const windowEndIso = windowEnd.toISOString();
+    const dateKey = windowEndIso.slice(0, 10);
+    const dauStartIso = new Date(windowEnd.getTime() - 1 * 86400000).toISOString();
+    const wauStartIso = new Date(windowEnd.getTime() - 7 * 86400000).toISOString();
+    const mauStartIso = new Date(windowEnd.getTime() - 30 * 86400000).toISOString();
+
+    const dau = new Set<string>();
+    const wau = new Set<string>();
+    const mau = new Set<string>();
+    for (const r of rows) {
+      if (r.created_at > windowEndIso || r.created_at < mauStartIso) continue;
+      mau.add(r.user_id);
+      if (r.created_at >= wauStartIso) wau.add(r.user_id);
+      if (r.created_at >= dauStartIso) dau.add(r.user_id);
+    }
+    out.push({ date: dateKey, dau: dau.size, wau: wau.size, mau: mau.size });
   }
   return out;
 }
@@ -152,6 +204,7 @@ export function computeAdminMetrics(): AdminMetrics {
     registeredDevices,
     dailySignups: dailyCounts("users"),
     dailyMemories: dailyCounts("memories"),
+    activeUsersTrend: activeUsersTrend(),
     memorySourceBreakdown,
     topCategories,
     zeroMemoryUsers,
