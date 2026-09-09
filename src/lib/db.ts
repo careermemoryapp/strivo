@@ -112,6 +112,17 @@ function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_messages_chat ON messages(chat_id);
+    -- messages has no index on user_id despite listMessagesWithEmbeddings
+    -- (repo/messages.ts -- the cross-chat recall candidate pool, called on
+    -- EVERY chat send, see chatService.ts) filtering by user_id first,
+    -- before chat_id/sender/embedding. Without this, that query does a
+    -- full table scan of the single fastest-growing table in the app (one
+    -- row per turn, across every chat, every user, unbounded) on every
+    -- single message. idx_messages_user_created also covers
+    -- listAllMessagesForUser's user_id + created_at query (the GDPR/CCPA
+    -- data-export route).
+    CREATE INDEX IF NOT EXISTS idx_messages_user ON messages(user_id);
+    CREATE INDEX IF NOT EXISTS idx_messages_user_created ON messages(user_id, created_at);
 
     CREATE TABLE IF NOT EXISTS password_reset_tokens (
       id TEXT PRIMARY KEY,

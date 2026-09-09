@@ -553,6 +553,42 @@ deadline (item 8) is the single most actionable new finding — it's dated,
 already in effect, and would block the Codemagic pipeline outright if
 misconfigured, regardless of anything else in this checklist.
 
+**2026-09-09 — Short-form transcript: "5 vibe-coded app performance
+mistakes" (large images, no loading states, no caching, single JS bundle,
+missing DB indexes).** Not App Store-specific, general performance advice
+— logged here anyway since it's the same "check the claim against actual
+Strivo code" discipline as everything else in this file. Checked all
+five directly:
+1. Large image uploads — N/A, Strivo has no image/profile-picture upload
+   path at all (only document upload: PDF/docx/pptx/xlsx via FilePicker,
+   already capped/handled).
+2. No loading states — already extensive: dedicated `loading.tsx` per
+   route (home, chats, memories, record, settings, subscription, profile)
+   plus `<Spinner />` in client-fetch flows. Not a gap.
+3. Refetch/no caching — mostly N/A: most pages are Server Components
+   reading SQLite directly per request (no network round trip to cache),
+   a materially different situation than the hosted-API apps this advice
+   targets. A few client components do fetch their own API route on
+   mount (subscription page, admin panels) — acceptable today since that
+   data needs to be live/correct (trial status, billing), not stale-safe.
+4. Single massive JS bundle — N/A, Next.js App Router already does
+   automatic per-route code splitting by default; nothing in
+   `next.config.ts` disables it.
+5. Missing DB indexes — **real, fixed 2026-09-09.** `messages` had an
+   index on `chat_id` only. `listMessagesWithEmbeddings` in
+   `repo/messages.ts` — the cross-chat recall candidate pool, called on
+   *every single chat send* (task #307/308's hot path) — filters
+   `WHERE user_id = ?` first, with no index backing it, against the
+   single fastest-growing, unbounded table in the app. Added
+   `idx_messages_user` and `idx_messages_user_created` in `db.ts`
+   (applies automatically on next deploy, same as any other
+   `CREATE INDEX IF NOT EXISTS` migration — no manual DB step needed).
+   Also covers `listAllMessagesForUser` (the GDPR/CCPA export route).
+
+Relevance to Strivo: LOW-MEDIUM overall (4 of 5 points were already
+handled or don't apply), but point 5 was a genuine, unflagged, real
+performance gap on a real hot path — worth the check.
+
 **2026-09 — Short-form transcript: "what Apple's human reviewer actually
 does in the 90-second review."** Describes the review as: tap every
 button hunting for placeholder/broken content; if login is required,
