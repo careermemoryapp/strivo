@@ -8,7 +8,7 @@ import { Card } from "@/components/Card";
 import { chatCategoryDef } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 
-export function ChatCard({ chat, onChanged }: { chat: Chat; onChanged?: () => void }) {
+export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: string) => void }) {
   const { icon: Icon, bg, text } = chatCategoryDef(chat.category);
   const [menuOpen, setMenuOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -18,8 +18,19 @@ export function ChatCard({ chat, onChanged }: { chat: Chat; onChanged?: () => vo
     e.stopPropagation();
     setDeleting(true);
     try {
-      await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
-      onChanged?.();
+      const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
+      // Tell the parent to drop this one row locally instead of asking it to
+      // re-fetch the whole list from the server (the old onChanged?.()
+      // behavior). Deleting several cards in quick succession used to fire
+      // one full-list GET per delete, and those GETs could resolve out of
+      // order -- a request that started before some of the deletes had
+      // landed on the server could resolve *after* a request that started
+      // later, overwriting the correctly-shortened list with a stale, longer
+      // one. That's why deleted chats kept reappearing until a manual
+      // refresh (a single fresh server render, no race possible). A plain
+      // local array filter has no network round-trip, so there's nothing to
+      // race.
+      if (res.ok) onDeleted?.(chat.id);
     } finally {
       setDeleting(false);
       setMenuOpen(false);

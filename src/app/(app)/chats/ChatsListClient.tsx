@@ -212,7 +212,17 @@ export function ChatsListClient({
 
         <div className="space-y-2.5">
           {chats?.map((chat) => (
-            <ChatCard key={chat.id} chat={chat} onChanged={() => load(search, category)} />
+            <ChatCard
+              key={chat.id}
+              chat={chat}
+              // Local removal, not a re-fetch -- see ChatCard's onDeleted
+              // comment for why asking every delete to re-fetch the whole
+              // list from the server was the actual bug: rapid deletes fired
+              // overlapping GETs that could resolve out of order and put a
+              // stale (longer) list back on screen after a fresher one had
+              // already rendered correctly.
+              onDeleted={(id) => setChats((prev) => (prev ? prev.filter((c) => c.id !== id) : prev))}
+            />
           ))}
         </div>
       </div>

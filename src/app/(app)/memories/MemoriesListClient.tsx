@@ -208,7 +208,12 @@ export function MemoriesListClient({ initialMemories }: { initialMemories: Memor
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-ink-faint">{group.label}</h3>
               <div className="space-y-2.5">
                 {group.items.map((m) => (
-                  <MemoryCard key={m.id} memory={m} onChanged={() => load(search, sort, filters)} />
+                  <MemoryCard
+                    key={m.id}
+                    memory={m}
+                    onChanged={() => load(search, sort, filters)}
+                    onDeleted={(id) => setMemories((prev) => (prev ? prev.filter((mm) => mm.id !== id) : prev))}
+                  />
                 ))}
               </div>
             </div>

@@ -13,10 +13,12 @@ export function MemoryCard({
   memory,
   menu = true,
   onChanged,
+  onDeleted,
 }: {
   memory: Memory;
   menu?: boolean;
   onChanged?: () => void;
+  onDeleted?: (id: string) => void;
 }) {
   const { icon: Icon } = memoryCategoryDef(memory.category);
   const tags = safeJsonParse<string[]>(memory.tags, []);
@@ -41,8 +43,16 @@ export function MemoryCard({
     e.stopPropagation();
     setBusy(true);
     try {
-      await fetch(`/api/memories/${memory.id}`, { method: "DELETE" });
-      onChanged?.();
+      const res = await fetch(`/api/memories/${memory.id}`, { method: "DELETE" });
+      // Local removal, not a re-fetch -- see MemoriesListClient's onDeleted
+      // comment. Duplicate (above) still goes through onChanged/a real
+      // reload since it needs the newly-created row's real data from the
+      // server; delete only ever needs to remove a row that's already fully
+      // known client-side, so there's no reason to round-trip through a
+      // full-list GET (and every reason not to -- concurrent deletes racing
+      // those GETs is what caused deleted items to keep reappearing until a
+      // manual page refresh).
+      if (res.ok) onDeleted?.(memory.id);
     } finally {
       setBusy(false);
       setMenuOpen(false);
