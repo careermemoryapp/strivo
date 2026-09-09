@@ -258,6 +258,14 @@ export type AdminUserRow = {
   // signed up before this shipped and hasn't visited since, or if the
   // header wasn't present for their request.
   country: string | null;
+  // Timestamp of the one-time AI-processing consent gate (see /ai-consent
+  // and its redirect in (app)/layout.tsx, closing Guideline 5.1.2(i)) --
+  // null means they haven't seen/accepted it yet, including every account
+  // that existed before this shipped. This is the compliance evidence
+  // trail: proof, per user, that explicit permission was actually
+  // obtained before their data went to OpenAI, not just documented in a
+  // policy somewhere.
+  aiConsentAt: string | null;
 };
 
 export type AdminUsersPage = {
@@ -335,6 +343,7 @@ export function listUsersForAdmin(search?: string, page = 1, pageSize = 20): Adm
       emailSubscribed: !u.email_opt_out,
       lastActiveAt: u.last_active_at,
       country: u.country,
+      aiConsentAt: u.ai_consent_at,
     };
   });
 

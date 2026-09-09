@@ -1851,6 +1851,7 @@ export default function AdminDashboardPage() {
                           <th className="px-4 py-3 font-semibold">Emails</th>
                           <th className="px-4 py-3 font-semibold">Last seen</th>
                           <th className="px-4 py-3 font-semibold">Country</th>
+                          <th className="px-4 py-3 font-semibold">AI consent</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
                           <th className="px-4 py-3 font-semibold"></th>
                         </tr>
@@ -1927,6 +1928,19 @@ export default function AdminDashboardPage() {
                                 <span className="text-[12px] text-ink-soft">{u.country}</span>
                               ) : (
                                 <span className="text-[12px] text-ink-faint">Unknown</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {u.aiConsentAt ? (
+                                <span className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />
+                                  {format(new Date(u.aiConsentAt), "MMM d, yyyy")}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1.5 text-[12px] text-amber-600">
+                                  <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
+                                  Not yet
+                                </span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-ink-soft whitespace-nowrap">
