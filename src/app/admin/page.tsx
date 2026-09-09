@@ -1264,7 +1264,7 @@ export default function AdminDashboardPage() {
                 <StatCard label="New this month" value={String(metrics.newUsersThisMonth)} />
               </div>
               <div className="mt-3">
-                <ChartCard title="Signups — last 14 days">
+                <ChartCard title="Signups — last 30 days">
                   <TrendLineChart data={metrics.dailySignups} />
                 </ChartCard>
               </div>
@@ -1320,12 +1320,12 @@ export default function AdminDashboardPage() {
                 />
               </div>
               <div className="mt-3">
-                <ChartCard title="Active users — DAU / WAU / MAU, last 14 days">
+                <ChartCard title="Active users — DAU / WAU / MAU, last 30 days">
                   <ActiveUsersLineChart data={metrics.activeUsersTrend} />
                 </ChartCard>
               </div>
               <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
-                <ChartCard title="Memories captured — last 14 days">
+                <ChartCard title="Memories captured — last 30 days">
                   <TrendLineChart data={metrics.dailyMemories} color="#60a5fa" />
                 </ChartCard>
                 <ChartCard title="How memories are captured">
@@ -1850,6 +1850,7 @@ export default function AdminDashboardPage() {
                           <th className="px-4 py-3 font-semibold">App version</th>
                           <th className="px-4 py-3 font-semibold">Emails</th>
                           <th className="px-4 py-3 font-semibold">Last seen</th>
+                          <th className="px-4 py-3 font-semibold">Country</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
                           <th className="px-4 py-3 font-semibold"></th>
                         </tr>
@@ -1919,6 +1920,13 @@ export default function AdminDashboardPage() {
                                 </span>
                               ) : (
                                 <span className="text-[12px] text-ink-faint">Never</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {u.country ? (
+                                <span className="text-[12px] text-ink-soft">{u.country}</span>
+                              ) : (
+                                <span className="text-[12px] text-ink-faint">Unknown</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-ink-soft whitespace-nowrap">

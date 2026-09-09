@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import BottomNav from "@/components/BottomNav";
 import { requireUserId } from "@/lib/serverAuth";
-import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
+import { getUserById, getSubscriptionInfo, maybeSetUserCountry } from "@/lib/repo/users";
 import { countMemories } from "@/lib/repo/memories";
 import { CurrentUserProvider } from "@/lib/CurrentUserContext";
 import { NavTourProvider } from "@/components/NavTour";
@@ -57,6 +58,18 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!user) {
     redirect("/login");
   }
+
+  // Best-effort country capture (see maybeSetUserCountry in repo/users.ts):
+  // Cloudflare stamps every request that reaches origin with cf-ipcountry,
+  // so this needs no GeoIP API or extra dependency. A real Node Server
+  // Component (unlike proxy.ts's Edge middleware) can both read headers()
+  // and hit the database, so this is the earliest point in the request
+  // lifecycle that can do both -- and since every protected route shares
+  // this layout, it naturally backfills existing users on their next
+  // visit too, not just brand-new signups. No-ops (see the function) if
+  // the header is missing or the user's country is already on file.
+  const h = await headers();
+  maybeSetUserCountry(userId, h.get("cf-ipcountry"));
 
   if (user.preferred_plan === null) {
     // Brand-new, hasn't recorded anything yet, and hasn't picked a plan --

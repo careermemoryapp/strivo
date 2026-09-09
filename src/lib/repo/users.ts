@@ -75,6 +75,15 @@ export type User = {
   product_update_sent_count: number;
   // Null means never sent one yet. See product_update_sent_count above.
   product_update_last_sent_at: string | null;
+  // Best-effort 2-letter country code (e.g. "IN", "US"), captured once from
+  // Cloudflare's automatic cf-ipcountry request header on this user's first
+  // protected page load after the column shipped (see maybeSetUserCountry
+  // below and its call site in (app)/layout.tsx). Null for anyone who
+  // signed up before this shipped, or if the header wasn't present (e.g.
+  // the request didn't come through Cloudflare). Not re-derived after
+  // first capture -- this is "where they most likely signed up from," not
+  // a live location tracker.
+  country: string | null;
   created_at: string;
 };
 
@@ -236,6 +245,20 @@ export function setDismissedNudge(id: string, nudgeId: string) {
 export function setUserAppVersion(id: string, version: string) {
   const db = getDb();
   db.prepare(`UPDATE users SET app_version = ?, last_active_at = ? WHERE id = ?`).run(version, nowIso(), id);
+}
+
+// Best-effort, write-once capture of a user's country from Cloudflare's
+// cf-ipcountry header — called from (app)/layout.tsx on every protected
+// page load (the one place shared by every route, web and native) so it
+// naturally backfills existing users the next time they visit, not just at
+// signup. Only writes when country is still null: deliberately NOT
+// re-stamped on every visit, so someone traveling doesn't have their
+// on-file country flip around. No-ops if the header wasn't present (e.g.
+// a request that didn't come through Cloudflare) or is already set.
+export function maybeSetUserCountry(id: string, country: string | null | undefined) {
+  if (!country) return;
+  const db = getDb();
+  db.prepare(`UPDATE users SET country = ? WHERE id = ? AND country IS NULL`).run(country, id);
 }
 
 // Manual override for the admin panel — lets the founder grant or revoke

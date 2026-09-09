@@ -993,6 +993,20 @@ function migrate(db: DatabaseSync) {
   if (!blogPostColumns.includes("cta_path")) {
     db.exec(`ALTER TABLE blog_posts ADD COLUMN cta_path TEXT;`);
   }
+
+  // Best-effort 2-letter country code (e.g. "IN", "US"), captured from
+  // Cloudflare's automatic `cf-ipcountry` request header (see
+  // maybeSetUserCountry in repo/users.ts, called from (app)/layout.tsx on
+  // every protected page load) -- no GeoIP API/dependency needed since
+  // Cloudflare already resolves this at the edge for every request that
+  // reaches origin. Null for anyone who signed up before this shipped, or
+  // if the header isn't present for some reason (e.g. request didn't come
+  // through Cloudflare). Written once and left alone after that -- a
+  // traveling user's country isn't re-derived on every page load, this is
+  // "where they most likely are/were", not a live location tracker.
+  if (!userColumns.includes("country")) {
+    db.exec(`ALTER TABLE users ADD COLUMN country TEXT;`);
+  }
 }
 
 export function getDb(): DatabaseSync {

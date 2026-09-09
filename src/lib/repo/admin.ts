@@ -73,7 +73,7 @@ function activeUsersSince(iso: string): number {
 // Day-by-day row counts for the last `days` days (including today),
 // oldest first, with gaps filled in as 0 — table name is only ever passed
 // as a fixed literal from computeAdminMetrics below, never user input.
-function dailyCounts(table: "users" | "memories", days = 14): { date: string; count: number }[] {
+function dailyCounts(table: "users" | "memories", days = 30): { date: string; count: number }[] {
   const db = getDb();
   const rows = db
     .prepare(`SELECT substr(created_at,1,10) as d, COUNT(*) as c FROM ${table} WHERE created_at >= ? GROUP BY d`)
@@ -99,7 +99,7 @@ function dailyCounts(table: "users" | "memories", days = 14): { date: string; co
 // same N+1-avoidance reasoning as listUsersForAdmin's memory/chat count
 // merge above. The per-day set math then happens in memory, which is cheap
 // at this data scale (a young product's total activity rows, not millions).
-function activeUsersTrend(days = 14): { date: string; dau: number; wau: number; mau: number }[] {
+function activeUsersTrend(days = 30): { date: string; dau: number; wau: number; mau: number }[] {
   const db = getDb();
   const lookbackIso = isoDaysAgo(days - 1 + 29);
   const rows = db
@@ -253,6 +253,11 @@ export type AdminUserRow = {
   // createdAt (signup date): this is "when were they last here," which is
   // what the admin panel actually wants to know at a glance.
   lastActiveAt: string | null;
+  // Best-effort 2-letter country code from Cloudflare's cf-ipcountry header
+  // (see maybeSetUserCountry in repo/users.ts) -- null for anyone who
+  // signed up before this shipped and hasn't visited since, or if the
+  // header wasn't present for their request.
+  country: string | null;
 };
 
 export type AdminUsersPage = {
@@ -329,6 +334,7 @@ export function listUsersForAdmin(search?: string, page = 1, pageSize = 20): Adm
       preferredPlan: info.preferredPlan,
       emailSubscribed: !u.email_opt_out,
       lastActiveAt: u.last_active_at,
+      country: u.country,
     };
   });
 
