@@ -71,6 +71,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const h = await headers();
   maybeSetUserCountry(userId, h.get("cf-ipcountry"));
 
+  // Guideline 5.1.2(i) gate (see /ai-consent's own comment for the full
+  // reasoning) -- checked before EVERY other redirect below, including
+  // first-record, so a brand-new signup can't reach a screen that sends
+  // anything to OpenAI before explicitly acknowledging it. ai_consent_at
+  // is NULL for every account that existed before this shipped too, so
+  // this also catches existing users on their next visit, not just new
+  // signups.
+  if (!user.ai_consent_at) {
+    redirect("/ai-consent");
+  }
+
   if (user.preferred_plan === null) {
     // Brand-new, hasn't recorded anything yet, and hasn't picked a plan --
     // send them to the "hero action" screen (record one thing, see it

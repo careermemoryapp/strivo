@@ -1018,6 +1018,19 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("country")) {
     db.exec(`ALTER TABLE users ADD COLUMN country TEXT;`);
   }
+
+  // Guideline 5.1.2(i) requires clearly disclosing when personal data goes
+  // to a third-party AI and getting explicit permission before it does --
+  // Strivo's Privacy Policy already discloses this, but the old signup
+  // flow only linked to Terms/Privacy generically, never naming AI itself
+  // in the consent step -- see /ai-consent and its gate in
+  // (app)/layout.tsx. NULL for anyone who signed up before this shipped
+  // (including every existing account) so they're prompted for it on
+  // their next visit too, not just brand-new signups -- this is a real
+  // compliance gap being closed retroactively, not just a new-user thing.
+  if (!userColumns.includes("ai_consent_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN ai_consent_at TEXT;`);
+  }
 }
 
 export function getDb(): DatabaseSync {

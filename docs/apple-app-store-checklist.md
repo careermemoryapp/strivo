@@ -7,6 +7,82 @@ before submitting the build for review (iOS Phase 6/7). Google Play
 approval does NOT predict Apple's decision — Apple's review is a human
 reviewer actually using the app, not just an automated policy check.
 
+## Primary-source verification (2026-09-09) — checked against Apple's actual guidelines text
+
+Everything above this point was built from secondary sources (blog posts,
+transcripts, AI search summaries) cross-checked against Strivo's code, but
+never against Apple's own guideline text directly. Today, fetched
+https://developer.apple.com/app-store/review/guidelines/ (the real page,
+"Last Updated: June 8, 2026") and had it read in full to verify or correct
+every specific claim/citation used above. Results, most important first:
+
+- **5.1.2(i) AI-consent claim — UPGRADED from "single agency's
+  interpretation" to CONFIRMED.** Apple's actual text: *"You must clearly
+  disclose where personal data will be shared with third parties,
+  including with third-party AI, and obtain explicit permission before
+  doing so."* This explicitly names third-party AI and requires "explicit
+  permission," not just disclosure. It does NOT specify a UI mechanism
+  (no literal requirement for a "modal") — a clear in-flow consent step
+  could satisfy it — but a Privacy-Policy-link-only approach is genuinely
+  weaker against "explicit permission" than I'd credited it when this was
+  flagged as a soft recommendation in item 3. **Shikhar declined to build
+  a dedicated AI-consent screen on 2026-09-09 based on that being an
+  unconfirmed agency claim — that premise has changed.** Worth revisiting
+  this decision with him now that it's confirmed real Apple text, even
+  though it's still not literally a "modal" requirement.
+- **Item 8 (Xcode 26 / iOS 26 SDK deadline) — NOT found in this document.**
+  Read the full 763-line guidelines page; no clause anywhere ties app
+  acceptance to a specific Xcode or SDK version. This doesn't mean the
+  claim is false — Apple typically announces build-tool/SDK minimums via
+  developer.apple.com/news or enforces them at the App Store Connect
+  upload step itself, not in the Review Guidelines document, so this is
+  simply the wrong source to confirm or deny it in. The `xcode: latest`
+  fix already applied to `codemagic.yaml` stays correct either way (it
+  always tracks whatever's current). Treat the specific "April 28, 2026"
+  date as still unconfirmed by a primary source.
+- **Item 1 (4.2.3 "repackaged website") — wrong sub-clause cited.** The
+  "repackaged website" language is actually in the **4.2 section intro**,
+  not the numbered **4.2.3** sub-clause (4.2.3 itself only covers apps
+  requiring another app to function, and disclosing download sizes). The
+  underlying risk assessment doesn't change — cite it as "Guideline 4.2"
+  going forward, not 4.2.3 specifically.
+- **Item 5 (EULA/Terms-of-Use required at point of purchase) — NOT found
+  in Guideline 3.1.2.** Read all of 3.1.2(a)/(b)/(c) in full; no
+  EULA/Terms-of-Use-at-purchase clause exists there. This requirement, if
+  real, most likely lives in Schedule 2 of the separate Apple Developer
+  Program License Agreement (a different, developer-facing document not
+  covered by this fetch), not the Review Guidelines. The App Store
+  Connect → App Information → License Agreement field (confirmed earlier
+  via a real rejection/fix account) is still real and still needs filling
+  in — just don't cite 3.1.2 as the source for the point-of-purchase part
+  specifically.
+- **Placeholder-content wording — wrong guideline cited.** Earlier entries
+  attributed "eliminate placeholders and dead ends" to Guideline 2.2.
+  Apple's actual placeholder-content language ("placeholder text, empty
+  websites, and other temporary content should be scrubbed") is in
+  **2.1(a)** (App Completeness), not 2.2 (which is just about
+  TestFlight/beta distribution rules). Strivo's underlying audit finding
+  (the one "Coming soon" element is safely disabled) is unaffected — just
+  cite 2.1(a) instead of 2.2 going forward.
+- **Confirmed accurate as cited:** 4.8 (Sign in with Apple / equivalent
+  login service — Apple's text names Google Sign-In, Facebook Login, etc.
+  as example trigger services via "such as," and requires "another login
+  service" meeting specific data-minimization criteria; it doesn't use
+  the literal phrase "Sign in with Apple" but that's the only practical
+  option meeting the criteria on iOS), 5.1.1(v) (account deletion), and
+  5.1.1(ii) (purpose strings for data collection — supports item 7's
+  permission-string fix, though the literal iOS crash-on-missing-key
+  behavior is a technical fact independent of this citation).
+- 2.5.2 confirmed to contain NO vibe-coding/AI-specific language at all —
+  it's general "don't download/execute code that changes app
+  functionality" text with a carve-out for educational coding apps. The
+  "targets vibe-coding tools, not ordinary AI-assisted apps" reading
+  (item 1's correction, sourced from the Hacker News thread) is an
+  interpretation of how Apple has been enforcing this generic clause in
+  practice, not something the clause itself says — worth remembering this
+  is enforcement pattern, not guideline text, if it's ever cited to a
+  reviewer.
+
 ## 0. Sign in with Apple (Guideline 4.8) — REAL GAP, needs code, not just a submission-day check
 
 Strivo is Google-Sign-In-only (see the comment in `lib/auth.ts`: "Strivo
@@ -217,12 +293,33 @@ before first use, not just documented after" point above. Not filed as
 its own task yet since it's a small UI addition better bundled into
 whatever onboarding work happens next, but flag it before iOS Phase 7.
 
-**2026-09-09 — Shikhar's explicit call: skip this.** Since it's a
-recommendation from a single agency's interpretation, not confirmed Apple
-guideline text, and the existing signup-time Terms/Privacy links already
-cover informed consent, he decided not to build a dedicated AI-consent
-screen. Don't re-raise this as a pending gap in a future session — it was
-considered and declined, not overlooked.
+**2026-09-09 — Shikhar's initial call was to skip this**, on the
+understanding that it was a single agency's interpretation, not confirmed
+Apple guideline text. That premise changed the same day: fetching Apple's
+actual guidelines page directly (see the "Primary-source verification"
+section near the top of this file) confirmed 5.1.2(i)'s literal text
+does require "explicit permission" before sharing data with third-party
+AI, not just disclosure. Once he saw that, he asked to build it and
+eliminate the risk.
+
+**BUILT 2026-09-09.** New one-time gate at `/ai-consent`
+(`src/app/ai-consent/page.tsx`), enforced in `(app)/layout.tsx` before
+every other redirect (including `/first-record`, so a brand-new signup
+can't reach anything that sends data to OpenAI before seeing it). Backed
+by a new `ai_consent_at` column on `users` (migration in `db.ts`,
+`setAiConsent()` in `repo/users.ts`, `POST /api/user/ai-consent`).
+Deliberately NULL for every account that existed before this shipped
+(not backfilled as "already consented"), so existing users get gated on
+their next visit too, not just new signups — this closes the gap for the
+whole user base, not just review-time signups. No decline option: AI
+processing is core, disclosed product functionality with no working
+AI-free fallback, so this is an acknowledge-and-continue gate, not a
+real accept/reject choice, consistent with the "no opt-out toggle"
+reasoning above. Copy states plainly that memories/chats go to OpenAI to
+power the app's own features, links the Privacy Policy, and confirms
+(verified against `privacy/page.tsx`'s actual text before shipping) that
+content isn't used to train OpenAI's models. Verified clean with
+`tsc`/`eslint`. Closes the 5.1.2(i) gap.
 
 **Checked and NOT applicable — two Greensighter claims that don't apply
 to Strivo:** (1) C2PA metadata for AI-generated visual content — Strivo

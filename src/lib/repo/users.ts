@@ -84,6 +84,15 @@ export type User = {
   // first capture -- this is "where they most likely signed up from," not
   // a live location tracker.
   country: string | null;
+  // Timestamp of the one-time AI-processing consent gate (see /ai-consent
+  // and its redirect in (app)/layout.tsx) -- null means they haven't seen
+  // it yet, including every account that existed before this shipped
+  // (deliberately NOT backfilled/assumed true for old accounts, even
+  // though they were already using AI features under the old generic
+  // Terms/Privacy link -- the whole point is getting real, explicit
+  // permission going forward per Guideline 5.1.2(i), not just recording
+  // that time passed). Never cleared once set.
+  ai_consent_at: string | null;
   created_at: string;
 };
 
@@ -259,6 +268,18 @@ export function maybeSetUserCountry(id: string, country: string | null | undefin
   if (!country) return;
   const db = getDb();
   db.prepare(`UPDATE users SET country = ? WHERE id = ? AND country IS NULL`).run(country, id);
+}
+
+// Records that this user has explicitly acknowledged Strivo's AI
+// processing (see /ai-consent and its gate in (app)/layout.tsx). Only
+// ever writes once and never clears -- there's no "revoke AI consent and
+// keep using Strivo" path since AI processing is core, disclosed product
+// functionality, not an optional add-on (see the checklist's reasoning
+// against an opt-out toggle). Idempotent WHERE clause matches
+// maybeSetUserCountry's pattern above.
+export function setAiConsent(id: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET ai_consent_at = ? WHERE id = ? AND ai_consent_at IS NULL`).run(nowIso(), id);
 }
 
 // Manual override for the admin panel — lets the founder grant or revoke
