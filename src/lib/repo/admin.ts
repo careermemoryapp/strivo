@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { getSubscriptionInfo, type User } from "@/lib/repo/users";
+import { listProductUpdatePostsOrdered } from "@/lib/repo/blogPosts";
 
 export type AdminMetrics = {
   totalUsers: number;
@@ -266,6 +267,15 @@ export type AdminUserRow = {
   // obtained before their data went to OpenAI, not just documented in a
   // policy somewhere.
   aiConsentAt: string | null;
+  // Title of the last Product Updates drip email this person actually
+  // received (see /api/product-update-drip/run) -- null if they haven't
+  // gotten one yet. Deliberately per-user rather than "today's post": the
+  // drip sends everyone their OWN next post in the backlog
+  // (posts[product_update_sent_count]), so two people who joined on
+  // different days are mid-sequence at different points and were never
+  // sent the same email on the same day -- see product_update_sent_count's
+  // comment on the User type for the full mechanics.
+  lastProductUpdateTitle: string | null;
 };
 
 export type AdminUsersPage = {
@@ -325,8 +335,17 @@ export function listUsersForAdmin(search?: string, page = 1, pageSize = 20): Adm
     ).forEach((r) => chatCounts.set(r.user_id, r.c));
   }
 
+  // Same ordered list the drip route itself indexes into
+  // (posts[user.product_update_sent_count]) -- a user who's received N
+  // emails has their most recent one at index N-1. Fetched once for the
+  // whole page rather than per-row, same N+1-avoidance reasoning as the
+  // memory/chat counts above.
+  const productUpdatePosts = listProductUpdatePostsOrdered();
+
   const users = rows.map((u) => {
     const info = getSubscriptionInfo(u);
+    const lastProductUpdateTitle =
+      u.product_update_sent_count > 0 ? (productUpdatePosts[u.product_update_sent_count - 1]?.title ?? null) : null;
     return {
       id: u.id,
       firstName: u.first_name,
@@ -344,6 +363,7 @@ export function listUsersForAdmin(search?: string, page = 1, pageSize = 20): Adm
       lastActiveAt: u.last_active_at,
       country: u.country,
       aiConsentAt: u.ai_consent_at,
+      lastProductUpdateTitle,
     };
   });
 

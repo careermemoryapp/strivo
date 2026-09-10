@@ -1852,6 +1852,7 @@ export default function AdminDashboardPage() {
                           <th className="px-4 py-3 font-semibold">Last seen</th>
                           <th className="px-4 py-3 font-semibold">Country</th>
                           <th className="px-4 py-3 font-semibold">AI consent</th>
+                          <th className="px-4 py-3 font-semibold">Last email</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
                           <th className="px-4 py-3 font-semibold"></th>
                         </tr>
@@ -1941,6 +1942,15 @@ export default function AdminDashboardPage() {
                                   <span className="h-1.5 w-1.5 rounded-full bg-amber-500" aria-hidden="true" />
                                   Not yet
                                 </span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 text-ink-soft">
+                              {u.lastProductUpdateTitle ? (
+                                <span className="block max-w-[220px] truncate" title={u.lastProductUpdateTitle}>
+                                  {u.lastProductUpdateTitle}
+                                </span>
+                              ) : (
+                                <span className="text-[12px] text-ink-faint">Not yet</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-ink-soft whitespace-nowrap">
