@@ -10,6 +10,7 @@ import {
 import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { memoryCategoryDef } from "@/lib/categoryIcons";
 import { cn, safeJsonParse } from "@/lib/utils";
 import type { Memory } from "@/lib/repo/memories";
@@ -24,6 +25,7 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
   const [memory, setMemory] = useState<Memory>(initialMemory);
   const [tab, setTab] = useState<"Transcript" | "Summary">("Transcript");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
@@ -38,6 +40,8 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
       await fetch(`/api/memories/${memoryId}`, { method: "DELETE" });
       router.push("/memories");
     } finally {
+      // Only reached if the DELETE failed and navigation didn't happen --
+      // the success path leaves this page before this line would matter.
       setDeleting(false);
     }
   }
@@ -143,11 +147,13 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
                 style={{ boxShadow: "var(--shadow-card)" }}
               >
                 <button
-                  onClick={handleDelete}
-                  disabled={deleting}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    setConfirmDelete(true);
+                  }}
                   className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                 >
-                  <Trash2 size={15} /> {deleting ? "Deleting…" : "Delete memory"}
+                  <Trash2 size={15} /> Delete memory
                 </button>
               </div>
             )}
@@ -379,8 +385,7 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
             <span className="text-xs font-medium">Duplicate</span>
           </button>
           <button
-            onClick={handleDelete}
-            disabled={deleting}
+            onClick={() => setConfirmDelete(true)}
             className="flex flex-col items-center gap-1 rounded-[14px] border border-[#f0ecf7] bg-surface py-3 text-red-600"
           >
             <Trash2 size={17} />
@@ -394,6 +399,15 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDelete}
+        title="Delete memory?"
+        description="This memory and its AI summary will be permanently deleted. This can't be undone."
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmDelete(false)}
+      />
     </div>
   );
 }

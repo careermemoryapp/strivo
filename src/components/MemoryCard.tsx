@@ -5,6 +5,7 @@ import { useState } from "react";
 import { format } from "date-fns";
 import { MoreVertical, Trash2, Copy } from "lucide-react";
 import { Card } from "@/components/Card";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { memoryCategoryDef } from "@/lib/categoryIcons";
 import { safeJsonParse } from "@/lib/utils";
 import type { Memory } from "@/lib/repo/memories";
@@ -23,6 +24,7 @@ export function MemoryCard({
   const { icon: Icon } = memoryCategoryDef(memory.category);
   const tags = safeJsonParse<string[]>(memory.tags, []);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function handleDuplicate(e: React.MouseEvent) {
@@ -38,9 +40,7 @@ export function MemoryCard({
     }
   }
 
-  async function handleDelete(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
+  async function handleDelete() {
     setBusy(true);
     try {
       const res = await fetch(`/api/memories/${memory.id}`, { method: "DELETE" });
@@ -55,7 +55,7 @@ export function MemoryCard({
       if (res.ok) onDeleted?.(memory.id);
     } finally {
       setBusy(false);
-      setMenuOpen(false);
+      setConfirmOpen(false);
     }
   }
 
@@ -122,8 +122,12 @@ export function MemoryCard({
                 <Copy size={14} /> Duplicate
               </button>
               <button
-                onClick={handleDelete}
-                disabled={busy}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setMenuOpen(false);
+                  setConfirmOpen(true);
+                }}
                 className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-red-600 hover:bg-red-50"
               >
                 <Trash2 size={14} /> Delete
@@ -132,6 +136,15 @@ export function MemoryCard({
           )}
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete memory?"
+        description="This memory and its AI summary will be permanently deleted. This can't be undone."
+        loading={busy}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

@@ -31,6 +31,7 @@ import {
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import type { AdminMetrics, AdminUserRow } from "@/lib/repo/admin";
 import type { Nudge } from "@/lib/repo/nudges";
@@ -318,6 +319,10 @@ export default function AdminDashboardPage() {
   const [newTemplateName, setNewTemplateName] = useState("");
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateActionId, setTemplateActionId] = useState<string | null>(null);
+  // Which template's delete is pending confirmation, if any -- the id
+  // (rather than a bare boolean) so the confirm dialog can show that
+  // specific template's name instead of a generic "this template?".
+  const [confirmDeleteTemplateId, setConfirmDeleteTemplateId] = useState<string | null>(null);
   const [userActionId, setUserActionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [checkedAuth, setCheckedAuth] = useState(false);
@@ -753,6 +758,7 @@ export default function AdminDashboardPage() {
       if (res.ok) await loadTemplates();
     } finally {
       setTemplateActionId(null);
+      setConfirmDeleteTemplateId(null);
     }
   }
 
@@ -1493,9 +1499,8 @@ export default function AdminDashboardPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDeleteTemplate(t.id)}
-                          disabled={templateActionId === t.id}
-                          className="absolute right-1.5 top-1.5 text-[10px] text-ink-faint opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100 disabled:opacity-50"
+                          onClick={() => setConfirmDeleteTemplateId(t.id)}
+                          className="absolute right-1.5 top-1.5 text-[10px] text-ink-faint opacity-0 transition-opacity hover:text-red-500 group-hover:opacity-100"
                           title="Delete template"
                         >
                           ✕
@@ -2076,6 +2081,19 @@ export default function AdminDashboardPage() {
           </>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteTemplateId !== null}
+        title="Delete template?"
+        description={
+          confirmDeleteTemplateId
+            ? `"${emailTemplates.find((t) => t.id === confirmDeleteTemplateId)?.name ?? "This template"}" will be permanently deleted. This can't be undone.`
+            : ""
+        }
+        loading={templateActionId === confirmDeleteTemplateId && templateActionId !== null}
+        onConfirm={() => confirmDeleteTemplateId && handleDeleteTemplate(confirmDeleteTemplateId)}
+        onCancel={() => setConfirmDeleteTemplateId(null)}
+      />
     </div>
   );
 }

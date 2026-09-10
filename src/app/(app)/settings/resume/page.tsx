@@ -10,6 +10,7 @@ import { markExpectedResume } from "@/lib/nativePlatform";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
 
 type ResumeStatus = { hasResume: boolean; filename: string | null; uploadedAt: string | null };
@@ -54,6 +55,7 @@ export default function ResumeSettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
 
   useEffect(() => {
@@ -140,6 +142,7 @@ export default function ResumeSettingsPage() {
       setUploadError("Couldn't remove your resume. Please try again.");
     } finally {
       setRemoving(false);
+      setConfirmRemove(false);
     }
   }
 
@@ -236,11 +239,11 @@ export default function ResumeSettingsPage() {
                     {uploading ? "Uploading…" : "Upload new version"}
                   </button>
                   <button
-                    onClick={handleRemove}
-                    disabled={removing}
-                    className="flex items-center justify-center gap-2 rounded-pill border border-[#ece5f5] bg-surface px-4 py-3 text-sm font-semibold text-[#8a82a8] disabled:opacity-60"
+                    onClick={() => setConfirmRemove(true)}
+                    aria-label="Remove resume"
+                    className="flex items-center justify-center gap-2 rounded-pill border border-[#ece5f5] bg-surface px-4 py-3 text-sm font-semibold text-[#8a82a8]"
                   >
-                    {removing ? <Spinner className="h-4 w-4" /> : <Trash2 size={16} />}
+                    <Trash2 size={16} />
                   </button>
                 </div>
               </div>
@@ -308,6 +311,16 @@ export default function ResumeSettingsPage() {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmRemove}
+        title="Remove resume?"
+        description="Your resume will stop being used as background context in chats and new memories. You can upload it again anytime."
+        confirmLabel="Remove"
+        loading={removing}
+        onConfirm={handleRemove}
+        onCancel={() => setConfirmRemove(false)}
+      />
     </div>
   );
 }

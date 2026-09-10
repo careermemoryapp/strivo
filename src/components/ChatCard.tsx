@@ -5,17 +5,17 @@ import { useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { MoreVertical, Trash2 } from "lucide-react";
 import { Card } from "@/components/Card";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { chatCategoryDef } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 
 export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: string) => void }) {
   const { icon: Icon, bg, text } = chatCategoryDef(chat.category);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  async function handleDelete(e: React.MouseEvent) {
-    e.preventDefault();
-    e.stopPropagation();
+  async function handleDelete() {
     setDeleting(true);
     try {
       const res = await fetch(`/api/chats/${chat.id}`, { method: "DELETE" });
@@ -33,7 +33,7 @@ export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: str
       if (res.ok) onDeleted?.(chat.id);
     } finally {
       setDeleting(false);
-      setMenuOpen(false);
+      setConfirmOpen(false);
     }
   }
 
@@ -98,15 +98,28 @@ export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: str
             style={{ boxShadow: "var(--shadow-card)" }}
           >
             <button
-              onClick={handleDelete}
-              disabled={deleting}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setMenuOpen(false);
+                setConfirmOpen(true);
+              }}
               className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-red-600 hover:bg-red-50"
             >
-              <Trash2 size={14} /> {deleting ? "Deleting…" : "Delete"}
+              <Trash2 size={14} /> Delete
             </button>
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Delete chat?"
+        description="This chat and all its messages will be permanently deleted. This can't be undone."
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

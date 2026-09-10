@@ -8,6 +8,7 @@ import { ChatBubble } from "@/components/ChatBubble";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 import type { Chat } from "@/lib/repo/chats";
 import type { Message } from "@/lib/repo/messages";
@@ -48,6 +49,8 @@ export function ChatDetailClient({
   const [sendError, setSendError] = useState<string | null>(null);
   const [lastFailedContent, setLastFailedContent] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [confirmDeleteChat, setConfirmDeleteChat] = useState(false);
+  const [deletingChat, setDeletingChat] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const speech = useSpeechRecognition();
@@ -138,8 +141,18 @@ export function ChatDetailClient({
   }
 
   async function handleDeleteChat() {
-    await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
-    router.push("/chats");
+    setDeletingChat(true);
+    try {
+      await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
+      router.push("/chats");
+    } finally {
+      // Only matters if the DELETE itself failed and we're still on this
+      // page -- the success path navigates away before this would ever be
+      // seen. Deliberately doesn't close the dialog on failure so it stays
+      // open with a spinner-off Delete button they can tap again, instead
+      // of silently dropping back to a closed dialog with no explanation.
+      setDeletingChat(false);
+    }
   }
 
   return (
@@ -171,7 +184,10 @@ export function ChatDetailClient({
                     <Sparkles size={15} /> View memories
                   </button>
                   <button
-                    onClick={handleDeleteChat}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setConfirmDeleteChat(true);
+                    }}
                     className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-red-600 hover:bg-red-50"
                   >
                     <Trash2 size={15} /> Delete chat
@@ -346,6 +362,15 @@ export function ChatDetailClient({
           </button>
         </form>
       </div>
+
+      <ConfirmDialog
+        open={confirmDeleteChat}
+        title="Delete chat?"
+        description="This chat and all its messages will be permanently deleted. This can't be undone."
+        loading={deletingChat}
+        onConfirm={handleDeleteChat}
+        onCancel={() => setConfirmDeleteChat(false)}
+      />
     </div>
   );
 }
