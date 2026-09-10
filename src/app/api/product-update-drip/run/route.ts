@@ -18,21 +18,21 @@ import { sendProductUpdateEmail } from "@/lib/email";
 // engagement-nudge, category-insight, resume-reminder): admin session OR
 // this route's own secret header.
 // Repeat sends are gated on elapsed time since product_update_last_sent_at,
-// NOT on how often this route gets called -- the cron trigger (server
-// crontab, 9am IST daily, see scripts/deploy.sh's README notes) can keep
-// firing every day exactly as it always has; this constant alone controls
-// how often any given user actually receives an email. Deliberately sized
-// as "just under 2 days" rather than exactly 48h, for the same reason the
-// original daily version used 20h instead of 24h: it gives the cron room to
-// land a little early/late run-to-run without a send ever slipping to a
-// 3-day gap. Sequence/content order (posts[user.product_update_sent_count])
-// is untouched by this -- only the cadence between sends changed.
+// NOT on how often this route gets called -- the actual crontab entry on the
+// server (confirmed 2026-09-10: `38 3 * * *`, i.e. 3:38 UTC = 9:08 IST,
+// daily) fires once a day regardless; this constant alone decides whether
+// any given user is actually due on a given day's run. Since the cron is
+// daily, a gate ABOVE 24h (like this one) means every other daily run
+// actually sends to a given user -- true alternate-day cadence from a
+// single once-a-day cron, no separate every-other-day schedule needed.
+//
+// 2026-09-10: founder's call, confirmed alternate-day (back from a brief
+// same-day revert to 20h/daily -- see git history if that's ever needed
+// again). ~44h rather than exactly 48h so the cron has room to land a
+// little early/late run-to-run without a send ever slipping to a 3-day gap.
+// Sequence/content order (posts[user.product_update_sent_count]) is
+// untouched by this -- only the cadence between sends changed.
 const REPEAT_SEND_GATE_MS = 44 * 60 * 60 * 1000; // ~44h -- alternate-day cadence
-// (was 20h/daily; founder's call: daily felt like too much, same sequence,
-// just every other day now). Used only for the REPEAT-send gate
-// (product_update_last_sent_at) -- see listUsersDueForProductUpdateDrip's
-// own comment for why the FIRST-send gate uses a calendar-day boundary
-// instead of this same rolling window.
 
 // Strivo's target market is India — same IST convention as
 // weekly-recap/run's sevenDaysAgoIstMidnightUtc (and lib/retrieval.ts,
