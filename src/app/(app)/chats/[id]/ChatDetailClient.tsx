@@ -202,7 +202,12 @@ export function ChatDetailClient({
         </DarkHeader>
       </div>
 
-      <div className="flex-1 px-5 py-4 space-y-4">
+      {/* px-4 rather than the wider px-5 used elsewhere -- this column is
+          the actual reading width for AI replies (see the width fix in
+          ChatBubble.tsx), so a bit less side padding here directly means a
+          bit more room per line instead of the short, choppy wraps this had
+          before. */}
+      <div className="flex-1 px-4 py-4 space-y-4">
         {messages.length === 0 && memoryCount === 0 && (
           // Zero memories means every personal question in this chat will
           // get an honest "I don't have that on file yet" from the AI (see
@@ -268,7 +273,9 @@ export function ChatDetailClient({
         <div ref={bottomRef} />
       </div>
 
-      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 px-5 pb-2">
+      {/* Matches the message list's px-4 above so the input box lines up
+          with the message bubbles instead of sitting more indented. */}
+      <div className="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-20 px-4 pb-2">
         {speech.error && (
           <div className="mb-2">
             <ErrorBanner message={speech.error} />

@@ -340,13 +340,21 @@ export function ChatBubble({
           <span>{time}</span>
         </div>
       )}
-      <div className="flex gap-2 max-w-[85%]">
+      {/* No width cap on this row (unlike the user bubble above) -- AI
+          replies are often multi-sentence/multi-line, and capping this row
+          at e.g. 85% on top of the avatar column already eating space left
+          a genuinely narrow text column (short lines wrapping after just a
+          couple of words, unlike ChatGPT/Claude's own chat UIs which let
+          the model's reply use the full available width). `min-w-0` on the
+          bubble itself is required alongside `flex-1` for a flex child to
+          actually wrap long text instead of overflowing it. */}
+      <div className="flex gap-2 w-full">
         <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-surface border border-border mt-0.5">
           <LogoMark size={16} />
         </div>
         <div
           className={cn(
-            "rounded-2xl rounded-tl-sm bg-surface border border-border px-4 py-2.5 text-ink",
+            "flex-1 min-w-0 rounded-2xl rounded-tl-sm bg-surface border border-border px-3.5 py-2.5 text-ink",
             status === "error" && "border-red-200 bg-red-50 text-red-700"
           )}
           style={status !== "error" ? { boxShadow: "var(--shadow-card)" } : undefined}
