@@ -645,12 +645,17 @@ function migrate(db: DatabaseSync) {
     );
   }
 
-  // Seed the three feature-flag rows the first time each is missing (not
-  // gated on the table being empty, so adding a fourth flag later just
-  // needs its own `if (!hasFlag)` block here rather than reworking this
-  // one). Everyone starts enabled -- this table only ever turns something
-  // OFF deliberately from the admin panel, never ships pre-disabled.
-  const seedFlags: { key: string }[] = [{ key: "ai_chat" }, { key: "uploads" }, { key: "push_notifications" }];
+  // Seed each feature-flag row the first time it's missing (not gated on
+  // the table being empty, so adding another flag later just means adding
+  // its key to this array). Everyone starts enabled -- this table only ever
+  // turns something OFF deliberately from the admin panel, never ships
+  // pre-disabled.
+  const seedFlags: { key: string }[] = [
+    { key: "ai_chat" },
+    { key: "uploads" },
+    { key: "push_notifications" },
+    { key: "chat_tts" },
+  ];
   for (const f of seedFlags) {
     const exists = db.prepare(`SELECT 1 FROM feature_flags WHERE key = ?`).get(f.key);
     if (!exists) {

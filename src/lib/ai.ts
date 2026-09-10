@@ -717,6 +717,31 @@ export async function transcribeAudio(file: File): Promise<string | null> {
   }
 }
 
+// Reads an AI chat reply aloud (the speaker button on each response — see
+// api/chats/speak/route.ts, which is the only caller). This is the paid
+// fallback path only: ChatBubble.tsx tries the browser's free built-in
+// speechSynthesis first and calls this route solely when that silently
+// fails (the well-known Android WebView getVoices() bug). Kept server-side
+// with OpenAI's TTS API rather than any other workaround because it's the
+// one option that's guaranteed to produce audio regardless of WebView quirks.
+export async function synthesizeSpeech(text: string): Promise<Buffer | null> {
+  const openai = getClient();
+  if (!openai) return null;
+  try {
+    const response = await openai.audio.speech.create({
+      model: "tts-1",
+      voice: "alloy",
+      input: text,
+      response_format: "mp3",
+    });
+    return Buffer.from(await response.arrayBuffer());
+  } catch (err) {
+    console.error("synthesizeSpeech failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
 const SYSTEM_PROMPT_BASE = `You are the user's personal career intelligence assistant, part of a product called Strivo.

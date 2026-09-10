@@ -251,7 +251,13 @@ export function ChatDetailClient({
           </p>
         )}
         {messages.map((m) => (
-          <ChatBubble key={m.id} sender={m.sender} content={m.content} status={m.status} createdAt={m.created_at} />
+          <ChatBubble
+            key={m.id}
+            sender={m.sender}
+            content={m.content}
+            status={m.status}
+            createdAt={m.created_at}
+          />
         ))}
         {sending && (
           <div className="flex items-center gap-2 pl-1">

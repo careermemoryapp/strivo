@@ -22,6 +22,11 @@ export const FEATURE_FLAGS = [
     label: "Push notifications",
     description: "Sending real push notifications to phones (admin nudges). The in-app experience is unaffected either way.",
   },
+  {
+    key: "chat_tts",
+    label: "Chat text-to-speech (fallback)",
+    description: "The paid OpenAI TTS backup for the speaker button on AI chat replies. The button tries the browser's free built-in voice first and only calls OpenAI when that silently fails (mainly some Android WebViews). Turning this off just removes that backup -- those devices show \"Not supported here\" instead; everyone else is unaffected.",
+  },
 ] as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[number]["key"];
