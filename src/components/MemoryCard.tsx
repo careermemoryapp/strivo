@@ -21,7 +21,12 @@ export function MemoryCard({
   onChanged?: () => void;
   onDeleted?: (id: string) => void;
 }) {
-  const { icon: Icon } = memoryCategoryDef(memory.category);
+  const {
+    icon: Icon,
+    gradient = ["#cbd5e1", "#94a3b8"],
+    glow = "rgba(100,116,139,0.3)",
+    wash,
+  } = memoryCategoryDef(memory.category);
   const tags = safeJsonParse<string[]>(memory.tags, []);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -66,9 +71,19 @@ export function MemoryCard({
         className="block active:scale-[0.98] active:opacity-80 transition-transform"
         onClick={() => menuOpen && setMenuOpen(false)}
       >
-        <Card className="hover:border-brand-primary/40 transition-colors">
-          <div className="flex gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#f2effa] text-[#8b5cf6]">
+        <Card className="relative overflow-hidden hover:border-brand-primary/40 transition-colors">
+          {wash && (
+            <div
+              className="pointer-events-none absolute -right-6 -top-6 h-[100px] w-[100px] rounded-full"
+              style={{ background: `radial-gradient(circle, ${wash}, transparent 70%)` }}
+              aria-hidden="true"
+            />
+          )}
+          <div className="relative flex gap-3">
+            <div
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white"
+              style={{ background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`, boxShadow: `0 6px 16px ${glow}` }}
+            >
               <Icon size={19} />
             </div>
             <div className="min-w-0 flex-1">
@@ -81,7 +96,10 @@ export function MemoryCard({
               <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-ink-faint">{format(new Date(memory.created_at), "MMM d")}</span>
                 {memory.category && (
-                  <span className="rounded-pill bg-bg px-2 py-0.5 text-[11px] font-medium text-ink-soft border border-border">
+                  <span
+                    className="rounded-pill px-2 py-0.5 text-[11px] font-semibold text-white"
+                    style={{ background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})` }}
+                  >
                     {memory.category}
                   </span>
                 )}
