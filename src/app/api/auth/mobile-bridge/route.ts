@@ -17,16 +17,20 @@ const PLAIN_COOKIE = "next-auth.session-token";
 // use that instead of anything derived from the incoming request.
 const SITE_URL = process.env.NEXTAUTH_URL || "https://strivo.ai";
 
-// The Android app's Google sign-in has to run in the system browser (Google
-// blocks its own sign-in screen inside embedded WebViews). This route is
-// where that system-browser flow lands right after NextAuth finishes OAuth
-// there — callbackUrl on the /login page points here. At this point the
-// system browser already has a valid NextAuth session cookie; we can't hand
-// that cookie to the app's WebView directly (separate cookie jars), so we
-// mint a short-lived one-time token carrying the cookie value and bounce
-// out to the app via a custom-scheme deep link. The app (MainActivity)
-// catches that link and loads /api/auth/mobile-consume, which sets the same
-// cookie value inside its own WebView.
+// The app's Google AND Apple sign-in both have to run in the system browser
+// (Google blocks its own sign-in screen inside embedded WebViews; Apple's
+// form_post callback plus this app's cookie setup is likewise unreliable
+// inside one). This route is where that system-browser flow lands right
+// after NextAuth finishes OAuth there — callbackUrl on /mobile-google-start
+// and /mobile-apple-start both point here, and this route doesn't need to
+// care which provider was used. At this point the system browser already
+// has a valid NextAuth session cookie; we can't hand that cookie to the
+// app's WebView directly (separate cookie jars), so we mint a short-lived
+// one-time token carrying the cookie value and bounce out to the app via a
+// custom-scheme deep link. On Android, MainActivity catches that link; on
+// iOS, Providers.tsx's appUrlOpen listener does (see SceneDelegate.swift).
+// Either way, it loads /api/auth/mobile-consume, which sets the same cookie
+// value inside the app's own WebView.
 export async function GET(req: NextRequest) {
   const sessionCookie = req.cookies.get(SECURE_COOKIE)?.value ?? req.cookies.get(PLAIN_COOKIE)?.value;
   if (!sessionCookie) {

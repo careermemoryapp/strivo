@@ -3,7 +3,7 @@ import { SessionProvider, useSession } from "next-auth/react";
 import { ReactNode, useEffect } from "react";
 import { App as CapacitorApp } from "@capacitor/app";
 import * as Sentry from "@sentry/nextjs";
-import { isNativeApp, getNativePlatform, consumeExpectedResume } from "@/lib/nativePlatform";
+import { isNativeApp, getNativePlatform, consumeExpectedResume, markExpectedResume } from "@/lib/nativePlatform";
 import { usePushRegistration } from "@/lib/usePushRegistration";
 import { useAppVersionPing } from "@/lib/useAppVersionPing";
 
@@ -63,6 +63,41 @@ function useReloadOnNativeResume() {
   }, []);
 }
 
+// iOS counterpart to Android's MainActivity.java handleAuthCallbackIntent.
+// Android has its own native deep-link handler already (registered via the
+// auth-callback intent-filter in AndroidManifest.xml), so this listener is
+// deliberately scoped to iOS only -- the two must never both try to handle
+// the same callback. Capacitor's @capacitor/app plugin already wires iOS's
+// SceneDelegate openURLContexts through to this "appUrlOpen" event (see
+// SceneDelegateProxy.shared in ios/App/App/SceneDelegate.swift) with zero
+// native Swift code needed here -- catching it in JS and loading the
+// consume URL is the whole fix. The ai.strivo.app:// scheme itself is
+// registered in ios/App/App/Info.plist's CFBundleURLTypes. See
+// docs/apple-app-store-checklist.md item 0 and /api/auth/mobile-bridge's
+// comment for the full round trip this closes (Sign in with Apple + Google
+// both use it on iOS).
+function useIosAuthCallback() {
+  useEffect(() => {
+    if (getNativePlatform() !== "ios") return;
+    const handle = CapacitorApp.addListener("appUrlOpen", ({ url }: { url: string }) => {
+      let parsed: URL;
+      try {
+        parsed = new URL(url);
+      } catch {
+        return;
+      }
+      if (parsed.protocol !== "ai.strivo.app:" || parsed.hostname !== "auth-callback") return;
+      const token = parsed.searchParams.get("token");
+      if (!token) return;
+      markExpectedResume();
+      window.location.href = `https://strivo.ai/api/auth/mobile-consume?token=${encodeURIComponent(token)}`;
+    });
+    return () => {
+      handle.then((h) => h.remove());
+    };
+  }, []);
+}
+
 // Registers this device for push notifications once someone's actually
 // signed in (registering while logged out would have no user to attach the
 // device token to). Needs to live inside <SessionProvider> to read the
@@ -93,6 +128,7 @@ function PushRegistration() {
 export default function Providers({ children }: { children: ReactNode }) {
   useReloadOnNativeResume();
   useSentryDeviceTags();
+  useIosAuthCallback();
   return (
     <SessionProvider>
       <PushRegistration />

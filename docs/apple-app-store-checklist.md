@@ -83,25 +83,82 @@ every specific claim/citation used above. Results, most important first:
   is enforcement pattern, not guideline text, if it's ever cited to a
   reviewer.
 
-## 0. Sign in with Apple (Guideline 4.8) — REAL GAP, needs code, not just a submission-day check
+## 0. Sign in with Apple (Guideline 4.8) — CODE WRITTEN 2026-09-10, VERIFIED 2026-09-10 (device test still pending)
 
-Strivo is Google-Sign-In-only (see the comment in `lib/auth.ts`: "Strivo
-is Google-sign-in-only — there's no email/password login"). Apple's
-Guideline 4.8 requires that if an app offers a third-party login option
-(Google counts), it must ALSO offer "Sign in with Apple" as an equivalent,
-privacy-friendly option. This is one of the most commonly cited real
-rejection reasons and is NOT something that can be fixed at submission
-time — it needs an actual implementation pass before iOS Phase 6/7:
-- Add an Apple provider alongside the existing Google provider in
-  `lib/auth.ts` (NextAuth supports this natively)
-- Native side needs Sign in with Apple capability enabled in the Apple
-  Developer portal + Xcode capability, plus a native-aware login flow
-  mirroring the existing Google mobile-bridge/mobile-consume pattern
-- This should happen during iOS Phase 3 (iOS-specific reconfig) or as its
-  own phase before Phase 7 submission — do NOT skip it assuming it's a
-  metadata/questionnaire fix, it isn't
-- Android does not require this (4.8 is an Apple-only guideline) — no
-  change needed there
+**Built 2026-09-10** (task #389). All the code is in place:
+- `lib/auth.ts`: added `AppleProvider` alongside the existing `GoogleProvider`.
+  Apple's `clientSecret` isn't a static string like Google's -- it has to be
+  a JWT Strivo signs itself with a private key from the Apple Developer
+  Portal. See `lib/appleClientSecret.ts` (new file) for that signing logic
+  and why it's generated fresh per server process rather than a static
+  value someone has to remember to rotate. `checks: ["none"]` is set on the
+  Apple provider specifically because Apple's `response_mode=form_post`
+  callback (a cross-site POST) strips NextAuth's default state/PKCE cookie
+  before it arrives -- a well-documented NextAuth+Apple interaction, not a
+  Strivo bug; Apple's own code+id_token exchange still verifies the request.
+  Both `signIn` and `jwt` callbacks generalized from `account.provider ===
+  "google"` to `=== "google" || === "apple"`.
+- `src/app/(auth)/login/page.tsx`: added a "Continue with Apple" button and
+  `handleApple()`, mirroring `handleGoogle()` exactly (same system-browser
+  hand-off reasoning applies to Apple's WebView-hostile OAuth flow).
+- `src/app/(auth)/mobile-apple-start/page.tsx` (new): Apple counterpart to
+  `mobile-google-start`.
+- `src/app/api/auth/mobile-bridge/route.ts`: comment updated to reflect it's
+  now provider-agnostic (no code change needed there -- it already just
+  reads whatever NextAuth session cookie exists, regardless of provider).
+- `src/components/Providers.tsx`: added `useIosAuthCallback()`, an iOS-only
+  JS listener on `@capacitor/app`'s `appUrlOpen` event that catches the
+  `ai.strivo.app://auth-callback` deep link and loads
+  `/api/auth/mobile-consume` -- the iOS equivalent of what
+  `MainActivity.java`'s `handleAuthCallbackIntent` already does natively on
+  Android. This closes a real gap that blocked Google sign-in on iOS too
+  (not just Apple), since iOS previously had nothing catching that deep
+  link at all. Scoped strictly to iOS so it never double-handles alongside
+  Android's native code.
+- `ios/App/App/Info.plist`: added `CFBundleURLTypes` registering the
+  `ai.strivo.app://` custom scheme, mirroring the Android manifest's
+  intent-filter.
+- `.env.example`: documented the four required env vars
+  (`APPLE_CLIENT_ID`/`APPLE_TEAM_ID`/`APPLE_KEY_ID`/`APPLE_PRIVATE_KEY`)
+  with exact Apple Developer Portal steps to obtain each one.
+
+**What's still needed before this actually works, in order:**
+1. **Real Apple Developer Portal credentials** -- nothing above works until
+   someone with access does the 4 steps in `.env.example`'s comment
+   (Services ID, App ID capability, Sign in with Apple key + download,
+   Team ID) and sets the resulting env vars on the server.
+2. **Verification run 2026-09-10 -- clean, one real bug found and fixed.**
+   The sandbox's device shell was still wedged (Plan9 mount failures /
+   "Workspace unavailable", unrelated to this code), so `npx tsc --noEmit`
+   and `npx eslint` were run against a full copy of the project staged into
+   the cloud sandbox and built there with `npm install` instead. Both came
+   back clean on every one of the 7 changed TS/TSX files (`tsc --noEmit`
+   against the whole project, zero errors once an unrelated pre-existing
+   gap -- the `xlsx` CDN package being unreachable from the sandbox, nothing
+   to do with this change -- was worked around). Separately, parsing
+   `ios/App/App/Info.plist` as XML (the same check that caught item 7's bug)
+   found one real bug this time too: the new `CFBundleURLTypes` comment
+   contained `--` twice, which is invalid inside an XML comment and would
+   have broken the Xcode build the same way item 7's did. Fixed (reworded
+   to drop both `--`s) and re-verified as well-formed XML. Logic review of
+   `lib/auth.ts`/`lib/appleClientSecret.ts`/the mobile-apple-start +
+   Providers.tsx deep-link flow found nothing else wrong. Still not run:
+   an actual device/TestFlight test (see #3).
+3. **Real end-to-end test not possible yet** -- Apple's OAuth flow (the
+   `checks: ["none"]`/form_post interaction especially) is exactly the kind
+   of thing that benefits from an actual device test, not just a code
+   review. Test via TestFlight (iOS Phase 5) once credentials are set.
+4. **Known cosmetic gap:** Apple only ever sends a person's real name once,
+   on their very first authorization, via a side-channel POST field that
+   next-auth's default Apple profile mapping doesn't surface. Every
+   brand-new Apple sign-up will get the "Strivo User" placeholder name
+   instead of their real name (Google sign-ups don't have this problem).
+   Not a broken sign-in, just a worse first-run name -- flagged in
+   `lib/auth.ts`'s comment, fixable later by reading the raw `user` POST
+   field in a custom callback if it's ever worth the complexity.
+
+Android does not require any of this (4.8 is an Apple-only guideline) — no
+Android-side change was made or needed.
 
 ## 7. Missing iOS permission usage descriptions — FIXED 2026-09-09
 

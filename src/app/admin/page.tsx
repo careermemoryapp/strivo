@@ -1954,7 +1954,18 @@ export default function AdminDashboardPage() {
                               )}
                             </td>
                             <td className="px-4 py-3 text-ink-soft whitespace-nowrap">
-                              {new Date(u.createdAt).toLocaleDateString()}
+                              {/* Explicit Asia/Kolkata rather than the
+                                  viewer's own browser timezone -- this used
+                                  to silently depend on whoever's looking at
+                                  /admin being in IST, which happened to be
+                                  true but wasn't guaranteed, and was one of
+                                  three different "today" definitions this
+                                  dashboard had (see the 2026-09-10 fix
+                                  comment in lib/repo/admin.ts). Now matches
+                                  the New Today stat and the signups chart
+                                  exactly, regardless of the viewer's own
+                                  device timezone. */}
+                              {new Date(u.createdAt).toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata" })}
                             </td>
                             <td className="px-4 py-3">
                               <div className="flex flex-col items-start gap-1">

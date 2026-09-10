@@ -1,8 +1,10 @@
 import type { AuthOptions } from "next-auth";
 import GoogleProvider from "next-auth/providers/google";
+import AppleProvider from "next-auth/providers/apple";
 import crypto from "node:crypto";
 import { getUserByEmail, getUserById, createUser, updateUserProfile, markLoggedOut } from "@/lib/repo/users";
 import { sendWelcomeEmail } from "@/lib/email";
+import { tryGenerateAppleClientSecret } from "@/lib/appleClientSecret";
 import * as Sentry from "@sentry/nextjs";
 
 // True if this token was issued before its owner's most recent Log Out --
@@ -21,9 +23,9 @@ export function isTokenRevoked(userId: string | undefined, loginAt: string | und
   return new Date(loginAt).getTime() <= new Date(dbUser.logged_out_at).getTime();
 }
 
-// Strivo is Google-sign-in-only — there's no email/password login,
-// signup, or password-reset flow (those pages/routes were removed; see
-// commit history if they're ever needed again). Every user record still
+// Strivo is social-sign-in-only (Google + Apple) — there's no email/password
+// login, signup, or password-reset flow (those pages/routes were removed;
+// see commit history if they're ever needed again). Every user record still
 // has a password_hash column for schema-simplicity reasons, but it's only
 // ever filled with a random, never-checked placeholder (below) since
 // nothing reads it back for authentication anymore. It's stored as plain
@@ -31,6 +33,13 @@ export function isTokenRevoked(userId: string | undefined, loginAt: string | und
 // to be used here, but hashing a value nobody ever verifies against was
 // pure overhead — a dependency to maintain and a blocking CPU-bound call
 // on every signup — for no actual security benefit).
+//
+// Apple was added alongside Google (not instead of it) to satisfy Apple App
+// Store Guideline 4.8: any app offering a third-party login like Google must
+// also offer Sign in with Apple. See docs/apple-app-store-checklist.md item
+// 0 for the full rationale and Apple Developer Portal setup steps, and
+// lib/appleClientSecret.ts for why Apple's "clientSecret" here is a
+// self-signed JWT rather than a static string like Google's.
 export const authOptions: AuthOptions = {
   // Stateless JWT sessions have no server-side revocation list -- "logging
   // out" only clears the cookie on that one device, so if a session token
@@ -51,14 +60,37 @@ export const authOptions: AuthOptions = {
       clientId: process.env.GOOGLE_CLIENT_ID ?? "",
       clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
     }),
+    AppleProvider({
+      clientId: process.env.APPLE_CLIENT_ID ?? "",
+      clientSecret: tryGenerateAppleClientSecret(),
+      // Apple's OAuth callback uses response_mode=form_post (a cross-site
+      // POST), which strips NextAuth's default SameSite=Lax state/PKCE
+      // cookie before it ever reaches the callback — a well-documented
+      // NextAuth+Apple interaction, not a Strivo-specific bug. "none" here
+      // disables that one extra CSRF check for the Apple provider only;
+      // Apple's own authorization-code + id_token exchange still verifies
+      // the request is genuine, so this is the standard, low-risk workaround
+      // rather than a real security gap.
+      checks: ["none"],
+    }),
   ],
   callbacks: {
     async signIn({ user, account }) {
-      if (account?.provider === "google") {
+      if (account?.provider === "google" || account?.provider === "apple") {
         const email = user.email;
         if (!email) return false;
         let dbUser = getUserByEmail(email);
         if (!dbUser) {
+          // KNOWN GAP for Apple specifically: Apple only ever sends the
+          // person's real name once, as a one-time "user" JSON field on the
+          // very first authorization -- and it isn't part of the id_token,
+          // so next-auth's default Apple profile mapping doesn't surface it
+          // here as user.name (that field only ever gets populated for
+          // Google). Every brand-new Apple sign-up will fall through to the
+          // "Strivo User" placeholder below rather than their real name.
+          // Not a broken sign-in -- just a worse first-run name than Google
+          // gets -- and fixable later by reading the raw "user" POST field
+          // in a custom Apple callback if it's worth the added complexity.
           const fullName = (user.name ?? "").trim();
           const [firstName, ...rest] = fullName.length ? fullName.split(" ") : ["Strivo", "User"];
           const placeholderHash = crypto.randomBytes(32).toString("hex");
@@ -68,7 +100,7 @@ export const authOptions: AuthOptions = {
             email,
             passwordHash: placeholderHash,
           });
-          console.log(`New user created via Google sign-in: ${email} (id=${dbUser.id}) — sending welcome email.`);
+          console.log(`New user created via ${account.provider} sign-in: ${email} (id=${dbUser.id}) — sending welcome email.`);
           // Fire-and-forget: this is the one moment we know for certain
           // it's a brand-new account (dbUser was just created above, not
           // looked up). Deliberately NOT awaited -- a slow or failed SES
@@ -97,7 +129,7 @@ export const authOptions: AuthOptions = {
       if (account) {
         token.loginAt = new Date().toISOString();
       }
-      if (account?.provider === "google" && user?.email) {
+      if ((account?.provider === "google" || account?.provider === "apple") && user?.email) {
         const dbUser = getUserByEmail(user.email);
         if (dbUser) {
           token.userId = dbUser.id;

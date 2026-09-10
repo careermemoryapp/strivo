@@ -34,6 +34,17 @@ function GoogleIcon() {
   );
 }
 
+function AppleIcon() {
+  // Single-color glyph, matches Apple's own Human Interface Guidelines for
+  // "Sign in with Apple" buttons (black glyph on a light button here, since
+  // this button uses the same "ghost" light-surface style as Google's).
+  return (
+    <svg width="16" height="18" viewBox="0 0 16 18" aria-hidden fill="#000">
+      <path d="M13.15 9.56c-.02-2.1 1.72-3.1 1.8-3.15-.98-1.43-2.5-1.63-3.04-1.65-1.3-.13-2.53.76-3.19.76-.66 0-1.67-.74-2.75-.72-1.4.02-2.72.82-3.44 2.06-1.47 2.55-.38 6.32 1.06 8.38.7 1 1.53 2.13 2.63 2.09 1.05-.04 1.45-.68 2.72-.68 1.27 0 1.63.68 2.75.66 1.14-.02 1.86-1.03 2.55-2.04.8-1.17 1.13-2.3 1.15-2.36-.02-.01-2.2-.85-2.24-3.35zM11.1 3.3c.58-.7.97-1.68.86-2.65-.83.03-1.85.55-2.45 1.24-.53.61-1.01 1.6-.88 2.54.92.07 1.87-.47 2.47-1.13z" />
+    </svg>
+  );
+}
+
 function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -94,6 +105,38 @@ function LoginForm() {
     }
   }
 
+  // Mirrors handleGoogle above exactly -- same system-browser hand-off
+  // reasoning applies to Apple's form_post OAuth callback inside an
+  // embedded WebView, and reuses the same mobile-bridge/mobile-consume deep
+  // link (provider-agnostic on that end already). See
+  // docs/apple-app-store-checklist.md item 0 for why this button exists at
+  // all (App Store Guideline 4.8).
+  async function handleApple() {
+    setLoading(true);
+    setError(null);
+
+    if (isNativeApp()) {
+      const bridgeUrl = `${window.location.origin}/mobile-apple-start`;
+      try {
+        markExpectedResume();
+        await Browser.open({ url: bridgeUrl });
+      } catch {
+        setError(
+          "Couldn't open the sign-in page. Make sure you have the latest version of the app installed."
+        );
+      } finally {
+        setLoading(false);
+      }
+      return;
+    }
+
+    const res = await signIn("apple", { callbackUrl });
+    if (res?.error) {
+      setError("Couldn't sign in with Apple. Please try again.");
+      setLoading(false);
+    }
+  }
+
   return (
     <div>
       <div className="mb-8 flex flex-col items-center text-center">
@@ -117,9 +160,20 @@ function LoginForm() {
         Continue with Google
       </Button>
 
+      <Button
+        type="button"
+        variant="ghost"
+        className="mt-3 w-full flex items-center justify-center gap-2"
+        loading={loading}
+        onClick={handleApple}
+      >
+        <AppleIcon />
+        Continue with Apple
+      </Button>
+
       <p className="mt-6 text-center text-xs text-ink-faint">
-        New here? Signing in with Google creates your {APP_NAME} account automatically —
-        no separate sign up needed.
+        New here? Signing in creates your {APP_NAME} account automatically — no separate
+        sign up needed.
       </p>
 
       <p className="mt-3 text-center text-xs text-ink-faint">

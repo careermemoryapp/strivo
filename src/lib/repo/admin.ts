@@ -49,6 +49,46 @@ function isoDaysAgo(days: number): string {
   return d.toISOString();
 }
 
+// India is Strivo's target market -- same IST convention used everywhere
+// else "today" needs to mean a real calendar day, not a rolling 24h window
+// (src/lib/retrieval.ts's IST_OFFSET_MS, src/app/api/product-update-drip
+// /run/route.ts's todayIstMidnightUtc, etc.). Duplicated here rather than
+// imported, same reasoning as those files: it's a tiny fixed constant.
+//
+// 2026-09-10 fix: newUsersToday/ThisWeek/ThisMonth and dailyCounts() below
+// used to use isoDaysAgo() (a rolling window from the exact request
+// instant) and substr(created_at,1,10) (a raw slice of the UTC-stored
+// created_at string) respectively -- two DIFFERENT, un-aligned definitions
+// of "today," and a THIRD one again in admin/page.tsx's Joined column
+// (browser-local time via toLocaleDateString(), which is IST for a founder
+// viewing from India but not guaranteed). Founder noticed the "New Today"
+// stat card, the signups chart's rightmost point, and counting rows in the
+// Users table by Joined date all disagreed -- because they were, genuinely,
+// three different calculations. Signup counts now use IST calendar-day
+// boundaries everywhere (this file and the Joined column); DAU/WAU/MAU
+// below deliberately keep rolling trailing windows (see activeUsersTrend's
+// own comment) since "active in the last 24h" is a defensible, different
+// definition from "signed up on this calendar day."
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+// The UTC instant for "midnight IST, `daysAgo` days before today" --
+// daysAgo=0 is the start of today (IST); daysAgo=6 is the start of the IST
+// day 6 days ago, so "created_at >= istMidnightUtcDaysAgo(6)" is a 7-day,
+// calendar-aligned window that includes today.
+function istMidnightUtcDaysAgo(daysAgo: number): string {
+  const now = new Date();
+  const ist = new Date(now.getTime() + IST_OFFSET_MS);
+  const istMidnightTodayUtcMs = Date.UTC(ist.getUTCFullYear(), ist.getUTCMonth(), ist.getUTCDate()) - IST_OFFSET_MS;
+  return new Date(istMidnightTodayUtcMs - daysAgo * 86400000).toISOString();
+}
+
+// IST calendar-day key (YYYY-MM-DD) for a UTC ISO timestamp -- e.g. a
+// signup at 2026-09-09T19:00:00Z (00:30 IST on the 10th) correctly buckets
+// under "2026-09-10", not "2026-09-09" like a raw UTC substr would.
+function istDateKey(isoUtc: string): string {
+  return new Date(new Date(isoUtc).getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
 function count(sql: string, ...params: (string | number)[]): number {
   const db = getDb();
   return (db.prepare(sql).get(...params) as { c: number }).c;
@@ -74,15 +114,28 @@ function activeUsersSince(iso: string): number {
 // Day-by-day row counts for the last `days` days (including today),
 // oldest first, with gaps filled in as 0 — table name is only ever passed
 // as a fixed literal from computeAdminMetrics below, never user input.
+//
+// Buckets by IST calendar day (see istDateKey/IST_OFFSET_MS comment above),
+// not a raw substr() of the UTC-stored created_at string -- that used to
+// silently misfile any signup between IST 00:00-05:29 (UTC 18:30-23:59 the
+// previous day) into "yesterday" forever, and made "today"'s bar a partial
+// UTC-day count instead of a real IST calendar day. Pulling raw rows and
+// bucketing in JS (rather than a SQL GROUP BY on a computed column) is the
+// same tradeoff activeUsersTrend below already makes -- cheap at this data
+// scale, and simpler than teaching SQLite an IST-aware date expression.
 function dailyCounts(table: "users" | "memories", days = 30): { date: string; count: number }[] {
   const db = getDb();
   const rows = db
-    .prepare(`SELECT substr(created_at,1,10) as d, COUNT(*) as c FROM ${table} WHERE created_at >= ? GROUP BY d`)
-    .all(isoDaysAgo(days - 1)) as { d: string; c: number }[];
-  const byDate = new Map(rows.map((r) => [r.d, r.c]));
+    .prepare(`SELECT created_at FROM ${table} WHERE created_at >= ?`)
+    .all(istMidnightUtcDaysAgo(days - 1)) as { created_at: string }[];
+  const byDate = new Map<string, number>();
+  for (const r of rows) {
+    const key = istDateKey(r.created_at);
+    byDate.set(key, (byDate.get(key) ?? 0) + 1);
+  }
   const out: { date: string; count: number }[] = [];
   for (let i = days - 1; i >= 0; i--) {
-    const key = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10);
+    const key = istDateKey(istMidnightUtcDaysAgo(i));
     out.push({ date: key, count: byDate.get(key) ?? 0 });
   }
   return out;
@@ -140,9 +193,14 @@ export function computeAdminMetrics(): AdminMetrics {
   const db = getDb();
 
   const totalUsers = count(`SELECT COUNT(*) as c FROM users`);
-  const newUsersToday = count(`SELECT COUNT(*) as c FROM users WHERE created_at >= ?`, isoDaysAgo(1));
-  const newUsersThisWeek = count(`SELECT COUNT(*) as c FROM users WHERE created_at >= ?`, isoDaysAgo(7));
-  const newUsersThisMonth = count(`SELECT COUNT(*) as c FROM users WHERE created_at >= ?`, isoDaysAgo(30));
+  // IST calendar-day boundaries (see the 2026-09-10 fix comment above
+  // istMidnightUtcDaysAgo) -- "today" is a real IST calendar day, "this
+  // week"/"this month" are 7/30-day windows aligned to that same boundary
+  // (ending today, inclusive) rather than rolling from the exact request
+  // instant. Matches the signups chart and the Users table's Joined column.
+  const newUsersToday = count(`SELECT COUNT(*) as c FROM users WHERE created_at >= ?`, istMidnightUtcDaysAgo(0));
+  const newUsersThisWeek = count(`SELECT COUNT(*) as c FROM users WHERE created_at >= ?`, istMidnightUtcDaysAgo(6));
+  const newUsersThisMonth = count(`SELECT COUNT(*) as c FROM users WHERE created_at >= ?`, istMidnightUtcDaysAgo(29));
 
   const users = db.prepare(`SELECT subscription_status, trial_ends_at FROM users`).all() as Pick<
     User,

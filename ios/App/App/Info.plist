@@ -35,6 +35,24 @@
 	     item 7 / task #390. -->
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Strivo uses your microphone to record voice memories you choose to save.</string>
+	<!-- Registers the ai.strivo.app:// custom URL scheme so iOS routes
+	     ai.strivo.app://auth-callback?token=... (the deep link Sign in with
+	     Apple/Google's system-browser hand-off ends with, see
+	     /api/auth/mobile-bridge and Providers.tsx's useIosAuthCallback)
+	     back into this app instead of Safari having nowhere to send it.
+	     Mirrors the <data android:scheme="ai.strivo.app"
+	     android:host="auth-callback" /> intent-filter in
+	     AndroidManifest.xml, same deep link, both platforms. See
+	     docs/apple-app-store-checklist.md item 0. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ai.strivo.app</string>
+			</array>
+		</dict>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
