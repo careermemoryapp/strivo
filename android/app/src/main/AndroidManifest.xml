@@ -101,6 +101,22 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Singular MMP SDK (src/lib/singular.ts): needed for install/session
+         attribution. Singular's Cordova plugin normally injects these two
+         via config.xml's <edit-config>, but that mechanism is Cordova-only
+         and Capacitor's `cap sync` doesn't run it, so they're declared here
+         by hand instead. ACCESS_NETWORK_STATE lets the SDK check connectivity
+         before sending attribution events; AD_ID is required on Android 13+
+         to read the advertising ID Singular uses for attribution matching
+         (Strivo is not a kids' app, so this is required, not omitted). The
+         third permission the plugin needs, BIND_GET_INSTALL_REFERRER_SERVICE,
+         doesn't go here; it ships inside the Play Install Referrer
+         library's own manifest and merges in automatically once that
+         library is pulled in as a Gradle dependency (via `npx cap sync`
+         after installing singular_cordova_sdk). -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
+
     <!-- Android 13+ requires this permission to be declared (and granted
          at runtime — see usePushRegistration.ts) before any notification,
          including FCM push, can be shown in the notification bar. -->

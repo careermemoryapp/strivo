@@ -6,6 +6,7 @@ import * as Sentry from "@sentry/nextjs";
 import { isNativeApp, getNativePlatform, consumeExpectedResume, markExpectedResume } from "@/lib/nativePlatform";
 import { usePushRegistration } from "@/lib/usePushRegistration";
 import { useAppVersionPing } from "@/lib/useAppVersionPing";
+import { initSingular } from "@/lib/singular";
 
 // Tags every client-side error Sentry captures (instrumentation-client.ts)
 // with which platform and native app build it came from, so the admin
@@ -30,6 +31,18 @@ function useSentryDeviceTags() {
           // untagged for app_version, same as before this existed.
         });
     }
+  }, []);
+}
+
+// Fires Singular's session-start on every native launch (see
+// src/lib/singular.ts for why this must run every launch, not just once).
+// Deliberately unconditional like useSentryDeviceTags above, not gated on
+// being signed in -- X Ads' "App installs" objective needs Singular to see
+// installs/opens from people who haven't signed up yet, since that's the
+// whole funnel step the ad is trying to measure.
+function useSingularInit() {
+  useEffect(() => {
+    initSingular();
   }, []);
 }
 
@@ -129,6 +142,7 @@ export default function Providers({ children }: { children: ReactNode }) {
   useReloadOnNativeResume();
   useSentryDeviceTags();
   useIosAuthCallback();
+  useSingularInit();
   return (
     <SessionProvider>
       <PushRegistration />
