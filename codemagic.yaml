@@ -59,8 +59,17 @@ workflows:
           # generates them (via the App Store Connect API key) the first
           # time this runs; later runs will just reuse what already exists.
           keychain initialize
+          # --certificate-type DISTRIBUTION explicitly requests the modern
+          # unified "Apple Distribution" certificate type. Without it, this
+          # was silently failing to create anything on a brand-new Apple
+          # Developer account (no certificate ever appeared, and the log
+          # only showed a vague "cannot save ... without certificate
+          # private key" -- newer accounts can no longer be issued the
+          # legacy iOS-only distribution certificate type this command
+          # otherwise defaults toward).
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
+            --certificate-type DISTRIBUTION \
             --create
           keychain add-certificates
           xcode-project use-profiles
