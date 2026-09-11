@@ -34,6 +34,21 @@ workflows:
       xcode: latest
       cocoapods: default
       node: latest
+    # Every build runs on a brand-new, disposable machine -- nothing written
+    # outside these paths survives between builds. The signing step below
+    # generates a private key into $CM_CACHE_DIR/strivo-signing the first
+    # time it ever runs and then reuses that exact file on every later
+    # build, instead of generating a new one each time. That matters
+    # because Apple only lets you download a certificate's private key
+    # once, at creation -- a certificate created with build N's key can
+    # never be signed with by build N+1's differently-generated key. This
+    # is exactly what broke the second real build: it generated a fresh
+    # key, but the certificate already sitting on the Apple account was
+    # tied to the first build's (already-discarded) key, so nothing matched
+    # and code signing silently had nothing to use.
+    cache:
+      cache_paths:
+        - $CM_CACHE_DIR/strivo-signing
     # Names the App Store Connect integration this workflow will use for
     # signing and publishing. "strivo_appstore" doesn't need to exist yet --
     # it's just a label. Once Apple Developer enrollment (Phase 1) is done,
@@ -67,17 +82,21 @@ workflows:
           # time this runs; later runs will just reuse what already exists.
           keychain initialize
           # `--create` needs a private key to build the certificate signing
-          # request it submits to Apple -- without one supplied explicitly,
-          # this was failing to save anything (log only showed a vague
-          # "cannot save ... without certificate private key", and no
-          # certificate ever appeared in the Apple Developer Portal).
-          # Generating one ourselves and passing it via --certificate-key
-          # fixes that: the tool then has what it needs to create AND save
-          # a real certificate the first time this runs.
-          openssl genrsa -out /tmp/certificate_key.pem 2048
+          # request it submits to Apple. It has to be the SAME key on every
+          # build from here on (see the `cache:` comment above for why) --
+          # only generate one if this cache doesn't already have one from a
+          # previous build.
+          mkdir -p "$CM_CACHE_DIR/strivo-signing"
+          CERT_KEY="$CM_CACHE_DIR/strivo-signing/certificate_key.pem"
+          if [ ! -f "$CERT_KEY" ]; then
+            echo "No cached signing key yet -- generating one."
+            openssl genrsa -out "$CERT_KEY" 2048
+          else
+            echo "Reusing cached signing key from a previous build."
+          fi
           app-store-connect fetch-signing-files "$BUNDLE_ID" \
             --type IOS_APP_STORE \
-            --certificate-key @file:/tmp/certificate_key.pem \
+            --certificate-key @file:"$CERT_KEY" \
             --create
           keychain add-certificates
           xcode-project use-profiles
