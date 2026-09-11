@@ -1,9 +1,10 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { signIn } from "next-auth/react";
 import { useSearchParams } from "next/navigation";
 import { Browser } from "@capacitor/browser";
+import { App as CapacitorApp } from "@capacitor/app";
 import Link from "next/link";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -55,6 +56,29 @@ function LoginForm() {
   // so isNativeApp() is false here and the normal in-page NextAuth flow
   // (already proven to work in a real browser) just runs as-is.
   const callbackUrl = searchParams.get("callbackUrl") || "/home";
+
+  // handleGoogle/handleApple below set `loading` true right before handing
+  // off to the system browser, and only reset it in a `finally` that runs
+  // once Browser.open() itself resolves (i.e., once the browser has been
+  // presented) -- not once the user is done with it. If someone backs out
+  // of that sign-in tab instead of completing it, that `finally` already
+  // ran long ago, but nothing else was resetting `loading` on the way back
+  // in, so this page came back with both buttons permanently grey and no
+  // way to retry either provider. The native "resume" event fires every
+  // time the app returns to the foreground -- including from a cancelled
+  // sign-in -- so clearing loading there covers exactly that case. A
+  // successful sign-in instead has mobile-consume redirect this WebView to
+  // /home, which unmounts this page before the reset would even matter, so
+  // doing it unconditionally on every resume is safe either way.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    const handle = CapacitorApp.addListener("resume", () => {
+      setLoading(false);
+    });
+    return () => {
+      handle.then((h) => h.remove());
+    };
+  }, []);
 
   async function handleGoogle() {
     setLoading(true);
