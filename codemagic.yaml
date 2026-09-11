@@ -36,19 +36,25 @@ workflows:
       node: latest
     # Every build runs on a brand-new, disposable machine -- nothing written
     # outside these paths survives between builds. The signing step below
-    # generates a private key into $CM_CACHE_DIR/strivo-signing the first
-    # time it ever runs and then reuses that exact file on every later
-    # build, instead of generating a new one each time. That matters
-    # because Apple only lets you download a certificate's private key
-    # once, at creation -- a certificate created with build N's key can
-    # never be signed with by build N+1's differently-generated key. This
-    # is exactly what broke the second real build: it generated a fresh
-    # key, but the certificate already sitting on the Apple account was
-    # tied to the first build's (already-discarded) key, so nothing matched
-    # and code signing silently had nothing to use.
+    # generates a private key into $HOME/.strivo-signing the first time it
+    # ever runs and then reuses that exact file on every later build,
+    # instead of generating a new one each time. That matters because
+    # Apple only lets you download a certificate's private key once, at
+    # creation -- a certificate created with build N's key can never be
+    # signed with by build N+1's differently-generated key. This is
+    # exactly what broke the second real build: it generated a fresh key,
+    # but the certificate already sitting on the Apple account was tied to
+    # the first build's (already-discarded) key, so nothing matched and
+    # code signing silently had nothing to use.
+    #
+    # (First attempt at this used "$CM_CACHE_DIR/strivo-signing" -- that
+    # env var doesn't actually exist in Codemagic, so it expanded to
+    # nothing and the path collapsed to "/strivo-signing", a root-level
+    # path macOS refuses to create ("Read-only file system"). $HOME is a
+    # real, always-set, writable path, so this doesn't repeat that.)
     cache:
       cache_paths:
-        - $CM_CACHE_DIR/strivo-signing
+        - $HOME/.strivo-signing
     # Names the App Store Connect integration this workflow will use for
     # signing and publishing. "strivo_appstore" doesn't need to exist yet --
     # it's just a label. Once Apple Developer enrollment (Phase 1) is done,
@@ -86,8 +92,8 @@ workflows:
           # build from here on (see the `cache:` comment above for why) --
           # only generate one if this cache doesn't already have one from a
           # previous build.
-          mkdir -p "$CM_CACHE_DIR/strivo-signing"
-          CERT_KEY="$CM_CACHE_DIR/strivo-signing/certificate_key.pem"
+          mkdir -p "$HOME/.strivo-signing"
+          CERT_KEY="$HOME/.strivo-signing/certificate_key.pem"
           if [ ! -f "$CERT_KEY" ]; then
             echo "No cached signing key yet -- generating one."
             openssl genrsa -out "$CERT_KEY" 2048

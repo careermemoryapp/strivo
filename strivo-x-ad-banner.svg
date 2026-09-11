@@ -1,0 +1,52 @@
+<svg viewBox="0 0 1200 628" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Strivo — land your dream job</title>
+<desc>Landscape promotional banner for Strivo sized for X's app-install ad card, with a headline and four short benefits.</desc>
+<defs>
+  <radialGradient id="glow" cx="80%" cy="10%" r="80%">
+    <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.32"/>
+    <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#a78bfa"/>
+    <stop offset="100%" stop-color="#7c3aed"/>
+  </linearGradient>
+</defs>
+
+<rect width="1200" height="628" fill="#0a0a0f"/>
+<rect width="1200" height="628" fill="url(#glow)"/>
+<rect y="0" width="1200" height="5" fill="#7c3aed"/>
+
+<!-- logo lockup -->
+<rect x="64" y="56" width="46" height="46" rx="13" fill="url(#iconGrad)"/>
+<path d="M78 84 L88 74 L96 81 L106 68" stroke="#ffffff" stroke-width="4.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="122" y="88" font-family="Helvetica, Arial, sans-serif" font-size="30" font-weight="700" fill="#ffffff">Strivo</text>
+
+<!-- headline -->
+<text x="64" y="262" font-family="Helvetica, Arial, sans-serif" font-size="52" font-weight="800" fill="#ffffff">Never blank on the</text>
+<text x="64" y="326" font-family="Helvetica, Arial, sans-serif" font-size="52" font-weight="800" fill="#ffffff">story that <tspan fill="#a78bfa">gets you</tspan></text>
+<text x="64" y="390" font-family="Helvetica, Arial, sans-serif" font-size="52" font-weight="800" fill="#a78bfa">the job.</text>
+
+<!-- subhead -->
+<text x="64" y="440" font-family="Helvetica, Arial, sans-serif" font-size="23" fill="#9a9aa8">The AI that remembers your career wins for you.</text>
+
+<!-- divider -->
+<line x1="616" y1="90" x2="616" y2="500" stroke="#26232f" stroke-width="1"/>
+
+<!-- benefits -->
+<g font-family="Helvetica, Arial, sans-serif">
+  <circle cx="664" cy="150" r="4" fill="#a78bfa"/>
+  <text x="686" y="158" font-size="25" font-weight="600" fill="#ffffff">Perfect interview answers, instantly</text>
+
+  <circle cx="664" cy="222" r="4" fill="#a78bfa"/>
+  <text x="686" y="230" font-size="25" font-weight="600" fill="#ffffff">Resume bullets that write themselves</text>
+
+  <circle cx="664" cy="294" r="4" fill="#a78bfa"/>
+  <text x="686" y="302" font-size="25" font-weight="600" fill="#ffffff">Real proof for your next promotion</text>
+
+  <circle cx="664" cy="366" r="4" fill="#a78bfa"/>
+  <text x="686" y="374" font-size="25" font-weight="600" fill="#ffffff">Never forget a win again</text>
+</g>
+
+<!-- footer -->
+<text x="64" y="588" font-family="Helvetica, Arial, sans-serif" font-size="22" font-weight="700" fill="#a78bfa">strivo.ai</text>
+</svg>

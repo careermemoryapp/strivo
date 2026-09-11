@@ -1,0 +1,123 @@
+<svg viewBox="0 0 1080 1920" xmlns="http://www.w3.org/2000/svg" role="img">
+<title>Strivo — Your Personal Career AI</title>
+<desc>Vertical promotional banner for Strivo, an AI app that remembers your career wins. Shows the tagline, how it works, where it helps, and a first-100-signups free offer.</desc>
+<defs>
+  <radialGradient id="glow1" cx="50%" cy="0%" r="70%">
+    <stop offset="0%" stop-color="#7c3aed" stop-opacity="0.35"/>
+    <stop offset="100%" stop-color="#7c3aed" stop-opacity="0"/>
+  </radialGradient>
+  <radialGradient id="glow2" cx="20%" cy="60%" r="50%">
+    <stop offset="0%" stop-color="#60a5fa" stop-opacity="0.18"/>
+    <stop offset="100%" stop-color="#60a5fa" stop-opacity="0"/>
+  </radialGradient>
+  <linearGradient id="iconGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#a78bfa"/>
+    <stop offset="100%" stop-color="#7c3aed"/>
+  </linearGradient>
+  <linearGradient id="ctaGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+    <stop offset="0%" stop-color="#7c3aed"/>
+    <stop offset="100%" stop-color="#60a5fa"/>
+  </linearGradient>
+  <linearGradient id="offerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+    <stop offset="0%" stop-color="#a78bfa"/>
+    <stop offset="50%" stop-color="#7c3aed"/>
+    <stop offset="100%" stop-color="#60a5fa"/>
+  </linearGradient>
+</defs>
+
+<!-- background -->
+<rect width="1080" height="1920" fill="#0a0a0f"/>
+<rect width="1080" height="1920" fill="url(#glow1)"/>
+<rect width="1080" height="1920" fill="url(#glow2)"/>
+<rect y="0" width="1080" height="6" fill="#7c3aed"/>
+
+<!-- logo lockup -->
+<rect x="90" y="86" width="66" height="66" rx="18" fill="url(#iconGrad)"/>
+<path d="M110 122 L124 108 L136 118 L150 100" stroke="#ffffff" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="174" y="134" font-family="Helvetica, Arial, sans-serif" font-size="46" font-weight="700" fill="#ffffff">Strivo</text>
+
+<!-- eyebrow -->
+<text x="90" y="222" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="3" fill="#a78bfa">YOUR PERSONAL CAREER AI</text>
+
+<!-- headline -->
+<text x="90" y="302" font-family="Helvetica, Arial, sans-serif" font-size="62" font-weight="800" fill="#ffffff">Never forget</text>
+<text x="90" y="372" font-family="Helvetica, Arial, sans-serif" font-size="62" font-weight="800" fill="#ffffff">the story that</text>
+<text x="90" y="442" font-family="Helvetica, Arial, sans-serif" font-size="62" font-weight="800" fill="#ffffff">gets you <tspan fill="#a78bfa">the offer.</tspan></text>
+
+<!-- subhead -->
+<text x="90" y="500" font-family="Helvetica, Arial, sans-serif" font-size="29" fill="#c7c7d1">Strivo is the AI that remembers your career</text>
+<text x="90" y="538" font-family="Helvetica, Arial, sans-serif" font-size="29" fill="#c7c7d1">wins — so you never blank when it matters.</text>
+
+<!-- divider -->
+<rect x="90" y="592" width="900" height="1" fill="#26232f"/>
+
+<!-- HOW IT WORKS -->
+<text x="90" y="652" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="2" fill="#a78bfa">HOW IT WORKS</text>
+
+<!-- step 1 -->
+<circle cx="112" cy="718" r="26" fill="#15121f" stroke="#7c3aed" stroke-width="2"/>
+<text x="112" y="727" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#ffffff" text-anchor="middle">1</text>
+<text x="160" y="712" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="600" fill="#ffffff">Speak or type it</text>
+<text x="160" y="746" font-family="Helvetica, Arial, sans-serif" font-size="24" fill="#9a9aa8">whenever something worth remembering happens</text>
+
+<!-- step 2 -->
+<circle cx="112" cy="810" r="26" fill="#15121f" stroke="#7c3aed" stroke-width="2"/>
+<text x="112" y="819" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#ffffff" text-anchor="middle">2</text>
+<text x="160" y="804" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="600" fill="#ffffff">Strivo saves &amp; organizes it</text>
+<text x="160" y="838" font-family="Helvetica, Arial, sans-serif" font-size="24" fill="#9a9aa8">transcribed, tagged, and structured automatically</text>
+
+<!-- step 3 -->
+<circle cx="112" cy="902" r="26" fill="#15121f" stroke="#7c3aed" stroke-width="2"/>
+<text x="112" y="911" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" fill="#ffffff" text-anchor="middle">3</text>
+<text x="160" y="896" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="600" fill="#ffffff">Get it back, instantly</text>
+<text x="160" y="930" font-family="Helvetica, Arial, sans-serif" font-size="24" fill="#9a9aa8">the exact right story, ready to use, the moment you need it</text>
+
+<!-- divider -->
+<rect x="90" y="986" width="900" height="1" fill="#26232f"/>
+
+<!-- WHERE IT HELPS -->
+<text x="90" y="1046" font-family="Helvetica, Arial, sans-serif" font-size="24" font-weight="700" letter-spacing="2" fill="#a78bfa">WHERE IT HELPS</text>
+
+<!-- 2x2 card grid -->
+<!-- card: Interviews -->
+<rect x="90" y="1082" width="430" height="140" rx="14" fill="#15121f"/>
+<path d="M118 1128 h34 v24 h-34 z M126 1120 v8 M138 1120 v8" stroke="#a78bfa" stroke-width="3" fill="none" stroke-linecap="round"/>
+<text x="164" y="1140" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#ffffff">Interviews</text>
+<text x="164" y="1172" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#9a9aa8">The perfect STAR</text>
+<text x="164" y="1196" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#9a9aa8">story, no blanking</text>
+
+<!-- card: Performance reviews -->
+<rect x="560" y="1082" width="430" height="140" rx="14" fill="#15121f"/>
+<path d="M588 1150 l12 -26 l12 18 l12 -34 l12 20" stroke="#a78bfa" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="634" y="1140" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#ffffff">Reviews</text>
+<text x="634" y="1172" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#9a9aa8">Months of real wins</text>
+<text x="634" y="1196" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#9a9aa8">in seconds</text>
+
+<!-- card: Resume -->
+<rect x="90" y="1240" width="430" height="140" rx="14" fill="#15121f"/>
+<rect x="118" y="1276" width="30" height="38" rx="3" fill="none" stroke="#a78bfa" stroke-width="3"/>
+<line x1="124" y1="1286" x2="142" y2="1286" stroke="#a78bfa" stroke-width="2.5"/>
+<line x1="124" y1="1294" x2="142" y2="1294" stroke="#a78bfa" stroke-width="2.5"/>
+<line x1="124" y1="1302" x2="136" y2="1302" stroke="#a78bfa" stroke-width="2.5"/>
+<text x="164" y="1298" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#ffffff">Resume</text>
+<text x="164" y="1330" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#9a9aa8">Real memories into</text>
+<text x="164" y="1354" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#9a9aa8">ready bullet points</text>
+
+<!-- card: Promotion -->
+<rect x="560" y="1240" width="430" height="140" rx="14" fill="#15121f"/>
+<path d="M588 1316 l14 -34 l14 34 M595 1308 h14" stroke="#a78bfa" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="634" y="1298" font-family="Helvetica, Arial, sans-serif" font-size="27" font-weight="700" fill="#ffffff">Promotion</text>
+<text x="634" y="1330" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#9a9aa8">Back your case with</text>
+<text x="634" y="1354" font-family="Helvetica, Arial, sans-serif" font-size="20" fill="#9a9aa8">concrete, dated proof</text>
+
+<!-- offer banner -->
+<rect x="90" y="1420" width="900" height="180" rx="20" fill="url(#offerGrad)"/>
+<text x="540" y="1494" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="800" fill="#ffffff" text-anchor="middle">First 100 sign-ups</text>
+<text x="540" y="1540" font-family="Helvetica, Arial, sans-serif" font-size="38" font-weight="800" fill="#ffffff" text-anchor="middle">get 1 year free</text>
+<text x="540" y="1576" font-family="Helvetica, Arial, sans-serif" font-size="21" fill="#f0e9ff" text-anchor="middle">no card needed</text>
+
+<!-- bottom CTA bar -->
+<rect x="0" y="1780" width="1080" height="140" fill="url(#ctaGrad)"/>
+<text x="540" y="1838" font-family="Helvetica, Arial, sans-serif" font-size="34" font-weight="800" fill="#ffffff" text-anchor="middle">Download Strivo free</text>
+<text x="540" y="1876" font-family="Helvetica, Arial, sans-serif" font-size="26" font-weight="600" fill="#f0e9ff" text-anchor="middle">strivo.ai</text>
+</svg>
