@@ -6,3 +6,4 @@ Tracks which milestone reel has been sent, so the daily scheduled task
 ## Day 1 — The problem (why Strivo needed to exist) (sent 2026-09-08)
 ## Day 2 — Not a coder, built it anyway (sent 2026-09-09)
 ## Day 3 — Day one (sent 2026-09-10)
+## Day 4 — The core loop (sent 2026-09-11)

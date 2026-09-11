@@ -17,7 +17,12 @@ workflows:
         - appstore_credentials
       vars:
         BUNDLE_ID: "ai.strivo.app"
-        XCODE_WORKSPACE: "ios/App/App.xcworkspace"
+        # This project uses Capacitor's Swift Package Manager integration
+        # (see ios/App/CapApp-SPM), not CocoaPods -- there is no Podfile and
+        # no .xcworkspace, only App.xcodeproj. Build against the project
+        # directly; do NOT reintroduce a --workspace flag or a `pod install`
+        # step below unless a Podfile is actually added to the repo.
+        XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
       xcode: latest
       cocoapods: default
@@ -45,16 +50,13 @@ workflows:
       # committed ios/ project, not run `next build`.
       - name: Sync Capacitor iOS project
         script: npx cap sync ios
-      - name: Install CocoaPods dependencies
-        script: |
-          cd ios/App && pod install
       - name: Set up code signing (automatic, via App Store Connect API key)
         script: |
           xcode-project use-profiles
       - name: Build .ipa
         script: |
           xcode-project build-ipa \
-            --workspace "$XCODE_WORKSPACE" \
+            --project "$XCODE_PROJECT" \
             --scheme "$XCODE_SCHEME"
     artifacts:
       - build/ios/ipa/*.ipa
