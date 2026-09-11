@@ -24,6 +24,13 @@ workflows:
         # step below unless a Podfile is actually added to the repo.
         XCODE_PROJECT: "ios/App/App.xcodeproj"
         XCODE_SCHEME: "App"
+        # Numeric Apple ID for the Strivo AI app record in App Store
+        # Connect (visible in its URL, e.g.
+        # appstoreconnect.apple.com/.../apps/6810935174/...) -- NOT the
+        # same thing as BUNDLE_ID above. Needed by the "Increment build
+        # number" step below to look up the last build number actually
+        # accepted by TestFlight.
+        APP_STORE_APP_ID: "6810935174"
       xcode: latest
       cocoapods: default
       node: latest
@@ -74,6 +81,22 @@ workflows:
             --create
           keychain add-certificates
           xcode-project use-profiles
+      - name: Increment build number
+        script: |
+          # Apple rejects re-uploading a build number that's already been
+          # used for this version, even if the .ipa contents changed --
+          # the first successful build shipped as build 1, so a second
+          # push with the project still pinned at build 1 fails publishing
+          # with "The provided entity includes an attribute with a value
+          # that has already been used." Looking up the actual last-used
+          # number from TestFlight (rather than hardcoding one here) means
+          # this keeps working correctly even after a manual build number
+          # change, or a build from another machine.
+          BUILD_NUMBER=$(app-store-connect get-latest-testflight-build-number "$APP_STORE_APP_ID")
+          BUILD_NUMBER=$((BUILD_NUMBER + 1))
+          echo "Setting build number to $BUILD_NUMBER"
+          cd ios/App
+          agvtool new-version -all $BUILD_NUMBER
       - name: Build .ipa
         script: |
           xcode-project build-ipa \
