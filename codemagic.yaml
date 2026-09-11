@@ -52,6 +52,17 @@ workflows:
         script: npx cap sync ios
       - name: Set up code signing (automatic, via App Store Connect API key)
         script: |
+          # This is a brand-new Apple Developer enrollment -- there is no
+          # Distribution certificate or App Store provisioning profile for
+          # ai.strivo.app anywhere yet, so `xcode-project use-profiles`
+          # alone has nothing to find. `fetch-signing-files --create`
+          # generates them (via the App Store Connect API key) the first
+          # time this runs; later runs will just reuse what already exists.
+          keychain initialize
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+          keychain add-certificates
           xcode-project use-profiles
       - name: Build .ipa
         script: |
