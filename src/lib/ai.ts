@@ -563,9 +563,10 @@ export async function translateToEnglish(text: string): Promise<string> {
 // own small badge in the UI instead of being baked into the title text.
 // Returns null on any failure so the caller just keeps the template title
 // rather than erroring the message send over a cosmetic feature.
-export async function generateChatTitle(firstMessage: string): Promise<string | null> {
+export async function generateChatTitle(userMessage: string, aiReply?: string | null): Promise<string | null> {
   const openai = getClient();
   if (!openai) return null;
+  const contextText = aiReply ? `User: ${userMessage}\nAssistant: ${aiReply}` : userMessage;
   try {
     const completion = await openai.chat.completions.create({
       model: CHAT_MODEL,
@@ -578,7 +579,7 @@ export async function generateChatTitle(firstMessage: string): Promise<string | 
             "Be specific to the real content -- never output a generic label like 'General Chat', 'New Chat', or 'Interview Preparation'. " +
             "No quotes, no trailing punctuation. Respond with ONLY the title, nothing else.",
         },
-        { role: "user", content: firstMessage },
+        { role: "user", content: contextText },
       ],
     });
     const raw = completion.choices[0]?.message?.content?.trim();

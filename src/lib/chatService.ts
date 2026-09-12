@@ -137,5 +137,13 @@ export async function sendUserMessageAndGetReply(
     status: "sent",
   });
 
+  if (isFirstMessage) {
+    generateChatTitle(content, result.reply)
+      .then((refinedTitle) => {
+        if (refinedTitle) touchChat(userId, chatId, { title: refinedTitle });
+      })
+      .catch(() => {});
+  }
+
   return { userMessage, aiMessage, retrieval };
 }
