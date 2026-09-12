@@ -6,68 +6,43 @@ import { ComponentType } from "react";
 
 type IconDef = {
   icon: ComponentType<{ size?: number; className?: string }>;
-  bg: string;
-  text: string;
+  bg?: string;
+  text?: string;
   // Tailwind gradient "from-*" stop matching `bg`, used for richer hero
   // headers (e.g. memory detail page). Written out explicitly (not derived
   // from `bg` at runtime) so Tailwind's static scanner can see the literal
   // class name and generate the CSS for it.
   from?: string;
-  // "Gradient Glow" card treatment (Chats/Memories list cards): a two-stop
-  // gradient for the circular icon badge, a matching colored box-shadow
-  // glow beneath it, and a soft radial wash tinting the card's corner.
-  // Plain hex/rgba (not Tailwind classes) -- these are assembled into
-  // per-category combinations at runtime, which Tailwind's static class
-  // scanner can't see, so inline styles are used instead. `wash` is
-  // omitted for the neutral/slate categories, matching the muted
-  // treatment used for "general" content in the design. Optional because
-  // ACTION_ICON_DEFS (Home screen grid, below) doesn't use this treatment.
+  // Kept only for ACTION_ICON_DEFS (Home screen grid, below), which still
+  // has its own per-action bg/text pair. Memory/chat categories used to
+  // carry a per-category gradient/glow/wash here too (a different hue per
+  // category -- blue, emerald, amber, teal, indigo, orange, pink...), but
+  // that rainbow was the actual source of the "colors don't feel aligned"
+  // problem: every screen that lists memories or chats looked like a
+  // scrapbook of unrelated accent colors. MemoryCard/ChatCard now render a
+  // single brand-primary treatment for every category (see those files) and
+  // rely on `icon` alone to keep categories visually distinct -- so this
+  // field only needs to exist for the unrelated Home quick-action grid.
   gradient?: [string, string];
   glow?: string;
   wash?: string;
 };
 
-// Memory categories. Each maps to a distinct icon + soft color pair so the
-// Memories list is scannable at a glance, matching the product's visual
-// design. Add a new category here (and to CATEGORY_OPTIONS in lib/ai.ts) to
-// extend the taxonomy.
+// Memory categories. Each maps to a distinct icon so the Memories list is
+// scannable at a glance -- all categories share one brand-primary color
+// treatment now (rendered in MemoryCard.tsx), not a different hue per
+// category. Add a new category here (and to CATEGORY_OPTIONS in lib/ai.ts)
+// to extend the taxonomy.
 export const MEMORY_CATEGORIES: Record<string, IconDef> = {
-  Work: {
-    icon: Briefcase, bg: "bg-blue-50", text: "text-blue-500", from: "from-blue-100",
-    gradient: ["#60a5fa", "#3b82f6"], glow: "rgba(59,130,246,0.4)", wash: "rgba(59,130,246,0.12)",
-  },
-  Meeting: {
-    icon: Users, bg: "bg-emerald-50", text: "text-emerald-500", from: "from-emerald-100",
-    gradient: ["#6ee7b7", "#10b981"], glow: "rgba(16,185,129,0.4)", wash: "rgba(16,185,129,0.12)",
-  },
-  Career: {
-    icon: Award, bg: "bg-purple-50", text: "text-purple-500", from: "from-purple-100",
-    gradient: ["#c4b5fd", "#a78bfa"], glow: "rgba(167,139,250,0.45)", wash: "rgba(167,139,250,0.14)",
-  },
-  Idea: {
-    icon: Lightbulb, bg: "bg-amber-50", text: "text-amber-500", from: "from-amber-100",
-    gradient: ["#fbbf24", "#f59e0b"], glow: "rgba(245,158,11,0.4)", wash: "rgba(245,158,11,0.14)",
-  },
-  Review: {
-    icon: TrendingUp, bg: "bg-teal-50", text: "text-teal-500", from: "from-teal-100",
-    gradient: ["#5eead4", "#14b8a6"], glow: "rgba(20,184,166,0.4)", wash: "rgba(20,184,166,0.12)",
-  },
-  Learning: {
-    icon: GraduationCap, bg: "bg-violet-50", text: "text-violet-500", from: "from-violet-100",
-    gradient: ["#818cf8", "#6366f1"], glow: "rgba(99,102,241,0.4)", wash: "rgba(99,102,241,0.12)",
-  },
-  Achievement: {
-    icon: Trophy, bg: "bg-orange-50", text: "text-orange-500", from: "from-orange-100",
-    gradient: ["#fdba74", "#f97316"], glow: "rgba(249,115,22,0.4)", wash: "rgba(249,115,22,0.14)",
-  },
-  Personal: {
-    icon: Heart, bg: "bg-pink-50", text: "text-pink-500", from: "from-pink-100",
-    gradient: ["#f9a8d4", "#ec4899"], glow: "rgba(236,72,153,0.4)", wash: "rgba(236,72,153,0.13)",
-  },
-  General: {
-    icon: FileText, bg: "bg-slate-100", text: "text-slate-500", from: "from-slate-200",
-    gradient: ["#cbd5e1", "#94a3b8"], glow: "rgba(100,116,139,0.3)",
-  },
+  Work: { icon: Briefcase },
+  Meeting: { icon: Users },
+  Career: { icon: Award },
+  Idea: { icon: Lightbulb },
+  Review: { icon: TrendingUp },
+  Learning: { icon: GraduationCap },
+  Achievement: { icon: Trophy },
+  Personal: { icon: Heart },
+  General: { icon: FileText },
 };
 
 export function memoryCategoryDef(category?: string | null): IconDef {
@@ -83,26 +58,11 @@ export function memoryCategoryIcon(category?: string | null) {
 // dots read as an empty/placeholder icon at the size the Chats list renders
 // it, not as a meaningful "general conversation" symbol.
 export const CHAT_CATEGORIES_DEF: Record<string, IconDef> = {
-  Interview: {
-    icon: Target, bg: "bg-indigo-50", text: "text-indigo-500",
-    gradient: ["#818cf8", "#6366f1"], glow: "rgba(99,102,241,0.4)", wash: "rgba(99,102,241,0.12)",
-  },
-  Resume: {
-    icon: FileText, bg: "bg-blue-50", text: "text-blue-500",
-    gradient: ["#60a5fa", "#3b82f6"], glow: "rgba(59,130,246,0.4)", wash: "rgba(59,130,246,0.12)",
-  },
-  Leadership: {
-    icon: Users, bg: "bg-violet-50", text: "text-violet-500",
-    gradient: ["#c4b5fd", "#a78bfa"], glow: "rgba(167,139,250,0.45)", wash: "rgba(167,139,250,0.14)",
-  },
-  "Performance Review": {
-    icon: Award, bg: "bg-amber-50", text: "text-amber-500",
-    gradient: ["#fbbf24", "#f59e0b"], glow: "rgba(245,158,11,0.4)", wash: "rgba(245,158,11,0.14)",
-  },
-  Others: {
-    icon: MessageCircle, bg: "bg-slate-100", text: "text-slate-500",
-    gradient: ["#cbd5e1", "#94a3b8"], glow: "rgba(100,116,139,0.3)",
-  },
+  Interview: { icon: Target },
+  Resume: { icon: FileText },
+  Leadership: { icon: Users },
+  "Performance Review": { icon: Award },
+  Others: { icon: MessageCircle },
 };
 
 export function chatCategoryDef(category?: string | null): IconDef {
