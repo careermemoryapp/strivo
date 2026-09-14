@@ -188,7 +188,8 @@ export async function generateMemoryMetadata(
             `futureCheckin (object or null): today's date is ${todayIso} (IST). ONLY when the transcript clearly mentions a SPECIFIC upcoming event that hasn't happened yet, with an identifiable timeframe -- an interview, a hard conversation, a performance review, a deadline, a decision, a result coming back. Examples: "I have my performance review next month", "talking to my manager about this on Friday", "we find out the results in two weeks". If so, return { question: string (SAME language as the transcript, short, specific, naming the actual event, phrased as something to ask AFTER it happens -- e.g. "How did the conversation with your manager go?", not "How do you feel about Friday?"), targetDate: string in YYYY-MM-DD format, your best-effort resolution of the relative timeframe against today's date -- e.g. "next Friday" or "in two weeks" becomes an actual calendar date. If only a vague timeframe is given (e.g. "sometime next month"), pick a single reasonable date within it rather than returning null over it. } Return null if there's no clear upcoming event, if the event already happened or is happening today, or if there's truly no timeframe at all to anchor a date to. This is rare -- most memories are about something already done, not something still coming, so null is the right answer far more often than not. Never invent an event that isn't actually mentioned. ` +
             "selfMinimized (boolean) and selfMinimizedReason (string or null): selfMinimized is true ONLY when the transcript describes a genuinely strong accomplishment -- real ownership, real impact, or a real difficulty actually overcome -- using flat, dismissive, or minimizing language about it: 'just', 'nothing much', 'anyone would have done that', 'it wasn't a big deal', or simply reporting something significant in a matter-of-fact tone with zero acknowledgment of its actual weight. This is NARROWER than competencies/praise above: a memory can genuinely have competencies while being described with ordinary pride or plain neutral reporting, which does NOT count here -- reserve true for a real, noticeable gap between what actually happened and how modestly the person framed it. Most memories are false here, including most memories with competencies -- this should fire rarely. When true, selfMinimizedReason is one short (<=20 words) English internal note naming the specific gap (e.g. 'Led a 3-team rollout solo but called it \"just helping out\"') -- never shown to the user directly, only used internally later. When false, selfMinimizedReason MUST be null. " +
             "entities (array, 0-5 items): recurring proper nouns worth remembering from this transcript -- a specific person's name (a manager, teammate, friend, client), a team name, or a recurring project/product name. Only include something genuinely name-like -- a real name or a real proper-noun team/project name -- NOT a generic role or relation with no name attached ('my manager', 'a friend', 'the team' do NOT count on their own; 'Priya', 'the Atlas team', 'Project Falcon' do). Use the transcript's own casing/spelling. Skip entirely (empty array) if nothing in the transcript is a genuine named person/team/project -- this should be empty for a large share of memories. " +
-            "Never invent facts not present in the transcript. Base everything strictly on the transcript text.",
+            "The transcript is machine speech-to-text and can contain an obvious mishearing of a well-known term -- most commonly a modern tech/work phrase autocorrected-by-ear into an ordinary word that happens to sound similar (e.g. 'vibe coding' -- letting an AI write code from a natural-language description -- misheard as 'white coding'). When the surrounding context makes the intended term unambiguous (the transcript is clearly about coding/apps/AI tools) and the mishearing is a well-established named term you're confident about, use the CORRECT term in title/summary/keyPoints/searchText/resumeLine instead of repeating the mistranscription -- don't build a resume line or summary around a garbled word. This is narrow: only fix a clear, confident mishearing of a real known term, never reinterpret or guess at what someone 'really meant' beyond that, and never change a plain word just because a different reading seems more interesting. The transcript text itself is never altered (the user can edit it directly) -- this only affects the metadata you're generating here. " +
+            "Outside of that narrow correction, never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
       ],
@@ -656,8 +657,20 @@ export async function embedText(text: string): Promise<number[] | null> {
 // foreign-script tokens to latch onto, so English-only recordings are no
 // longer nudged off course by the hint meant for a completely different
 // case.
+// "vibe coding" (letting an AI write code from natural-language prompts
+// instead of hand-writing it) is a real, increasingly common term among
+// this app's users, but on a short/unclear clip Whisper has no prior for
+// it and can lock onto the much more common word "white" instead --
+// reported by a real user: said "vibe coding", got back "white coding" in
+// the transcript. Naming it explicitly here (once, plainly, no other
+// vocabulary padding) gives Whisper's decoder the token sequence as
+// context so it's no longer choosing blind between an unfamiliar term and
+// a familiar-sounding one. Keep future additions to this list narrow and
+// evidence-based (an actual reported mishearing), not a speculative
+// jargon dump -- every extra token here is also extra text the
+// prompt-echo guard below (looksLikePromptEcho) has to stay clear of.
 const TRANSCRIBE_PROMPT =
-  "This is a short personal voice memo about work, projects, or career moments. The speaker may talk in English, in Hindi, or naturally mix both languages within the same recording.";
+  "This is a short personal voice memo about work, projects, or career moments. The speaker may talk in English, in Hindi, or naturally mix both languages within the same recording. They may use modern tech terms like 'vibe coding' (using AI to help write code).";
 
 // Whisper treats the `prompt` above purely as a steering hint, but on audio
 // it can't transcribe with confidence (too quiet, background noise, a bad
@@ -704,6 +717,75 @@ function isLikelySilentSegment(segment: { no_speech_prob: number; avg_logprob: n
   return segment.no_speech_prob > 0.6 && segment.avg_logprob < -1;
 }
 
+// Whisper transcribes word-by-word/sound-by-sound with no real understanding
+// of what the sentence as a whole means, so on an unfamiliar or slightly
+// unclear word it can lock onto a common, similar-sounding word instead (the
+// reported case: "vibe coding" heard as "white coding") -- and once that's
+// baked into the transcript text, nothing downstream (including
+// generateMemoryMetadata, which only ever sees this text, never the audio)
+// has any way to know a mistake was even made. This is a second pass over
+// the raw transcript, using the full sentence as context to catch and fix
+// exactly that failure mode -- this is genuinely what gives products like
+// ChatGPT/Claude voice their "it understood me even though I mumbled that
+// bit" feel: it's not that the audio model itself is flawless, it's that a
+// second, context-aware pass reviews the words as a whole rather than in
+// isolation. Deliberately NOT a hardcoded list of specific terms (that would
+// only ever cover cases someone happened to report) -- the model is asked to
+// use judgment the same way a person re-reading their own auto-generated
+// captions would: only fix a word/phrase that plainly doesn't belong given
+// everything around it, and only when confident what was actually meant.
+// Falls back to the original text on any failure, low confidence, or a
+// response that looks like a rewrite rather than a light fix -- an
+// unconfident "correction" that changes the user's actual words is a worse
+// bug than the mishearing this exists to catch.
+async function correctTranscriptionErrors(rawText: string): Promise<string> {
+  const openai = getClient();
+  // Not worth a round trip on empty/trivial text (nothing meaningful to get
+  // wrong, and it'd just be spending money for no benefit).
+  if (!openai || rawText.trim().length < 3) return rawText;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are reviewing a raw speech-to-text transcript of a short, informal personal voice memo about work, projects, or career moments (it may mix Hindi and English). " +
+            "Speech-to-text engines sometimes mishear a word or short phrase and substitute a different, unrelated one that sounds similar but doesn't fit the meaning of the sentence -- often a newer or less common term (a technical term, product name, or piece of modern jargon) heard as a more common everyday word or phrase instead (for example, 'vibe coding' -- using AI to help write code -- misheard as 'white coding'). That's just one example, not an exhaustive list; the same kind of mistake can happen to any word. " +
+            "Read the WHOLE transcript for context, then fix ONLY places like this: a specific word or short phrase that clearly does not fit the meaning of what's being said around it, where you are genuinely confident what the speaker actually said. Replace it with what was actually said. " +
+            "Do not do anything else. Do not paraphrase, summarize, reword for style, fix grammar or punctuation, translate, or otherwise polish the writing. Preserve the speaker's own words, sentence structure, repetition, and language exactly everywhere else, even where it sounds informal or awkward -- that's just how people actually talk. If you're not confident a word or phrase is a transcription error, leave it exactly as given; leaving a real mistake alone is far better than changing something that was actually correct. " +
+            "Respond with ONLY the corrected transcript text -- no preamble, no quotes, no explanation.",
+        },
+        { role: "user", content: rawText },
+      ],
+    });
+    const corrected = completion.choices[0]?.message?.content?.trim();
+    if (!corrected) return rawText;
+    // A light word-level fix barely changes the word count. A big swing
+    // either way means the model likely rewrote/summarized/truncated
+    // instead of doing the narrow fix asked for -- discard and keep the
+    // original rather than risk handing back something that isn't really
+    // the user's own words anymore.
+    const wordCount = (s: string) => s.split(/\s+/).filter(Boolean).length;
+    const rawWords = wordCount(rawText);
+    const correctedWords = wordCount(corrected);
+    if (rawWords > 0 && (correctedWords < rawWords * 0.6 || correctedWords > rawWords * 1.6)) {
+      console.error("correctTranscriptionErrors: correction word count diverged too much, discarding:", {
+        rawText,
+        corrected,
+      });
+      Sentry.captureMessage("correctTranscriptionErrors divergent correction", { extra: { rawText, corrected } });
+      return rawText;
+    }
+    return corrected;
+  } catch (err) {
+    console.error("correctTranscriptionErrors failed, keeping raw transcript:", err);
+    Sentry.captureException(err);
+    return rawText;
+  }
+}
+
 export async function transcribeAudio(file: File): Promise<string | null> {
   const openai = getClient();
   if (!openai) return null;
@@ -738,7 +820,12 @@ export async function transcribeAudio(file: File): Promise<string | null> {
       Sentry.captureMessage("transcribeAudio prompt-echo hallucination", { extra: { text } });
       return null;
     }
-    return text;
+    // Context-aware cleanup pass -- see correctTranscriptionErrors above.
+    // Runs on the raw Whisper output before it's ever saved, so the
+    // transcript the user actually sees (and that everything downstream is
+    // built from) already reflects the fix, not just the AI-generated
+    // summary layer.
+    return await correctTranscriptionErrors(text);
   } catch (err) {
     console.error("transcribeAudio failed:", err);
     Sentry.captureException(err);
