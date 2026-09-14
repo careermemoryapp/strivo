@@ -10,12 +10,11 @@ import { chatCategoryDef } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 
 export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: string) => void }) {
-  const {
-    icon: Icon,
-    gradient = ["#cbd5e1", "#94a3b8"],
-    glow = "rgba(100,116,139,0.3)",
-    wash,
-  } = chatCategoryDef(chat.category);
+  // Every category shares one brand-primary treatment now -- see the
+  // comment above MEMORY_CATEGORIES in categoryIcons.tsx for why the old
+  // per-category gradient/glow/wash (a different hue per category) got
+  // removed. Only the icon still varies by category.
+  const { icon: Icon } = chatCategoryDef(chat.category);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -50,18 +49,8 @@ export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: str
         onClick={() => menuOpen && setMenuOpen(false)}
       >
         <Card className="relative overflow-hidden hover:border-brand-primary/40 transition-colors">
-          {wash && (
-            <div
-              className="pointer-events-none absolute -right-6 -top-6 h-[100px] w-[100px] rounded-full"
-              style={{ background: `radial-gradient(circle, ${wash}, transparent 70%)` }}
-              aria-hidden="true"
-            />
-          )}
           <div className="relative flex gap-3">
-            <div
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-white"
-              style={{ background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})`, boxShadow: `0 6px 16px ${glow}` }}
-            >
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-primary-soft text-brand-primary">
               <Icon size={20} />
             </div>
             <div className="min-w-0 flex-1">
@@ -80,10 +69,7 @@ export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: str
                   not baked into this title. */}
               <h3 className="font-semibold text-ink line-clamp-2 pr-6">{chat.title}</h3>
               <div className="mt-1 flex items-center gap-2">
-                <span
-                  className="shrink-0 rounded-pill px-2 py-0.5 text-[10px] font-semibold text-white"
-                  style={{ background: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})` }}
-                >
+                <span className="shrink-0 rounded-pill bg-brand-primary-soft px-2 py-0.5 text-[10px] font-semibold text-brand-primary">
                   {chat.category}
                 </span>
                 <span className="shrink-0 text-xs text-ink-faint">

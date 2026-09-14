@@ -122,6 +122,7 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error();
+      router.refresh();
       router.push(`/chats/${json.chat.id}`);
     } catch {
       setPendingAction(null);

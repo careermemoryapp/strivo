@@ -86,6 +86,7 @@ export function ChatsListClient({
       });
       const data = await res.json();
       if (!res.ok) throw new Error();
+      router.refresh();
       router.push(`/chats/${data.chat.id}`);
     } catch {
       setCreating(null);
