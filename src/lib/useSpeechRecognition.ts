@@ -125,6 +125,18 @@ export function useSpeechRecognition() {
     setError(null);
   }, []);
 
+  // Lets a caller (the Record screen's now-editable transcript box) correct
+  // the text directly. Has to update finalTextRef too, not just the state:
+  // transcribeChunks above appends each new recording's text onto
+  // finalTextRef.current, not onto the React state. Without this, editing
+  // the transcript and then recording a bit more would silently discard the
+  // edit — the next chunk would get appended onto the stale, pre-edit ref
+  // value instead of what's actually on screen.
+  const setFinalTextEdited = useCallback((text: string) => {
+    finalTextRef.current = text;
+    setFinalText(text);
+  }, []);
+
   return {
     state,
     supported: state !== "unsupported",
@@ -137,6 +149,6 @@ export function useSpeechRecognition() {
     start,
     stop,
     reset,
-    setFinalText,
+    setFinalText: setFinalTextEdited,
   };
 }

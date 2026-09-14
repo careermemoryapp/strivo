@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { getMemoryById, deleteMemory, updateMemoryMetadata } from "@/lib/repo/memories";
@@ -83,5 +84,18 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const memory = getMemoryById(userId, id);
   if (!memory) return NextResponse.json({ error: "Memory not found" }, { status: 404 });
   deleteMemory(userId, id);
+  // MemoriesListClient removes the row from its own local state immediately
+  // (see the comment on its onDeleted prop / MemoryCard's handleDelete) --
+  // that's still correct and stays as-is. What that local update can't fix
+  // is Next's Router Cache: /memories and /home were both server-rendered
+  // with this memory still in the list, and navigating away and back can
+  // serve that cached render instead of re-fetching, which is exactly the
+  // "deleted item comes back until I switch screens" bug that got reported.
+  // revalidatePath marks those cached renders stale server-side so the next
+  // visit gets a fresh one, without reintroducing the client-side GET race
+  // that caused the earlier, different reappearing bug this file's comments
+  // already guard against.
+  revalidatePath("/memories");
+  revalidatePath("/home");
   return NextResponse.json({ ok: true });
 }

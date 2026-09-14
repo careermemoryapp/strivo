@@ -550,22 +550,37 @@ export async function translateToEnglish(text: string): Promise<string> {
   }
 }
 
-// Short (3-5 word) chat title generated from the first message in a chat —
+// Short (3-6 word) chat title generated from the first message in a chat —
 // the same idea as ChatGPT/Claude auto-titling a new conversation. Without
 // this, every chat started from the same quick action ("Interview
 // Preparation", "General Chat", ...) keeps that literal template name as
 // its title forever, so the Chats list becomes a wall of identical labels
-// and the only way to tell conversations apart is opening each one. Called
-// once, for the first message only (see chatService.ts) — the chat keeps
-// this title from then on rather than re-titling on every message, same as
-// ChatGPT. The starting category (Interview/Resume/etc.) is tracked
-// separately on chat.category and unaffected by this — it's shown as its
-// own small badge in the UI instead of being baked into the title text.
-// Returns null on any failure so the caller just keeps the template title
-// rather than erroring the message send over a cosmetic feature.
-export async function generateChatTitle(firstMessage: string): Promise<string | null> {
+// and the only way to tell conversations apart is opening each one. The
+// starting category (Interview/Resume/etc.) is tracked separately on
+// chat.category and unaffected by this — it's shown as its own small badge
+// in the UI instead of being baked into the title text.
+//
+// Called TWICE per chat, not once (see chatService.ts): first right away
+// with just the user's opening line, so the chat has *some* real title
+// immediately; then again once the AI's first reply exists, passing both
+// messages so the model has actual substance to be specific about. The
+// first call alone reliably produces exactly the generic-sounding titles
+// this is supposed to avoid -- "Tomorrow I have an interview which is..."
+// or "I need to update my resume..." on their own carry almost no concrete
+// detail (no company, role, topic, or deadline named yet), so even a model
+// faithfully following "be specific" ends up re-deriving the category
+// ("Interview Preparation Tips", "Resume Update Tips") because that's
+// genuinely the most specific thing available at that point. The second
+// pass (aiReply present) is the one expected to actually land on something
+// concrete, the same way generateMemoryMetadata's title works from a full
+// transcript rather than one line -- and its result overwrites the first
+// guess. Returns null on any failure so the caller just keeps whatever
+// title it already has rather than erroring the message send over a
+// cosmetic feature.
+export async function generateChatTitle(userMessage: string, aiReply?: string | null): Promise<string | null> {
   const openai = getClient();
   if (!openai) return null;
+  const contextText = aiReply ? `User: ${userMessage}\nAssistant: ${aiReply}` : userMessage;
   try {
     const completion = await openai.chat.completions.create({
       model: CHAT_MODEL,
@@ -574,11 +589,13 @@ export async function generateChatTitle(firstMessage: string): Promise<string | 
         {
           role: "system",
           content:
-            "Generate a short chat title, 3-5 words, summarizing what this conversation is actually about, in the SAME language as the message. " +
-            "Be specific to the real content -- never output a generic label like 'General Chat', 'New Chat', or 'Interview Preparation'. " +
+            "Generate a short chat title, 3-6 words, that names the SPECIFIC subject of this conversation, in the SAME language as the messages. " +
+            "Pull out whatever concrete detail is actually present -- a company or role name, a specific topic, skill, deadline, question, or decision -- the same way you'd title one specific memory, not a generic category label. " +
+            "NEVER produce a generic templated title like 'Resume Update Tips', 'Interview Preparation Tips', 'Interview Preparation', 'General Chat', or any '<topic> Tips' / '<topic> Preparation' pattern -- these give the user no way to tell one chat apart from another with the same starting category. " +
+            "If nothing concrete has been said yet and the only honest option IS a generic label, prefer a short literal echo of the user's actual words over a category name (e.g. 'Interview Tomorrow' rather than 'Interview Preparation Tips'). " +
             "No quotes, no trailing punctuation. Respond with ONLY the title, nothing else.",
         },
-        { role: "user", content: firstMessage },
+        { role: "user", content: contextText },
       ],
     });
     const raw = completion.choices[0]?.message?.content?.trim();
@@ -622,13 +639,25 @@ export async function embedText(text: string): Promise<number[] | null> {
 // code-switched clips (a Hindi sentence with a few English words mixed
 // in, very common in everyday speech) — with too little audio to be
 // confident, it can lock onto the wrong language and transcribe the whole
-// thing as something else entirely. The `prompt` field below is a
-// same-language sample of exactly that kind of speech; Whisper treats it
-// as "the kind of audio you're about to hear" and uses it purely as a
-// steering hint, not a restriction — English-only or any other-language
-// recordings are completely unaffected and still auto-detect normally.
+// thing as something else entirely. The `prompt` field below is meant as a
+// steering hint for that case, not a restriction.
+//
+// IMPORTANT: keep this prompt written in English words only, even though
+// it's *describing* Hindi/English code-switching. An earlier version of
+// this prompt opened with an actual Hindi sentence ("यह एक व्यक्तिगत वॉयस
+// नोट है।") as a same-language sample, on the theory that Whisper would
+// treat it purely as "the kind of audio you're about to hear." In practice
+// that backfired: Whisper conditions on the prompt's own text, so leading
+// with real Devanagari script measurably biased short/ambiguous clips —
+// including clearly spoken English ones — toward being decoded as Hindi.
+// Reported by a real user: spoke in English, got back Hindi. Describing
+// the code-switching in English (below) still steers Whisper to expect
+// Hindi/English mixed speech without handing its decoder actual
+// foreign-script tokens to latch onto, so English-only recordings are no
+// longer nudged off course by the hint meant for a completely different
+// case.
 const TRANSCRIBE_PROMPT =
-  "यह एक व्यक्तिगत वॉयस नोट है। This is a personal voice memo, sometimes in Hindi, sometimes in English, sometimes both mixed together.";
+  "This is a short personal voice memo about work, projects, or career moments. The speaker may talk in English, in Hindi, or naturally mix both languages within the same recording.";
 
 // Whisper treats the `prompt` above purely as a steering hint, but on audio
 // it can't transcribe with confidence (too quiet, background noise, a bad

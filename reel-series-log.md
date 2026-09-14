@@ -8,3 +8,5 @@ Tracks which milestone reel has been sent, so the daily scheduled task
 ## Day 3 — Day one (sent 2026-09-10)
 ## Day 4 — The core loop (sent 2026-09-11)
 ## Day 5 — Teaching the AI to actually understand him (sent 2026-09-12)
+## Day 6 — The first real crash (sent 2026-09-13)
+## Day 7 — A laptop isn't a company (sent 2026-09-14)

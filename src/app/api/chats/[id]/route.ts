@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { requireUserId } from "@/lib/serverAuth";
 import { getChatById } from "@/lib/repo/chats";
 import { listMessages } from "@/lib/repo/messages";
@@ -23,5 +24,13 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   // Scoped delete — WHERE user_id = ? ensures a user can only ever delete
   // their own chat, even though we already checked ownership above.
   getDb().prepare(`DELETE FROM chats WHERE id = ? AND user_id = ?`).run(id, userId);
+  // Same fix as the memories DELETE route (see the comment there): the
+  // client-side local-array-filter approach in ChatCard/ChatsListClient is
+  // correct and stays as-is, but it can't invalidate Next's Router Cache for
+  // /chats and /home (which shows recentChats), which is why a deleted chat
+  // could reappear until the user switched screens. This marks those cached
+  // renders stale so the next visit re-fetches instead.
+  revalidatePath("/chats");
+  revalidatePath("/home");
   return NextResponse.json({ ok: true });
 }

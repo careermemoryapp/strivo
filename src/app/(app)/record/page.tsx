@@ -615,7 +615,14 @@ export default function RecordPage() {
               {/* Shows right where the user is already looking, instead of
                   a separate panel further down the page — makes it obvious
                   the recording is still being processed, and then shows
-                  exactly what was captured before they hit Create Memory. */}
+                  exactly what was captured before they hit Create Memory.
+                  Editable once transcription finishes (not while actively
+                  listening/transcribing) — speech-to-text regularly misses
+                  or mishears a word, and until this was editable the only
+                  fix was re-recording the whole memory from scratch. Typing
+                  here calls speech.setFinalText directly, the same state
+                  Create Memory reads from, so the edit is what actually
+                  gets saved. */}
               {(content.trim() || speech.transcribing) && (
                 <div className="w-full mt-5 rounded-[13px] border border-[#ece5f5] bg-surface p-4 text-left">
                   {speech.transcribing ? (
@@ -625,8 +632,18 @@ export default function RecordPage() {
                     </div>
                   ) : (
                     <>
-                      <p className="text-xs font-semibold text-[#a8a2bd] uppercase tracking-wide mb-1.5">Transcript</p>
-                      <p className="text-sm text-ink whitespace-pre-wrap">{content}</p>
+                      <div className="mb-1.5 flex items-center justify-between">
+                        <p className="text-xs font-semibold text-[#a8a2bd] uppercase tracking-wide">Transcript</p>
+                        <p className="text-[11px] text-[#a8a2bd]">Tap to edit</p>
+                      </div>
+                      <textarea
+                        value={content}
+                        onChange={(e) => speech.setFinalText(e.target.value)}
+                        disabled={speech.listening}
+                        rows={4}
+                        placeholder="Your transcript will appear here…"
+                        className="w-full resize-none rounded-[10px] border border-transparent bg-transparent p-0 text-sm text-ink outline-none focus:border-[#ece5f5] focus:bg-[#faf9fc] focus:p-2.5 disabled:opacity-60"
+                      />
                     </>
                   )}
                 </div>
