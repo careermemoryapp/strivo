@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUserId } from "@/lib/serverAuth";
 import { getMemoryById } from "@/lib/repo/memories";
+import { getProjectById } from "@/lib/repo/projects";
 import { MemoryDetailClient } from "./MemoryDetailClient";
 
 // Server Component: fetches the memory here, before anything is sent to
@@ -17,8 +18,19 @@ export default async function MemoryDetailPage({ params }: { params: Promise<{ i
   // dead-end error screen for what's a rare, recoverable case.
   if (!memory) redirect("/memories");
 
+  // Resolved server-side so the detail page can show the project's NAME
+  // (not just its id) without an extra client round trip -- same reasoning
+  // as fetching the memory itself here instead of in MemoryDetailClient.
+  const currentProjectName = memory.project_id ? (getProjectById(userId, memory.project_id)?.name ?? null) : null;
+
   // node:sqlite rows aren't plain objects, so they can't cross the
   // Server -> Client boundary as-is -- see the matching comment in
   // chats/[id]/page.tsx.
-  return <MemoryDetailClient memoryId={id} initialMemory={{ ...memory }} />;
+  return (
+    <MemoryDetailClient
+      memoryId={id}
+      initialMemory={{ ...memory }}
+      initialProjectName={currentProjectName}
+    />
+  );
 }

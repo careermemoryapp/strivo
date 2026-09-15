@@ -20,6 +20,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/utils";
 import { useSpeechRecognition } from "@/lib/useSpeechRecognition";
 import { useCurrentUser } from "@/lib/useCurrentUser";
+import { ProjectAssigner, type ProjectSuggestion } from "@/components/ProjectAssigner";
 
 type Stage = "capture" | "success";
 type Mode = "voice" | "type" | "upload";
@@ -119,6 +120,17 @@ export default function RecordPage() {
   // instead of leaving an answered (or dismissed) question sitting on
   // screen looking unfinished.
   const [reflectionOutcome, setReflectionOutcome] = useState<"answered" | "skipped" | null>(null);
+
+  // The AI's guess at which project this memory belongs to (see
+  // suggestedExistingProjectName/suggestedNewProjectName in
+  // generateMemoryMetadata, lib/ai.ts, resolved into this shape by
+  // /api/memories' POST handler). Null suggestion fields mean "no guess" --
+  // ProjectAssigner itself decides whether that's worth showing a card for.
+  // Freshly-created memory always starts with no project assigned, so
+  // there's no currentProjectId/currentProjectName to seed here.
+  const [savedProjectSuggestion, setSavedProjectSuggestion] = useState<ProjectSuggestion | null>(null);
+  const [assignedProjectId, setAssignedProjectId] = useState<string | null>(null);
+  const [assignedProjectName, setAssignedProjectName] = useState<string | null>(null);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
@@ -245,6 +257,9 @@ export default function RecordPage() {
     setReflectionText("");
     setReflectionSaving(false);
     setReflectionOutcome(null);
+    setSavedProjectSuggestion(null);
+    setAssignedProjectId(null);
+    setAssignedProjectName(null);
   }
 
   async function submitReflection() {
@@ -292,6 +307,7 @@ export default function RecordPage() {
       const milestones: string[] = Array.isArray(data.milestones) ? data.milestones : [];
       setSavedMilestones(milestones);
       setSavedReflectiveQuestion(data.memory.reflective_question ?? null);
+      setSavedProjectSuggestion(data.projectSuggestion ?? null);
       setStage("success");
       // Small delay so the popup lands a beat after the success screen
       // appears, instead of both flashing in at once — reads as a genuine
@@ -381,6 +397,27 @@ export default function RecordPage() {
                   </div>
                 </>
               )}
+            </div>
+          )}
+
+          {/* AI's guess at which project this belongs to (see
+              savedProjectSuggestion above) -- "AI proposes, human confirms":
+              nothing here has assigned a project yet, this is just a
+              pre-filled starting point. Placed after the reflective-question
+              card and before the action buttons, its own natural next step
+              in the same "one more thing before you move on" flow. */}
+          {savedMemoryId && (
+            <div className="mt-5 w-full text-left">
+              <ProjectAssigner
+                memoryId={savedMemoryId}
+                currentProjectId={assignedProjectId}
+                currentProjectName={assignedProjectName}
+                suggestion={savedProjectSuggestion}
+                onChange={(projectId, projectName) => {
+                  setAssignedProjectId(projectId);
+                  setAssignedProjectName(projectName);
+                }}
+              />
             </div>
           )}
 

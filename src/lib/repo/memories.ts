@@ -50,6 +50,12 @@ export type Memory = {
   // comment in lib/db.ts. Aggregated across a user's memories by
   // listRecurringEntities below into a lightweight personal glossary.
   entities: string | null;
+  // Which project (see lib/repo/projects.ts) this memory is assigned to --
+  // see the migration comment in lib/db.ts for why this is never set
+  // automatically by AI metadata generation. Null means "no project,"
+  // whether because none was ever suggested, a suggestion was declined, or
+  // this memory predates the feature entirely -- all three read the same.
+  project_id: string | null;
   metadata_status: "pending" | "ready" | "failed";
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
@@ -288,6 +294,19 @@ export function updateMemoryMetadata(
 export function deleteMemory(userId: string, id: string) {
   const db = getDb();
   db.prepare(`DELETE FROM memories WHERE id = ? AND user_id = ?`).run(id, userId);
+}
+
+// Sets (or clears, with projectId null) which project a memory belongs to
+// -- see the migration comment on memories.project_id in lib/db.ts for why
+// this is a separate, narrow write rather than part of updateMemoryMetadata
+// above: this is always an explicit user action (confirming an AI
+// suggestion, picking from the dropdown, or clearing it), never something
+// AI metadata generation writes on its own. Doesn't touch updated_at --
+// changing which project a memory is filed under isn't really "editing"
+// the memory's own content the way a transcript edit is.
+export function setMemoryProject(userId: string, id: string, projectId: string | null): void {
+  const db = getDb();
+  db.prepare(`UPDATE memories SET project_id = ? WHERE id = ? AND user_id = ?`).run(projectId, id, userId);
 }
 
 export function countMemories(userId: string): number {

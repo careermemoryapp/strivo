@@ -14,6 +14,7 @@ import { searchMemoriesHybrid } from "@/lib/retrieval";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired, getUserById } from "@/lib/repo/users";
 import { createPendingCheckin, countOpenCheckins } from "@/lib/repo/pendingCheckins";
+import { listProjects } from "@/lib/repo/projects";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -107,7 +108,24 @@ export async function POST(req: Request) {
   // occasionally (see the nameHint comment in generateMemoryMetadata) --
   // a lookup miss here just means those fields fall back to no name.
   const firstName = getUserById(userId)?.first_name ?? null;
-  const metadata = await generateMemoryMetadata(transcript, firstName);
+  const existingProjects = listProjects(userId);
+  const metadata = await generateMemoryMetadata(transcript, firstName, new Date(), existingProjects.map((p) => p.name));
+
+  // Resolved here, once, into an actual project id the client can act on
+  // directly -- see suggestedExistingProjectName/suggestedNewProjectName on
+  // generateMemoryMetadata's return value (lib/ai.ts). Never applied to the
+  // memory automatically (project_id stays null until the user explicitly
+  // confirms via PATCH /api/memories/[id]/project -- see ProjectAssigner.tsx).
+  const projectSuggestion = metadata
+    ? {
+        existingId: metadata.suggestedExistingProjectName
+          ? (existingProjects.find((p) => p.name === metadata.suggestedExistingProjectName)?.id ?? null)
+          : null,
+        existingName: metadata.suggestedExistingProjectName,
+        newName: metadata.suggestedNewProjectName,
+      }
+    : { existingId: null, existingName: null, newName: null };
+
   if (metadata) {
     const priorCompetencyCounts = countMemoriesByCompetency(userId);
     const priorMetricCount = countMemoriesWithMetric(userId);
@@ -200,5 +218,5 @@ export async function POST(req: Request) {
   }
 
   const final = getMemoryById(userId, memory.id);
-  return NextResponse.json({ memory: final, aiMetadataGenerated: !!metadata, milestones });
+  return NextResponse.json({ memory: final, aiMetadataGenerated: !!metadata, milestones, projectSuggestion });
 }

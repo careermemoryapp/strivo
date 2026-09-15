@@ -118,6 +118,22 @@ export type MemoryMetadata = {
   // "my friend" with no name isn't an entity; "Priya", "the Atlas team",
   // "Project Falcon" are).
   entities: string[];
+  // Project-association suggestion for the real, permanent "project"
+  // concept in lib/repo/projects.ts -- deliberately separate from the
+  // free-text `entities` above (which stays a lightweight glossary for
+  // chat, unrelated to this). Never both set: EITHER this transcript
+  // clearly matches one of the user's EXISTING projects (given as
+  // `existingProjectNames` below), in which case
+  // suggestedExistingProjectName holds that exact name, OR it clearly
+  // centers on a distinct project worth tracking that ISN'T in that list,
+  // in which case suggestedNewProjectName holds a short name for it -- OR,
+  // by far the most common case, neither, and both are null. This is a
+  // SUGGESTION ONLY: see ProjectAssigner.tsx and the migration comment on
+  // memories.project_id in lib/db.ts for why nothing here ever assigns a
+  // project on its own -- same "AI proposes, human confirms" principle as
+  // the transcription-cleanup pass in transcribeAudio below.
+  suggestedExistingProjectName: string | null;
+  suggestedNewProjectName: string | null;
 };
 
 const CATEGORY_OPTIONS: string[] = [...MEMORY_CATEGORIES_LIST];
@@ -144,11 +160,19 @@ export const COMPETENCY_OPTIONS: string[] = [...MEMORY_COMPETENCIES_LIST];
 export async function generateMemoryMetadata(
   transcript: string,
   firstName?: string | null,
-  now: Date = new Date()
+  now: Date = new Date(),
+  // The user's existing project names (see lib/repo/projects.ts), passed
+  // in fresh on every call rather than cached -- lets the model match
+  // against a real, current list instead of guessing blind. Empty for a
+  // user with no projects yet, which just means every suggestion here can
+  // only ever be a "new project" suggestion, never an "existing" one.
+  existingProjectNames: string[] = []
 ): Promise<MemoryMetadata | null> {
   const openai = getClient();
   if (!openai) return null;
   const todayIso = istDateString(now);
+  const projectListForPrompt =
+    existingProjectNames.length > 0 ? existingProjectNames.map((n) => `"${n}"`).join(", ") : "(none yet)";
   // Same "occasionally, never forced" name guidance as buildSystemPrompt's
   // nameContext -- only given to the model when a name is actually
   // available, and phrased as a light option for praise/reflectiveQuestion
@@ -189,6 +213,7 @@ export async function generateMemoryMetadata(
             "selfMinimized (boolean) and selfMinimizedReason (string or null): selfMinimized is true ONLY when the transcript describes a genuinely strong accomplishment -- real ownership, real impact, or a real difficulty actually overcome -- using flat, dismissive, or minimizing language about it: 'just', 'nothing much', 'anyone would have done that', 'it wasn't a big deal', or simply reporting something significant in a matter-of-fact tone with zero acknowledgment of its actual weight. This is NARROWER than competencies/praise above: a memory can genuinely have competencies while being described with ordinary pride or plain neutral reporting, which does NOT count here -- reserve true for a real, noticeable gap between what actually happened and how modestly the person framed it. Most memories are false here, including most memories with competencies -- this should fire rarely. When true, selfMinimizedReason is one short (<=20 words) English internal note naming the specific gap (e.g. 'Led a 3-team rollout solo but called it \"just helping out\"') -- never shown to the user directly, only used internally later. When false, selfMinimizedReason MUST be null. " +
             "entities (array, 0-5 items): recurring proper nouns worth remembering from this transcript -- a specific person's name (a manager, teammate, friend, client), a team name, or a recurring project/product name. Only include something genuinely name-like -- a real name or a real proper-noun team/project name -- NOT a generic role or relation with no name attached ('my manager', 'a friend', 'the team' do NOT count on their own; 'Priya', 'the Atlas team', 'Project Falcon' do). Use the transcript's own casing/spelling. Skip entirely (empty array) if nothing in the transcript is a genuine named person/team/project -- this should be empty for a large share of memories. " +
             "The transcript is machine speech-to-text and can contain an obvious mishearing of a well-known term -- most commonly a modern tech/work phrase autocorrected-by-ear into an ordinary word that happens to sound similar (e.g. 'vibe coding' -- letting an AI write code from a natural-language description -- misheard as 'white coding'). When the surrounding context makes the intended term unambiguous (the transcript is clearly about coding/apps/AI tools) and the mishearing is a well-established named term you're confident about, use the CORRECT term in title/summary/keyPoints/searchText/resumeLine instead of repeating the mistranscription -- don't build a resume line or summary around a garbled word. This is narrow: only fix a clear, confident mishearing of a real known term, never reinterpret or guess at what someone 'really meant' beyond that, and never change a plain word just because a different reading seems more interesting. The transcript text itself is never altered (the user can edit it directly) -- this only affects the metadata you're generating here. " +
+            `projectSuggestion (object): the user's EXISTING projects are: ${projectListForPrompt}. Return { "existing": string or null, "new": string or null } -- ALWAYS both keys, at most ONE non-null. Set "existing" to the EXACT name (copy it verbatim from the list above, don't reword it) of one of those existing projects ONLY when this transcript is clearly, confidently about that same project -- a passing one-word mention isn't enough, and don't force a match onto the closest-sounding existing name if it's not really the same thing. If no existing project fits but the transcript clearly and repeatedly centers on ONE specific, distinctly-named initiative/project (not just "work" or "a meeting" in general) that would genuinely be worth tracking as its own project going forward, set "new" to a short, clear name for it (title case, 1-4 words, based on what the transcript actually calls it when possible). Otherwise -- by far the most common case, including plenty of ordinary work memories that don't center on a specific named project -- return both as null. This is only ever shown to the user as a suggestion they confirm or dismiss, never applied automatically, so it's fine (better, even) to return null rather than force a guess. ` +
             "Outside of that narrow correction, never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -204,6 +229,23 @@ export async function generateMemoryMetadata(
     const filteredCompetencies: string[] = Array.isArray(parsed.competencies)
       ? parsed.competencies.filter((c: unknown) => COMPETENCY_OPTIONS.includes(String(c))).slice(0, 3)
       : [];
+    // Re-validated against the REAL list passed in, not trusted verbatim --
+    // same principle as filteredCompetencies above. Matching
+    // case-insensitively (rather than a strict === check) is what still
+    // lets "atlas" match an existing "Atlas" without the model needing to
+    // get casing exactly right, while still refusing anything that isn't a
+    // genuine match -- a model that paraphrases an existing project's name
+    // instead of copying it exactly would otherwise slip past as a false
+    // "existing" match. If, despite the prompt saying "at most one," the
+    // model returns both an existing match AND a new-project name, the
+    // existing match wins and the new-name suggestion is dropped -- a real
+    // project's own name always takes priority over inventing a second one.
+    const matchedExistingProjectName =
+      typeof parsed.projectSuggestion?.existing === "string"
+        ? existingProjectNames.find(
+            (n) => n.toLowerCase() === String(parsed.projectSuggestion.existing).trim().toLowerCase()
+          ) ?? null
+        : null;
     return {
       title: String(parsed.title).slice(0, 120),
       summary: String(parsed.summary).slice(0, 2000),
@@ -250,6 +292,11 @@ export async function generateMemoryMetadata(
       entities: Array.isArray(parsed.entities)
         ? parsed.entities.slice(0, 5).map((e: unknown) => String(e).slice(0, 80)).filter((e: string) => e.trim().length > 0)
         : [],
+      suggestedExistingProjectName: matchedExistingProjectName,
+      suggestedNewProjectName:
+        !matchedExistingProjectName && typeof parsed.projectSuggestion?.new === "string" && parsed.projectSuggestion.new.trim()
+          ? parsed.projectSuggestion.new.trim().slice(0, 60)
+          : null,
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
@@ -754,6 +801,7 @@ async function correctTranscriptionErrors(rawText: string): Promise<string> {
             "You are reviewing a raw speech-to-text transcript of a short, informal personal voice memo about work, projects, or career moments (it may mix Hindi and English). " +
             "Speech-to-text engines sometimes mishear a word or short phrase and substitute a different, unrelated one that sounds similar but doesn't fit the meaning of the sentence -- often a newer or less common term (a technical term, product name, or piece of modern jargon) heard as a more common everyday word or phrase instead (for example, 'vibe coding' -- using AI to help write code -- misheard as 'white coding'). That's just one example, not an exhaustive list; the same kind of mistake can happen to any word. " +
             "Read the WHOLE transcript for context, then fix ONLY places like this: a specific word or short phrase that clearly does not fit the meaning of what's being said around it, where you are genuinely confident what the speaker actually said. Replace it with what was actually said. " +
+            "Being unfamiliar with a word is NOT the same as it being wrong -- a name, a person's nickname, a made-up or invented project/product title, or slang you simply don't recognize is expected in a personal voice memo, and should be left exactly as transcribed even if you've never seen it before. Only correct a word when it plainly breaks the sentence's meaning (like a random unrelated object or action dropped into a sentence about something else) AND you're confident what was actually said -- never replace an unusual-sounding word with a more common/ordinary one just because the unusual one is unfamiliar to you. When genuinely torn, do nothing. " +
             "Do not do anything else. Do not paraphrase, summarize, reword for style, fix grammar or punctuation, translate, or otherwise polish the writing. Preserve the speaker's own words, sentence structure, repetition, and language exactly everywhere else, even where it sounds informal or awkward -- that's just how people actually talk. If you're not confident a word or phrase is a transcription error, leave it exactly as given; leaving a real mistake alone is far better than changing something that was actually correct. " +
             "Respond with ONLY the corrected transcript text -- no preamble, no quotes, no explanation.",
         },

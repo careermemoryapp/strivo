@@ -11,6 +11,7 @@ import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ProjectAssigner } from "@/components/ProjectAssigner";
 import { memoryCategoryDef } from "@/lib/categoryIcons";
 import { cn, safeJsonParse } from "@/lib/utils";
 import type { Memory } from "@/lib/repo/memories";
@@ -20,9 +21,24 @@ import type { Memory } from "@/lib/repo/memories";
 // this removes the extra network round-trip that was making every memory
 // take multiple seconds to open even though the server itself answers in
 // milliseconds.
-export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: string; initialMemory: Memory }) {
+export function MemoryDetailClient({
+  memoryId,
+  initialMemory,
+  initialProjectName,
+}: {
+  memoryId: string;
+  initialMemory: Memory;
+  // Resolved server-side (see page.tsx) since the memory row only carries
+  // project_id, not the project's name -- null whenever project_id is null.
+  initialProjectName: string | null;
+}) {
   const router = useRouter();
   const [memory, setMemory] = useState<Memory>(initialMemory);
+  // Kept alongside memory.project_id rather than re-derived, since nothing
+  // else on this page fetches the project list -- ProjectAssigner updates
+  // both together via onChange whenever the user picks/creates/clears a
+  // project (see its onChange handler below).
+  const [projectName, setProjectName] = useState<string | null>(initialProjectName);
   const [tab, setTab] = useState<"Transcript" | "Summary">("Transcript");
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -185,6 +201,24 @@ export function MemoryDetailClient({ memoryId, initialMemory }: { memoryId: stri
                   {memory.source === "voice" ? <Mic size={12} /> : memory.source === "file" ? <Paperclip size={12} /> : <Type size={12} />}
                   {memory.source === "voice" ? "Voice" : memory.source === "file" ? "Document" : "Text"}
                 </span>
+              </div>
+              {/* No `suggestion` prop here -- there's never an AI suggestion
+                  to show on the detail page, only on the Record success
+                  screen right after saving (see record/page.tsx). This is
+                  what lets an OLD memory (predating this feature entirely)
+                  get a project assigned manually, per the "not now, no
+                  retroactive assignment" call -- nothing happens unless the
+                  user taps this themselves. */}
+              <div className="mt-2.5">
+                <ProjectAssigner
+                  memoryId={memory.id}
+                  currentProjectId={memory.project_id}
+                  currentProjectName={projectName}
+                  onChange={(projectId, name) => {
+                    setMemory((m) => ({ ...m, project_id: projectId }));
+                    setProjectName(name);
+                  }}
+                />
               </div>
             </div>
           </div>

@@ -89,6 +89,23 @@ function migrate(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_memories_user ON memories(user_id);
     CREATE INDEX IF NOT EXISTS idx_memories_user_created ON memories(user_id, created_at);
 
+    -- A real, permanent "project" a user creates once (Settings > Projects)
+    -- that memories can attach to -- see memories.project_id below. Exists
+    -- specifically to replace the old implicit approach (the AI just
+    -- noticing a proper noun in a transcript and matching later mentions by
+    -- exact string -- see entities/listRecurringEntities), which silently
+    -- treated "Atlas project" and "the Atlas team" as two unrelated things.
+    -- A project has a stable id a memory can point at regardless of how it
+    -- gets referred to in speech from one recording to the next.
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
+
     CREATE TABLE IF NOT EXISTS chats (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -772,6 +789,28 @@ function migrate(db: DatabaseSync) {
   // backfill, same rollout pattern as search_text/competencies before it.
   if (!memoryColumns.includes("entities")) {
     db.exec(`ALTER TABLE memories ADD COLUMN entities TEXT;`);
+  }
+
+  // Which project (see the `projects` table above) this memory has been
+  // assigned to, if any -- deliberately NOT set automatically by AI
+  // metadata generation, even when generateMemoryMetadata is confident
+  // enough to suggest one (see suggestedExistingProjectId/
+  // suggestedNewProjectName on its return value, lib/ai.ts). The AI's
+  // suggestion is only ever a suggestion shown to the user (see
+  // ProjectAssigner.tsx) -- this column is written only by an explicit
+  // user action (PATCH /api/memories/[id]/project), same "AI proposes,
+  // human confirms" principle as the transcription-cleanup pass in
+  // transcribeAudio. No FK constraint on purpose (consistent with every
+  // other column added via ALTER TABLE in this file) -- deleteProject
+  // (lib/repo/projects.ts) clears this column on every memory that
+  // pointed at it before removing the row, so a dangling reference should
+  // never occur in practice, but the column itself stays a plain
+  // nullable TEXT rather than relying on FK enforcement to guarantee it.
+  // NULL for every memory created before this existed, and for any memory
+  // never assigned one -- both read identically as "no project."
+  if (!memoryColumns.includes("project_id")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN project_id TEXT;`);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_project ON memories(project_id);`);
   }
 
   // Vector embedding of a user (not AI) message's content, same
