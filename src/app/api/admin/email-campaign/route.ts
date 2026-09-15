@@ -33,7 +33,11 @@ export async function GET() {
 // parsing (see `|| null` below) rather than stored as "".
 const schema = z.object({
   subject: z.string().trim().min(1, "Add a subject line before sending.").max(150),
-  bodyMarkdown: z.string().trim().min(1, "Add a message body before sending.").max(10000),
+  // Rich-text HTML from the admin composer (see RichTextEditor.tsx), not
+  // plain markdown-lite text -- the higher cap than a plain-text body
+  // would need accounts for formatting markup overhead (bold/color/font
+  // spans), not a longer real message.
+  bodyHtml: z.string().trim().min(1, "Add a message body before sending.").max(30000),
   segment: z.enum(EMAIL_SEGMENTS as [EmailSegment, ...EmailSegment[]]).default("all"),
   bannerImageUrl: z.string().trim().url("Banner image must be a valid https:// URL.").or(z.literal("")).optional(),
   buttonText: z.string().trim().max(40, "Button text is too long.").or(z.literal("")).optional(),
@@ -76,7 +80,7 @@ export async function POST(req: Request) {
   // even if some individual sends fail below.
   const campaign = createCampaign({
     subject: parsed.data.subject,
-    body: parsed.data.bodyMarkdown,
+    body: parsed.data.bodyHtml,
     segment: parsed.data.segment,
     recipientCount: recipients.length,
     bannerImageUrl,
@@ -100,7 +104,7 @@ export async function POST(req: Request) {
         toUserId: recipient.id,
         firstName: recipient.firstName,
         subject: parsed.data.subject,
-        bodyMarkdown: parsed.data.bodyMarkdown,
+        bodyHtml: parsed.data.bodyHtml,
         bannerImageUrl,
         buttonText,
         buttonUrl,

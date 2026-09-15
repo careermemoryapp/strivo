@@ -1,8 +1,15 @@
-// Turns the plain text an admin types into the campaign composer into both
-// an HTML email and a plain-text fallback. There's no rich-text editor
-// anywhere in this stack, so rather than bolt one on, the composer accepts
-// a small "markdown-lite" syntax (bold, links, paragraphs) that's easy to
-// type and easy to explain in one line of helper text under the textarea.
+// Turns what the admin writes in the campaign composer into both an HTML
+// email and a plain-text fallback. The composer is now a real rich-text
+// editor (see src/components/RichTextEditor.tsx) whose output IS already
+// HTML -- renderCampaignBodyHtml/htmlToPlainText below are the current
+// pipeline. renderMarkdownLiteToHtml/renderMarkdownLiteToText further down
+// are the OLD pipeline, from before the rich-text editor existed, when the
+// composer was a plain textarea accepting a small "markdown-lite" syntax
+// (**bold**, [text](url)). They're kept only so a template saved back then
+// still displays correctly (bold actually bold, links actually links) the
+// first time it's loaded into the new editor -- see the "does this already
+// look like HTML" check in handleLoadTemplate, admin/page.tsx. New
+// templates are saved as real HTML and never touch this old path again.
 
 function escapeHtml(input: string): string {
   return input
@@ -39,6 +46,62 @@ export function renderMarkdownLiteToText(source: string): string {
     .trim()
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, "$1 ($2)");
+}
+
+// The rich-text editor's output is admin-authored (not end-user input,
+// which is the main thing that would normally demand real HTML
+// sanitization) -- but it's still cleaned up before being embedded in an
+// email, the same "validate it like untrusted input anyway" posture
+// isValidHexColor/isValidHttpsUrl below already take for the other
+// campaign-design fields. Regex-based rather than a full HTML parser,
+// matching the rest of this file's lightweight style and avoiding a new
+// dependency for a single admin screen: strips a small, specific set of
+// dangerous tags/attributes rather than attempting to fully parse and
+// rebuild the markup.
+const DANGEROUS_TAGS = /<\/?(script|style|iframe|object|embed|form|link|meta|base)\b[^>]*>/gi;
+const EVENT_ATTR = /\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi;
+const JS_URL_ATTR = /(href|src)(\s*=\s*)(["'])\s*javascript:[^"']*\3/gi;
+
+export function sanitizeCampaignHtml(html: string): string {
+  return html.replace(DANGEROUS_TAGS, "").replace(EVENT_ATTR, "").replace(JS_URL_ATTR, (_m, attr, eq, quote) => `${attr}${eq}${quote}#${quote}`);
+}
+
+// Wraps the sanitized rich-text HTML with the same base body copy styling
+// (font size, line height, color) the old per-paragraph markdown-lite
+// renderer used to apply to every <p> -- color/font-size are CSS
+// properties that inherit, so setting them once on this outer wrapper
+// gives unstyled text the same look as before, while anything the admin
+// explicitly styled with the toolbar (an inline style on a <span>/<b>)
+// still wins, since an element's own inline style always overrides an
+// inherited value regardless of where in the tree it sits.
+export function renderCampaignBodyHtml(html: string): string {
+  return `<div style="font-size:15px;line-height:1.6;color:#3a3448;">${sanitizeCampaignHtml(html)}</div>`;
+}
+
+// Plain-text fallback for the Text MIME part -- strips the rich-text HTML
+// down to readable plain text rather than leaving raw markup in the
+// fallback that some mail clients show. Block-level tags become paragraph
+// breaks, <br> becomes a line break, and a link keeps its visible text
+// with the URL appended in parentheses (the same convention the old
+// markdown-lite fallback used).
+export function htmlToPlainText(html: string): string {
+  return html
+    .replace(/<a\b[^>]*\shref\s*=\s*(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_m, _q, url, inner) => {
+      const linkText = inner.replace(/<[^>]+>/g, "").trim();
+      return url ? `${linkText} (${url})` : linkText;
+    })
+    .replace(/<\/(p|div|h[1-6]|li)>/gi, "\n\n")
+    .replace(/<(p|div|h[1-6]|li)\b[^>]*>/gi, "")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 // Replaces {{firstName}} in a subject or body with the actual recipient's

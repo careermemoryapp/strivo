@@ -12,7 +12,10 @@ import { sendCampaignEmail } from "@/lib/email";
 const schema = z.object({
   toEmail: z.string().trim().email("Enter a valid email address."),
   subject: z.string().trim().min(1, "Add a subject line before sending.").max(150),
-  bodyMarkdown: z.string().trim().min(1, "Add a message body before sending.").max(10000),
+  // Rich-text HTML from the admin composer, not plain markdown-lite text --
+  // see the same field on the real campaign send route for why the cap is
+  // higher than a plain-text body would need.
+  bodyHtml: z.string().trim().min(1, "Add a message body before sending.").max(30000),
   bannerImageUrl: z.string().trim().url("Banner image must be a valid https:// URL.").or(z.literal("")).optional(),
   buttonText: z.string().trim().max(40, "Button text is too long.").or(z.literal("")).optional(),
   buttonUrl: z.string().trim().url("Button link must be a valid https:// URL.").or(z.literal("")).optional(),
@@ -43,7 +46,7 @@ export async function POST(req: Request) {
     toUserId: "test",
     firstName: "there",
     subject: parsed.data.subject,
-    bodyMarkdown: parsed.data.bodyMarkdown,
+    bodyHtml: parsed.data.bodyHtml,
     bannerImageUrl: parsed.data.bannerImageUrl || null,
     buttonText: parsed.data.buttonText || null,
     buttonUrl: parsed.data.buttonUrl || null,

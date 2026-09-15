@@ -1,7 +1,7 @@
 import { SESClient, SendEmailCommand } from "@aws-sdk/client-ses";
 import * as Sentry from "@sentry/nextjs";
 import { createUnsubscribeToken } from "@/lib/emailUnsubscribe";
-import { personalize, renderMarkdownLiteToHtml, renderMarkdownLiteToText, wrapBrandedEmail } from "@/lib/emailTemplate";
+import { personalize, renderCampaignBodyHtml, htmlToPlainText, wrapBrandedEmail } from "@/lib/emailTemplate";
 import { renderWelcomeEmailHtml, renderWelcomeEmailText } from "@/lib/emailWelcome";
 import { renderGiftEmailHtml, renderGiftEmailText, type GiftPlan } from "@/lib/emailGift";
 import { renderProductUpdateEmailHtml, renderProductUpdateEmailText } from "@/lib/emailProductUpdate";
@@ -313,7 +313,7 @@ export async function sendCampaignEmail(params: {
   toUserId: string;
   firstName: string;
   subject: string;
-  bodyMarkdown: string;
+  bodyHtml: string;
   bannerImageUrl?: string | null;
   buttonText?: string | null;
   buttonUrl?: string | null;
@@ -325,10 +325,10 @@ export async function sendCampaignEmail(params: {
   }
 
   const subject = personalize(params.subject, params.firstName);
-  const bodyMarkdown = personalize(params.bodyMarkdown, params.firstName);
+  const bodyHtml = personalize(params.bodyHtml, params.firstName);
   const unsubscribeUrl = `${APP_ORIGIN}/api/email/unsubscribe?t=${createUnsubscribeToken(params.toUserId)}`;
   const html = wrapBrandedEmail({
-    bodyHtml: renderMarkdownLiteToHtml(bodyMarkdown),
+    bodyHtml: renderCampaignBodyHtml(bodyHtml),
     unsubscribeUrl,
     accentColor: params.accentColor,
     bannerImageUrl: params.bannerImageUrl,
@@ -341,7 +341,7 @@ export async function sendCampaignEmail(params: {
   // Html.
   const buttonLine =
     params.buttonText?.trim() && params.buttonUrl?.trim() ? `\n${params.buttonText.trim()}: ${params.buttonUrl.trim()}\n` : "";
-  const text = `${renderMarkdownLiteToText(bodyMarkdown)}\n${buttonLine}\n---\nUnsubscribe from marketing emails: ${unsubscribeUrl}`;
+  const text = `${htmlToPlainText(bodyHtml)}\n${buttonLine}\n---\nUnsubscribe from marketing emails: ${unsubscribeUrl}`;
 
   try {
     await getClient().send(

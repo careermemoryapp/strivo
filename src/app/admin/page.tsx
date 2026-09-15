@@ -41,7 +41,8 @@ import type { EmailTemplate } from "@/lib/repo/emailTemplates";
 // Pure string-rendering helpers, no server-only imports (no db, no crypto) --
 // safe to run client-side so the composer can show an exact live preview
 // without a round trip to the server or an actual test send.
-import { renderMarkdownLiteToHtml, wrapBrandedEmail, personalize } from "@/lib/emailTemplate";
+import { renderMarkdownLiteToHtml, renderCampaignBodyHtml, htmlToPlainText, wrapBrandedEmail, personalize } from "@/lib/emailTemplate";
+import { RichTextEditor } from "@/components/RichTextEditor";
 import type { SentryIssue } from "@/lib/sentry";
 import type { SecurityCheck, DependencyAuditSummary } from "@/lib/securityStatus";
 import type { LiveSecurityStatus } from "@/lib/liveSecurityStatus";
@@ -638,7 +639,7 @@ export default function AdminDashboardPage() {
   // message the admin has since changed.
   async function handleSendCampaign(e: FormEvent) {
     e.preventDefault();
-    if (!campaignSubject.trim() || !campaignBody.trim()) return;
+    if (!campaignSubject.trim() || campaignBodyIsEmpty) return;
     if (!confirmingSend) {
       setConfirmingSend(true);
       return;
@@ -651,7 +652,7 @@ export default function AdminDashboardPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subject: campaignSubject.trim(),
-          bodyMarkdown: campaignBody.trim(),
+          bodyHtml: campaignBody.trim(),
           segment: campaignSegment,
           bannerImageUrl: campaignBannerUrl.trim(),
           buttonText: campaignButtonText.trim(),
@@ -681,7 +682,7 @@ export default function AdminDashboardPage() {
   }
 
   async function handleSendTestCampaign() {
-    if (!testEmail.trim() || !campaignSubject.trim() || !campaignBody.trim()) return;
+    if (!testEmail.trim() || !campaignSubject.trim() || campaignBodyIsEmpty) return;
     setSendingTest(true);
     setTestStatus(null);
     try {
@@ -691,7 +692,7 @@ export default function AdminDashboardPage() {
         body: JSON.stringify({
           toEmail: testEmail.trim(),
           subject: campaignSubject.trim(),
-          bodyMarkdown: campaignBody.trim(),
+          bodyHtml: campaignBody.trim(),
           bannerImageUrl: campaignBannerUrl.trim(),
           buttonText: campaignButtonText.trim(),
           buttonUrl: campaignButtonUrl.trim(),
@@ -707,12 +708,24 @@ export default function AdminDashboardPage() {
     }
   }
 
+  // A template saved before the rich-text editor existed has a body that's
+  // plain markdown-lite text (**bold**, [text](url)), not real HTML -- this
+  // is how handleLoadTemplate below tells the two apart so an old template
+  // still shows up correctly formatted (actually bold, actual links)
+  // instead of literal asterisks and brackets the first time it's loaded
+  // into the new editor. A body written by the rich-text editor always
+  // contains at least one real tag (even a bare paragraph is wrapped in
+  // <p>...</p>), which old plain text never does.
+  function looksLikeHtml(body: string): boolean {
+    return /<[a-z][\s\S]*>/i.test(body);
+  }
+
   // Populates every composer field from a saved/starter template. Doesn't
   // send or save anything -- just a fast way to start from something
   // written before instead of a blank subject/body.
   function handleLoadTemplate(t: EmailTemplate) {
     setCampaignSubject(t.subject);
-    setCampaignBody(t.body);
+    setCampaignBody(looksLikeHtml(t.body) ? t.body : renderMarkdownLiteToHtml(t.body));
     setCampaignBannerUrl(t.banner_image_url ?? "");
     setCampaignButtonText(t.button_text ?? "");
     setCampaignButtonUrl(t.button_url ?? "");
@@ -722,7 +735,7 @@ export default function AdminDashboardPage() {
   }
 
   async function handleSaveTemplate() {
-    if (!newTemplateName.trim() || !campaignSubject.trim() || !campaignBody.trim()) return;
+    if (!newTemplateName.trim() || !campaignSubject.trim() || campaignBodyIsEmpty) return;
     setSavingTemplate(true);
     try {
       const res = await fetch("/api/admin/email-templates", {
@@ -781,10 +794,24 @@ export default function AdminDashboardPage() {
   // a signed per-user token, which is server-only -- see emailUnsubscribe.ts
   // -- but the footer text/styling looks identical either way). Recomputes
   // on every keystroke since it's just string templating, no network call.
+  // campaignBody is now rich-text HTML from RichTextEditor, not plain text
+  // -- deleting all the visible text can still leave the DOM non-empty
+  // (contentEditable commonly leaves behind something like "<p><br></p>"
+  // rather than a true empty string), so a plain `!campaignBody.trim()`
+  // check would let an admin "send" a blank-looking message. Stripping to
+  // plain text first is what actually answers "is there anything to send."
+  // Not wrapped in useMemo -- stripping tags from a short email body on
+  // every render is cheap, and the React Compiler (see eslint's
+  // react-hooks/preserve-manual-memoization rule) couldn't reconcile a
+  // manual memo here with its own auto-memoization since this value is
+  // read from closures defined earlier in the component (handleSendCampaign
+  // etc.) as well as from JSX below.
+  const campaignBodyIsEmpty = htmlToPlainText(campaignBody).trim().length === 0;
+
   const emailPreviewHtml = useMemo(() => {
-    const bodyMarkdown = personalize(campaignBody || "_Your message will appear here._", "there");
+    const bodyHtml = personalize(campaignBody || "<p>Your message will appear here.</p>", "there");
     return wrapBrandedEmail({
-      bodyHtml: renderMarkdownLiteToHtml(bodyMarkdown),
+      bodyHtml: renderCampaignBodyHtml(bodyHtml),
       unsubscribeUrl: "https://strivo.ai/api/email/unsubscribe?t=preview",
       accentColor: campaignAccentColor,
       bannerImageUrl: campaignBannerUrl,
@@ -1531,23 +1558,17 @@ export default function AdminDashboardPage() {
                     <label className="mb-1 block text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
                       Message
                     </label>
-                    <textarea
+                    <RichTextEditor
                       value={campaignBody}
-                      onChange={(e) => {
-                        setCampaignBody(e.target.value);
+                      onChange={(html) => {
+                        setCampaignBody(html);
                         setConfirmingSend(false);
                       }}
-                      placeholder={
-                        "Hi {{firstName}},\n\nWrite your message here. **Bold** and [links](https://strivo.ai) both work — leave a blank line between paragraphs."
-                      }
-                      maxLength={10000}
-                      rows={6}
-                      className="w-full resize-none rounded-[11px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-sm text-ink placeholder:text-[#a29ab9] outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                      placeholder="Hi {{firstName}}, write your message here…"
                     />
                     <p className="mt-1 text-[10.5px] text-ink-faint">
-                      <code>{"{{firstName}}"}</code> personalizes per recipient, <code>**bold**</code> and{" "}
-                      <code>[text](https://...)</code> both render. Every send gets an unsubscribe footer
-                      automatically.
+                      <code>{"{{firstName}}"}</code> personalizes per recipient. Every send gets an unsubscribe
+                      footer automatically.
                     </p>
                   </div>
                   <div>
@@ -1680,7 +1701,7 @@ export default function AdminDashboardPage() {
                     <button
                       type="button"
                       onClick={handleSendTestCampaign}
-                      disabled={!testEmail.trim() || !campaignSubject.trim() || !campaignBody.trim() || sendingTest}
+                      disabled={!testEmail.trim() || !campaignSubject.trim() || campaignBodyIsEmpty || sendingTest}
                       className="whitespace-nowrap rounded-pill border border-[#ece5f5] bg-surface px-3.5 py-2 text-xs font-semibold text-ink-soft disabled:opacity-50"
                     >
                       {sendingTest ? "Sending…" : "Send test to this address"}
@@ -1701,7 +1722,7 @@ export default function AdminDashboardPage() {
                       <button
                         type="button"
                         onClick={() => setShowSaveTemplateInput(true)}
-                        disabled={!campaignSubject.trim() || !campaignBody.trim()}
+                        disabled={!campaignSubject.trim() || campaignBodyIsEmpty}
                         className="text-xs font-semibold text-[#8b5cf6] disabled:opacity-50"
                       >
                         Save as template
@@ -1740,7 +1761,7 @@ export default function AdminDashboardPage() {
                   <div className="flex items-center gap-3 pt-1">
                     <button
                       type="submit"
-                      disabled={!campaignSubject.trim() || !campaignBody.trim() || sendingCampaign}
+                      disabled={!campaignSubject.trim() || campaignBodyIsEmpty || sendingCampaign}
                       className="flex items-center gap-2 rounded-pill px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
                       style={{
                         background: confirmingSend

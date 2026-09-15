@@ -223,3 +223,13 @@ body {
 .animate-splash-dot {
   animation: splash-dot 1.1s ease-in-out infinite;
 }
+
+/* Placeholder text for the admin email composer's rich-text editor (see
+   src/components/RichTextEditor.tsx) -- contentEditable has no native
+   `placeholder` attribute, so this is the standard :empty + ::before
+   substitute, shown only while the box has no content at all. */
+.rte-editable:empty:before {
+  content: attr(data-placeholder);
+  color: #a29ab9;
+  pointer-events: none;
+}
