@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireUserId } from "@/lib/serverAuth";
 import { listMemories } from "@/lib/repo/memories";
+import { withProjectNames } from "@/lib/repo/projects";
 import { MemoriesListClient } from "./MemoriesListClient";
 
 // Server Component: fetches the default (newest-first, unfiltered) memory
@@ -12,8 +13,9 @@ export default async function MemoriesPage() {
 
   const memories = listMemories(userId, {});
 
-  // node:sqlite rows aren't plain objects, so they can't cross the
-  // Server -> Client boundary as-is -- see the matching comment in
-  // chats/[id]/page.tsx.
-  return <MemoriesListClient initialMemories={memories.map((m) => ({ ...m }))} />;
+  // withProjectNames spreads each row into a fresh plain object itself
+  // (see its comment in lib/repo/projects.ts), which also satisfies the
+  // "node:sqlite rows aren't plain objects" Server -> Client boundary rule
+  // -- see the matching comment in chats/[id]/page.tsx.
+  return <MemoriesListClient initialMemories={withProjectNames(userId, memories)} />;
 }

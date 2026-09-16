@@ -1,4 +1,5 @@
 import { getDb, newId, nowIso } from "@/lib/db";
+import type { Memory } from "./memories";
 
 // A real, permanent project a user creates (Settings > Projects) that
 // memories can be assigned to -- see the migration comment on the
@@ -83,4 +84,20 @@ export function countMemoriesByProject(userId: string): Record<string, number> {
   const counts: Record<string, number> = {};
   for (const row of rows) counts[row.project_id] = row.c;
   return counts;
+}
+
+// Attaches each memory's project NAME (not just its id) for any list view
+// that needs to show a project tag inline -- see the highlighted project
+// pill on MemoryCard, wired in from the /api/memories GET route and the
+// Memories tab's server-side initial fetch. One listProjects() call per
+// request rather than a join per memory, since a user's project count is
+// always small. Memories with no project (project_id null) get
+// project_name: null, same "no project" convention as project_id itself.
+export type MemoryWithProjectName = Memory & { project_name: string | null };
+
+export function withProjectNames(userId: string, memories: Memory[]): MemoryWithProjectName[] {
+  if (memories.length === 0) return [];
+  const projects = listProjects(userId);
+  const nameById = new Map(projects.map((p) => [p.id, p.name]));
+  return memories.map((m) => ({ ...m, project_name: m.project_id ? (nameById.get(m.project_id) ?? null) : null }));
 }

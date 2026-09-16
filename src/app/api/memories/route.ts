@@ -14,7 +14,7 @@ import { searchMemoriesHybrid } from "@/lib/retrieval";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired, getUserById } from "@/lib/repo/users";
 import { createPendingCheckin, countOpenCheckins } from "@/lib/repo/pendingCheckins";
-import { listProjects } from "@/lib/repo/projects";
+import { listProjects, withProjectNames } from "@/lib/repo/projects";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -31,7 +31,9 @@ export async function GET(req: Request) {
   // comment in lib/retrieval.ts -- so this is a no-cost no-op for the
   // default browse/filter-only case.
   const memories = await searchMemoriesHybrid(userId, { search, sort, category, competency });
-  return NextResponse.json({ memories });
+  // Attaches each memory's project NAME so MemoryCard can show a project
+  // tag -- see withProjectNames' comment in lib/repo/projects.ts.
+  return NextResponse.json({ memories: withProjectNames(userId, memories) });
 }
 
 const createSchema = z.object({

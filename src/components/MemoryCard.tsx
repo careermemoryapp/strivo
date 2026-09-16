@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { format } from "date-fns";
-import { MoreVertical, Trash2, Copy } from "lucide-react";
+import { MoreVertical, Trash2, Copy, Folder } from "lucide-react";
 import { Card } from "@/components/Card";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { memoryCategoryDef } from "@/lib/categoryIcons";
@@ -16,7 +16,12 @@ export function MemoryCard({
   onChanged,
   onDeleted,
 }: {
-  memory: Memory;
+  // project_name is optional (rather than always present on Memory itself)
+  // since not every caller enriches its list with it -- see
+  // withProjectNames in lib/repo/projects.ts, wired in on the Memories tab
+  // and /api/memories's GET. Callers that don't (e.g. the relevant-
+  // memories-for-a-chat view) simply don't get the tag below.
+  memory: Memory & { project_name?: string | null };
   menu?: boolean;
   onChanged?: () => void;
   onDeleted?: (id: string) => void;
@@ -84,6 +89,19 @@ export function MemoryCard({
               </p>
               <div className="mt-2 flex items-center gap-1.5 flex-wrap">
                 <span className="text-xs text-ink-faint">{format(new Date(memory.created_at), "MMM d")}</span>
+                {/* Only memories actually filed under a project get this --
+                    a gradient pill (the app's one "highlight" treatment,
+                    also used for the Record capture button and the project
+                    suggestion card) so it stands out from the flat category
+                    pill next to it, at a glance in the list. */}
+                {memory.project_name && (
+                  <span
+                    className="flex items-center gap-1 rounded-pill px-2 py-0.5 text-[11px] font-semibold text-white"
+                    style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                  >
+                    <Folder size={10} /> {memory.project_name}
+                  </span>
+                )}
                 {memory.category && (
                   <span className="rounded-pill bg-brand-primary-soft px-2 py-0.5 text-[11px] font-semibold text-brand-primary">
                     {memory.category}

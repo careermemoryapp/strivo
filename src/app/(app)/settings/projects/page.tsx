@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FolderKanban, FolderPlus, Pencil, Trash2, X, Check, Sparkles } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { FolderKanban, FolderPlus, Pencil, Trash2, X, Check, Sparkles, ChevronRight } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -23,6 +24,7 @@ type ProjectWithCount = Project & { memoryCount: number };
 // toggles, so it gets the more "alive" treatment other action-heavy screens
 // already use.
 export default function ProjectsSettingsPage() {
+  const router = useRouter();
   const [projects, setProjects] = useState<ProjectWithCount[] | null>(null);
   const [loadError, setLoadError] = useState(false);
 
@@ -294,35 +296,51 @@ export default function ProjectsSettingsPage() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] text-white"
-                      style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                  // Relative wrapper + an absolutely-positioned edit/delete
+                  // cluster ON TOP of a full-width row button -- same
+                  // non-nested-buttons pattern MemoryCard.tsx uses for its
+                  // menu button over its Link. Tapping the row (anywhere
+                  // outside those two icons) opens this project's memories
+                  // (see ProjectMemoriesClient.tsx) -- "click on that
+                  // particular project, it should show me what all three
+                  // memories it's talking about," not just the count.
+                  <div className="relative">
+                    <button
+                      onClick={() => router.push(`/settings/projects/${p.id}`)}
+                      className="flex w-full items-center gap-3 py-0.5 pr-16 text-left"
                     >
-                      <FolderKanban size={17} />
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-semibold text-ink">{p.name}</p>
-                      <p className="text-xs text-ink-faint">
-                        {p.memoryCount === 0
-                          ? "No memories yet"
-                          : `${p.memoryCount} ${p.memoryCount === 1 ? "memory" : "memories"}`}
-                      </p>
+                      <span
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] text-white"
+                        style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                      >
+                        <FolderKanban size={17} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-semibold text-ink">{p.name}</p>
+                        <p className="text-xs text-ink-faint">
+                          {p.memoryCount === 0
+                            ? "No memories yet"
+                            : `${p.memoryCount} ${p.memoryCount === 1 ? "memory" : "memories"}`}
+                        </p>
+                      </div>
+                      <ChevronRight size={15} className="shrink-0 text-[#cec7dd]" />
+                    </button>
+                    <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center gap-1">
+                      <button
+                        onClick={() => startEdit(p)}
+                        aria-label={`Rename ${p.name}`}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a29ab9] hover:bg-[#f5f2fb] hover:text-[#8b5cf6]"
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <button
+                        onClick={() => setDeleteTarget(p)}
+                        aria-label={`Delete ${p.name}`}
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a29ab9] hover:bg-red-50 hover:text-red-600"
+                      >
+                        <Trash2 size={15} />
+                      </button>
                     </div>
-                    <button
-                      onClick={() => startEdit(p)}
-                      aria-label={`Rename ${p.name}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a29ab9] hover:bg-[#f5f2fb] hover:text-[#8b5cf6]"
-                    >
-                      <Pencil size={15} />
-                    </button>
-                    <button
-                      onClick={() => setDeleteTarget(p)}
-                      aria-label={`Delete ${p.name}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a29ab9] hover:bg-red-50 hover:text-red-600"
-                    >
-                      <Trash2 size={15} />
-                    </button>
                   </div>
                 )}
               </div>

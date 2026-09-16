@@ -309,6 +309,18 @@ export function setMemoryProject(userId: string, id: string, projectId: string |
   db.prepare(`UPDATE memories SET project_id = ? WHERE id = ? AND user_id = ?`).run(projectId, id, userId);
 }
 
+// Every memory currently filed under one project -- backs the "tap a
+// project to see what's in it" view (Settings > Projects > a project),
+// since countMemoriesByProject (lib/repo/projects.ts) only ever gave a
+// number, not the actual memories behind it. Newest-first, same convention
+// as listMemories' default sort.
+export function listMemoriesByProject(userId: string, projectId: string): Memory[] {
+  const db = getDb();
+  return db
+    .prepare(`SELECT * FROM memories WHERE user_id = ? AND project_id = ? ORDER BY created_at DESC`)
+    .all(userId, projectId) as Memory[];
+}
+
 export function countMemories(userId: string): number {
   const db = getDb();
   const row = db
