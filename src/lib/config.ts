@@ -165,10 +165,10 @@ export const CAREER_WRAPPED_EVENTS = [
 // above: lib/trackEvent.ts's type and the server zod enum in
 // app/api/analytics/event/route.ts both derive from the UNION of this array
 // and CAREER_WRAPPED_EVENTS, not from this one alone -- see trackEvent.ts.
-// Only the events actually wired up in phase-3-stage-1 (engine + the
-// Career Superpower quiz) are listed here so far; the rest of the funnel
-// (career_profile_card_revealed, share-platform events, signup-funnel
-// events, etc.) gets added in the same place once that later work ships.
+// The card_* events mirror CAREER_WRAPPED_EVENTS' own card-generation/share
+// events one-for-one (career_profile_card_generated <-> career_card_generated,
+// etc.) but under distinct names so a Career Profile share can never be
+// confused with a Career Wrapped share in analytics.
 export const CAREER_PROFILE_EVENTS = [
   "career_profile_viewed",
   "career_profile_started",
@@ -177,6 +177,14 @@ export const CAREER_PROFILE_EVENTS = [
   "career_quiz_question_answered",
   "career_quiz_completed",
   "career_profile_completed",
+  "career_profile_card_revealed",
+  "career_profile_card_generated",
+  "career_profile_card_share_clicked",
+  "career_profile_card_shared_linkedin",
+  "career_profile_card_shared_x",
+  "career_profile_card_shared_whatsapp",
+  "career_profile_card_downloaded",
+  "career_profile_add_memory_clicked",
 ] as const;
 
 export const NEW_CHAT_TEMPLATES = [

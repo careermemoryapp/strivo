@@ -37,7 +37,7 @@ function makeUser() {
 }
 
 describe("Career Profile: quiz roster", () => {
-  it("has exactly 5 quizzes in a fixed order, with only Career Superpower implemented so far", () => {
+  it("has exactly 5 quizzes in a fixed order, all implemented", () => {
     expect(careerProfile.CAREER_PROFILE_QUIZ_ORDER).toEqual([
       "career_superpower",
       "corporate_character",
@@ -48,12 +48,61 @@ describe("Career Profile: quiz roster", () => {
     const implemented = careerProfile.CAREER_PROFILE_QUIZ_ORDER.filter(
       (id) => careerProfile.CAREER_PROFILE_QUIZZES[id].implemented
     );
-    expect(implemented).toEqual(["career_superpower"]);
+    expect(implemented).toEqual(careerProfile.CAREER_PROFILE_QUIZ_ORDER);
   });
 
-  it("getCareerProfileQuizDefinition returns null for a roster entry with no content yet", () => {
-    expect(careerProfile.getCareerProfileQuizDefinition("career_mode")).toBeNull();
-    expect(careerProfile.getCareerProfileQuizDefinition("career_superpower")).not.toBeNull();
+  it("getCareerProfileQuizDefinition returns a real definition for every roster entry", () => {
+    for (const id of careerProfile.CAREER_PROFILE_QUIZ_ORDER) {
+      expect(careerProfile.getCareerProfileQuizDefinition(id)).not.toBeNull();
+    }
+  });
+
+  it("every quiz has 7 questions x 4 options, and every archetype is reachable by some option", () => {
+    for (const id of careerProfile.CAREER_PROFILE_QUIZ_ORDER) {
+      const quiz = careerProfile.getCareerProfileQuizDefinition(id)!;
+      expect(quiz.questions).toHaveLength(7);
+      for (const q of quiz.questions) {
+        expect(q.options).toHaveLength(4);
+      }
+      const reachable = new Set(quiz.questions.flatMap((q) => q.options.map((o) => o.dimension)));
+      for (const archetype of quiz.archetypes) {
+        expect(reachable.has(archetype.key)).toBe(true);
+      }
+      expect(quiz.archetypes).toHaveLength(8);
+      expect(new Set(quiz.tieBreakOrder).size).toBe(8);
+      expect(quiz.tieBreakOrder.every((k) => quiz.archetypes.some((a) => a.key === k))).toBe(true);
+    }
+  });
+
+  it("is deterministic for every quiz -- the same answers always produce the same result", () => {
+    for (const id of careerProfile.CAREER_PROFILE_QUIZ_ORDER) {
+      const quiz = careerProfile.getCareerProfileQuizDefinition(id)!;
+      const answers = ["a", "b", "c", "d", "a", "b", "c"];
+      const first = careerProfile.scoreCareerProfileQuiz(quiz, answers);
+      const second = careerProfile.scoreCareerProfileQuiz(quiz, answers);
+      expect(second).toEqual(first);
+    }
+  });
+
+  it("breaks ties deterministically for every quiz -- the winner is always earliest in tieBreakOrder among tied dimensions", () => {
+    const answerSets = [
+      ["a", "b", "c", "d", "a", "b", "c"],
+      ["c", "c", "c", "c", "c", "c", "c"],
+      ["d", "a", "d", "b", "d", "d", "d"],
+      ["b", "d", "b", "a", "b", "c", "b"],
+    ];
+    for (const id of careerProfile.CAREER_PROFILE_QUIZ_ORDER) {
+      const quiz = careerProfile.getCareerProfileQuizDefinition(id)!;
+      for (const answers of answerSets) {
+        const { resultKey, dimensionScores } = careerProfile.scoreCareerProfileQuiz(quiz, answers);
+        const topScore = Math.max(...Object.values(dimensionScores));
+        const tiedKeys = Object.entries(dimensionScores)
+          .filter(([, score]) => score === topScore)
+          .map(([key]) => key);
+        const expectedWinner = quiz.tieBreakOrder.find((key) => tiedKeys.includes(key));
+        expect(resultKey).toBe(expectedWinner);
+      }
+    }
   });
 });
 
@@ -208,5 +257,71 @@ describe("Career Profile: persistence + progress", () => {
 
     expect(careerProfileRepo.getCareerProfileProgress(userA.id).completedCount).toBe(1);
     expect(careerProfileRepo.getCareerProfileProgress(userB.id).completedCount).toBe(0);
+  });
+});
+
+describe("Career Profile: card data", () => {
+  function completeAllQuizzes(userId: string) {
+    for (const quizId of careerProfile.CAREER_PROFILE_QUIZ_ORDER) {
+      const quiz = careerProfile.getCareerProfileQuizDefinition(quizId)!;
+      const answers = ["a", "b", "c", "d", "a", "b", "c"];
+      const { dimensionScores, resultKey } = careerProfile.scoreCareerProfileQuiz(quiz, answers);
+      careerProfileRepo.upsertCareerProfileResult({
+        userId,
+        quizId,
+        quizVersion: quiz.meta.version,
+        answers,
+        dimensionScores,
+        resultKey,
+      });
+    }
+  }
+
+  it("returns null before all 5 quizzes are complete", () => {
+    const user = makeUser();
+    expect(careerProfileRepo.buildCareerProfileCardData(user.id, user.first_name)).toBeNull();
+
+    const quiz = careerProfile.CAREER_SUPERPOWER_QUIZ;
+    const { dimensionScores, resultKey } = careerProfile.scoreCareerProfileQuiz(quiz, ["a", "b", "c", "d", "a", "b", "c"]);
+    careerProfileRepo.upsertCareerProfileResult({
+      userId: user.id,
+      quizId: "career_superpower",
+      quizVersion: quiz.meta.version,
+      answers: ["a", "b", "c", "d", "a", "b", "c"],
+      dimensionScores,
+      resultKey,
+    });
+    expect(careerProfileRepo.buildCareerProfileCardData(user.id, user.first_name)).toBeNull();
+  });
+
+  it("returns exactly 5 rows, in roster order, once all 5 quizzes are complete", () => {
+    const user = makeUser();
+    completeAllQuizzes(user.id);
+
+    const card = careerProfileRepo.buildCareerProfileCardData(user.id, user.first_name);
+    expect(card).not.toBeNull();
+    expect(card!.title).toBe(`${user.first_name}'s Career Profile`);
+    expect(card!.rows).toHaveLength(5);
+    expect(card!.rows.map((r) => r.eyebrow)).toEqual([
+      "CAREER SUPERPOWER",
+      "CORPORATE CHARACTER",
+      "CORPORATE RED FLAG",
+      "AI-ERA ADVANTAGE",
+      "CAREER MODE",
+    ]);
+    // Every row has a real title, never the "no result" fallback, and a
+    // quizId that matches the roster order above.
+    expect(card!.rows.map((r) => r.quizId)).toEqual(careerProfile.CAREER_PROFILE_QUIZ_ORDER);
+    for (const row of card!.rows) {
+      expect(row.title).not.toBe("—");
+      expect(row.title.length).toBeGreaterThan(0);
+    }
+  });
+
+  it("falls back to a generic title when the user has no first name on file", () => {
+    const user = makeUser();
+    completeAllQuizzes(user.id);
+    const card = careerProfileRepo.buildCareerProfileCardData(user.id, null);
+    expect(card!.title).toBe("Your Career Profile");
   });
 });
