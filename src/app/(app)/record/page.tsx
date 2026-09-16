@@ -1,7 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { FilePicker } from "@capawesome/capacitor-file-picker";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -67,13 +67,29 @@ function formatClock(totalSeconds: number): string {
   return `${m}:${String(s).padStart(2, "0")}`;
 }
 
+// Home's flow-strip buttons deep-link here with ?mode=type|voice|upload
+// (see FlowStep in HomeClient.tsx) so "Record" and "Create Memory" can land
+// on this same page pre-set to the right tab instead of always defaulting
+// to Voice. useSearchParams needs a Suspense boundary in the app router --
+// same pattern as (auth)/login/page.tsx.
 export default function RecordPage() {
+  return (
+    <Suspense fallback={null}>
+      <RecordPageInner />
+    </Suspense>
+  );
+}
+
+function RecordPageInner() {
   const router = useRouter();
   const speech = useSpeechRecognition();
   const user = useCurrentUser();
+  const searchParams = useSearchParams();
+
+  const initialMode: Mode = searchParams.get("mode") === "type" ? "type" : searchParams.get("mode") === "upload" ? "upload" : "voice";
 
   const [stage, setStage] = useState<Stage>("capture");
-  const [mode, setMode] = useState<Mode>("voice");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [typedText, setTypedText] = useState("");
   const [uploadText, setUploadText] = useState("");
   const [saving, setSaving] = useState(false);

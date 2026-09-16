@@ -3,7 +3,7 @@
 import { useState, useCallback, FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, ArrowRight, Briefcase,
+  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, MessageSquare,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
@@ -84,12 +84,19 @@ type StartChatArgs = {
   prompt: string;
 };
 
-// Home's own palette — deliberately not the shared theme tokens, since only
-// Home has this dark-header/soothing-body treatment for now (staged
-// rollout; the rest of the app is still the standard light theme). Kept in
-// one place so the header, hero, and bottom nav (see BottomNav.tsx) can be
-// kept in sync by eye.
-const DARK = "#26213c";
+// Home's own palette — deliberately not the shared theme tokens. Home is
+// now a fully dark, free-flowing page matching the marketing site's own
+// look (src/components/marketing/MarketingHome.tsx: bg #0a0a0f, hairline
+// `border-[#1e1e26]` section dividers instead of boxed white/bordered
+// cards, sparse `border-[#2a2a35]` cards where a card is genuinely
+// warranted) — product feedback was that a stack of differently-styled
+// boxed cards read as disconnected, and that the app and marketing site
+// should feel like one product. This is staged to Home only for now (the
+// rest of the app — Record, Chats, Memories, Settings — is still the
+// standard light theme); expanding further is a separate decision.
+const DARK = "#0a0a0f";
+const HAIRLINE = "border-[#1e1e26]";
+const CARD_BORDER = "border-[#2a2a35]";
 
 // initialData is fetched server-side by page.tsx (a Server Component)
 // before anything reaches the browser — see ChatDetailClient.tsx for the
@@ -218,23 +225,40 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
   );
 
   return (
-    <div className="pb-6">
+    <div className="pb-6" style={{ background: DARK }}>
       {header}
 
-      {/* "How Strivo.ai works" -- a brief, always-visible explainer so a
-          brand-new user understands what the app actually does before
-          being asked to record anything or take a quiz. Three steps,
-          intentionally terse (a few words each, not a paragraph) -- this
-          is orientation, not a pitch. */}
-      <div className="px-5 pt-5">
-        <div className="rounded-[18px] border border-[#ece5f5] bg-white p-4">
-          <div className="flex items-start justify-between gap-1">
-            <FlowStep icon={<Mic size={16} />} label="Record" sublabel="Talk or type about your work" />
-            <ArrowRight size={14} className="mt-3 shrink-0 text-[#cec7dd]" />
-            <FlowStep icon={<Sparkles size={16} />} label="Strivo.ai remembers" sublabel="Turns it into a career memory" />
-            <ArrowRight size={14} className="mt-3 shrink-0 text-[#cec7dd]" />
-            <FlowStep icon={<Briefcase size={16} />} label="Use it anywhere" sublabel="Resumes, interviews, reviews" />
-          </div>
+      {/* "How Strivo.ai works" -- same three steps, same labels and copy as
+          the marketing site's own "How it works" section (MarketingHome.tsx)
+          so a user never sees two different explanations of the same flow.
+          Unlike the marketing version (static phone-mockup screenshots for
+          visitors who can't act yet), these are real, functional buttons --
+          product feedback was explicit that a logged-in user should be able
+          to just tap Record / Create memory / Chat and go, not read a
+          description of what those do. */}
+      <div className={`border-t ${HAIRLINE} px-5 pt-6`}>
+        <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[#6d6d7a]">How Strivo.ai works</p>
+        <div className={`mt-3 flex items-stretch rounded-2xl border ${CARD_BORDER}`} style={{ background: "rgba(255,255,255,0.02)" }}>
+          <FlowButton
+            icon={<Mic size={17} />}
+            label="1. Record"
+            sublabel="Tap the mic, speak freely"
+            onClick={() => router.push("/record")}
+          />
+          <div className="w-px shrink-0 self-stretch" style={{ background: "#2a2a35" }} />
+          <FlowButton
+            icon={<Sparkles size={17} />}
+            label="2. Create memory"
+            sublabel="Transcribed & tagged for you"
+            onClick={() => router.push("/record?mode=type")}
+          />
+          <div className="w-px shrink-0 self-stretch" style={{ background: "#2a2a35" }} />
+          <FlowButton
+            icon={<MessageSquare size={17} />}
+            label="3. Chat"
+            sublabel="Ask for it back, anytime"
+            onClick={() => router.push("/chats")}
+          />
         </div>
       </div>
 
@@ -269,27 +293,19 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           heads-up; the actual trial cutoff is enforced separately by
           (app)/layout.tsx once the trial genuinely ends. */}
       {data.trial && data.trial.daysLeft <= TRIAL_REMINDER_THRESHOLD_DAYS && (
-        <div className="px-5 pt-4">
-          <button
-            onClick={() => router.push("/settings/subscription")}
-            className="flex w-full items-center gap-3 rounded-[14px] border border-[#f3d9a8] bg-[#fdf6e8] px-4 py-3 text-left"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#f8ecd2] text-[#b3811f]">
-              <Clock size={15} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-semibold text-[#5c4318]">
-                {data.trial.daysLeft <= 0
-                  ? "Your free trial ends today"
-                  : data.trial.daysLeft === 1
-                    ? "Your free trial ends tomorrow"
-                    : `Your free trial ends in ${data.trial.daysLeft} days`}
-              </p>
-              <p className="text-[11px] text-[#8a7550]">Tap to see your plan</p>
-            </div>
-            <ChevronRight size={15} className="shrink-0 text-[#c9ab6c]" />
-          </button>
-        </div>
+        <TeaserCard
+          onClick={() => router.push("/settings/subscription")}
+          icon={<Clock size={15} />}
+          accent="amber"
+          title={
+            data.trial.daysLeft <= 0
+              ? "Your free trial ends today"
+              : data.trial.daysLeft === 1
+                ? "Your free trial ends tomorrow"
+                : `Your free trial ends in ${data.trial.daysLeft} days`
+          }
+          subtitle="Tap to see your plan"
+        />
       )}
 
       {/* Proactive check-in teaser -- "Strivo remembered." Deliberately
@@ -299,21 +315,13 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           digest the user comes looking for -- see /check-in/[id] and
           app/api/checkins/run. */}
       {data.checkin && (
-        <div className="px-5 pt-4">
-          <button
-            onClick={() => router.push(`/check-in/${data.checkin!.id}`)}
-            className="flex w-full items-center gap-3 rounded-[14px] border border-rose-100 bg-rose-50 px-4 py-3 text-left"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-rose-500">
-              <MessageCircleQuestion size={15} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-semibold text-rose-800">One more thing —</p>
-              <p className="truncate text-[11px] text-rose-800/70">{data.checkin.question}</p>
-            </div>
-            <ChevronRight size={15} className="shrink-0 text-rose-300" />
-          </button>
-        </div>
+        <TeaserCard
+          onClick={() => router.push(`/check-in/${data.checkin!.id}`)}
+          icon={<MessageCircleQuestion size={15} />}
+          accent="rose"
+          title="One more thing —"
+          subtitle={data.checkin.question}
+        />
       )}
 
       {/* Weekly recap teaser -- secondary surface for anyone who opens the
@@ -323,21 +331,13 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           matching the milestone-badge color used on the Record success
           popup. */}
       {data.recap && (
-        <div className="px-5 pt-4">
-          <button
-            onClick={() => router.push("/recap")}
-            className="flex w-full items-center gap-3 rounded-[14px] border border-indigo-100 bg-indigo-50 px-4 py-3 text-left"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-indigo-500">
-              <CalendarDays size={15} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-semibold text-indigo-700">Your week in stories</p>
-              <p className="truncate text-[11px] text-indigo-700/70">{data.recap.headline}</p>
-            </div>
-            <ChevronRight size={15} className="shrink-0 text-indigo-300" />
-          </button>
-        </div>
+        <TeaserCard
+          onClick={() => router.push("/recap")}
+          icon={<CalendarDays size={15} />}
+          accent="indigo"
+          title="Your week in stories"
+          subtitle={data.recap.headline}
+        />
       )}
 
       {/* Growth narrative teaser -- secondary surface for anyone who opens
@@ -347,21 +347,13 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           trial banner and the indigo recap card above -- this is meant to
           read as the "biggest" of the three, not just another chip. */}
       {data.growth && (
-        <div className="px-5 pt-4">
-          <button
-            onClick={() => router.push("/growth")}
-            className="flex w-full items-center gap-3 rounded-[14px] border border-[#e6e2f7] bg-[#f5f3fd] px-4 py-3 text-left"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-[#7c6ff0]">
-              <TrendingUp size={15} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-semibold text-[#4a4270]">How you&apos;ve grown</p>
-              <p className="truncate text-[11px] text-[#4a4270]/70">{data.growth.text}</p>
-            </div>
-            <ChevronRight size={15} className="shrink-0 text-[#c3bce3]" />
-          </button>
-        </div>
+        <TeaserCard
+          onClick={() => router.push("/growth")}
+          icon={<TrendingUp size={15} />}
+          accent="violet"
+          title="How you've grown"
+          subtitle={data.growth.text}
+        />
       )}
 
       {/* Quarterly benchmark teaser -- secondary surface for anyone who
@@ -371,37 +363,27 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           recap (indigo) and growth (violet) teasers above since this one
           leads with real numbers rather than pure narrative. */}
       {data.benchmark && (
-        <div className="px-5 pt-4">
-          <button
-            onClick={() => router.push("/benchmark")}
-            className="flex w-full items-center gap-3 rounded-[14px] border border-emerald-100 bg-emerald-50 px-4 py-3 text-left"
-          >
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-emerald-600">
-              <Scale size={15} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="text-[12.5px] font-semibold text-emerald-800">
-                You vs. You — {data.benchmark.quarterLabel}
-              </p>
-              <p className="truncate text-[11px] text-emerald-800/70">{data.benchmark.text}</p>
-            </div>
-            <ChevronRight size={15} className="shrink-0 text-emerald-300" />
-          </button>
-        </div>
+        <TeaserCard
+          onClick={() => router.push("/benchmark")}
+          icon={<Scale size={15} />}
+          accent="emerald"
+          title={`You vs. You — ${data.benchmark.quarterLabel}`}
+          subtitle={data.benchmark.text}
+        />
       )}
 
-      {/* Calm invitation to record — the emotional centerpiece of the light
-          body, styled as a gentle prompt rather than a loud banner. */}
+      {/* Calm invitation to record — same brand gradient as the Career
+          Profile/Wrapped cards above it, so it reads as a sibling in the
+          same dark card family rather than a separate light-theme block. */}
       <div className="px-5 pt-5">
-        <div className="rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-5 text-center">
+        <div className={`rounded-2xl border ${CARD_BORDER} p-5 text-center`} style={{ background: "linear-gradient(135deg,#1c1533,#221a3d)" }}>
           <div
-            className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
-            style={{ boxShadow: "0 6px 16px rgba(139,92,246,0.18)" }}
+            className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-white/8 text-purple-300"
           >
             <Mic size={19} />
           </div>
-          <p className="text-sm font-semibold text-[#3c3650]">What&apos;s on your mind today?</p>
-          <p className="mt-0.5 text-[11px] text-[#8a82a8]">A minute of speaking is worth remembering.</p>
+          <p className="text-sm font-semibold text-white">What&apos;s on your mind today?</p>
+          <p className="mt-0.5 text-[11px] text-white/50">A minute of speaking is worth remembering.</p>
           <button
             onClick={() => router.push("/record")}
             className="mt-3.5 rounded-pill px-5 py-2.5 text-xs font-semibold text-white"
@@ -413,17 +395,10 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
       </div>
 
       {data.recentChats.length > 0 && (
-        <div className="px-5 pt-5">
-          {/* A colorful accent bar instead of a plain gray line — ties this
-              section back to the header/CTA gradient instead of just being
-              a generic hairline divider. */}
-          <div
-            className="mb-4 h-[3px] w-14 rounded-full"
-            style={{ background: "linear-gradient(90deg,#a78bfa,#60a5fa)" }}
-          />
+        <div className={`border-t ${HAIRLINE} mt-5 px-5 pt-5`}>
           <div className="mb-2.5 flex items-center justify-between">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Continue</p>
-            <button onClick={() => router.push("/chats")} className="text-[11px] font-semibold text-[#8b5cf6]">
+            <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[#6d6d7a]">Continue</p>
+            <button onClick={() => router.push("/chats")} className="text-[11px] font-semibold text-brand-secondary">
               View all
             </button>
           </div>
@@ -432,16 +407,16 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
               const Icon = chatCategoryIcon(chat.category);
               return (
                 <button key={chat.id} onClick={() => router.push(`/chats/${chat.id}`)} className="flex w-full items-center gap-3 text-left">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#f2effa] text-[#8b5cf6]">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border ${CARD_BORDER} text-brand-secondary`} style={{ background: "#161620" }}>
                     <Icon size={16} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-[12.5px] font-medium text-ink">{chat.title}</p>
-                    <p className="text-[11px] text-ink-faint">
+                    <p className="truncate text-[12.5px] font-medium text-white">{chat.title}</p>
+                    <p className="text-[11px] text-[#6d6d7a]">
                       Last active {formatDistanceToNowStrict(new Date(chat.updated_at), { addSuffix: true })}
                     </p>
                   </div>
-                  <ChevronRight size={15} className="shrink-0 text-[#cec7dd]" />
+                  <ChevronRight size={15} className="shrink-0 text-[#4a4a55]" />
                 </button>
               );
             })}
@@ -452,16 +427,71 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
   );
 }
 
-// One step in the "how Strivo.ai works" explainer above -- icon chip, a
-// short label, and a one-line sublabel. flex-1/min-w-0 so three of these
-// plus two arrow glyphs fit one row on a phone-width screen without
-// wrapping mid-word.
-function FlowStep({ icon, label, sublabel }: { icon: ReactNode; label: string; sublabel: string }) {
+// One step in the "how Strivo.ai works" explainer above -- a real, tappable
+// button (not just a description) matching the marketing site's own
+// "How it works" labels/copy exactly (see MarketingHome.tsx). flex-1/
+// min-w-0 so three of these fit one row on a phone-width screen without
+// wrapping mid-word; active:scale for a bit of tactile feedback since
+// these are now actions, not just illustration.
+function FlowButton({ icon, label, sublabel, onClick }: { icon: ReactNode; label: string; sublabel: string; onClick: () => void }) {
   return (
-    <div className="flex min-w-0 flex-1 flex-col items-center text-center">
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f2effa] text-[#8b5cf6]">{icon}</div>
-      <p className="mt-1.5 text-[11px] font-semibold leading-tight text-ink">{label}</p>
-      <p className="mt-0.5 text-[9.5px] leading-tight text-ink-faint">{sublabel}</p>
+    <button
+      onClick={onClick}
+      className="flex min-w-0 flex-1 flex-col items-center gap-1.5 px-2 py-4 text-center transition-transform active:scale-[0.97]"
+    >
+      <div
+        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#2a2a35] text-brand-secondary"
+        style={{ background: "#161620" }}
+      >
+        {icon}
+      </div>
+      <p className="text-[11px] font-semibold leading-tight text-white">{label}</p>
+      <p className="text-[9.5px] leading-tight text-[#6d6d7a]">{sublabel}</p>
+    </button>
+  );
+}
+
+// Accent palette for the teaser cards below -- each feature keeps its own
+// established color (see each card's own comment above its usage) but all
+// now share the same dark, sparsely-bordered card shape as the marketing
+// site's own cards (border-[#2a2a35], no solid pastel fills) instead of
+// five different light, solid-fill boxes.
+const TEASER_ACCENTS = {
+  amber: { icon: "text-amber-400", chip: "bg-amber-400/10" },
+  rose: { icon: "text-rose-400", chip: "bg-rose-400/10" },
+  indigo: { icon: "text-indigo-400", chip: "bg-indigo-400/10" },
+  violet: { icon: "text-violet-400", chip: "bg-violet-400/10" },
+  emerald: { icon: "text-emerald-400", chip: "bg-emerald-400/10" },
+} as const;
+
+function TeaserCard({
+  onClick,
+  icon,
+  accent,
+  title,
+  subtitle,
+}: {
+  onClick: () => void;
+  icon: ReactNode;
+  accent: keyof typeof TEASER_ACCENTS;
+  title: string;
+  subtitle: string;
+}) {
+  const { icon: iconClass, chip } = TEASER_ACCENTS[accent];
+  return (
+    <div className="px-5 pt-4">
+      <button
+        onClick={onClick}
+        className="flex w-full items-center gap-3 rounded-2xl border border-[#2a2a35] px-4 py-3.5 text-left"
+        style={{ background: "rgba(255,255,255,0.02)" }}
+      >
+        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${chip} ${iconClass}`}>{icon}</div>
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-[12.5px] font-semibold text-white">{title}</p>
+          <p className="truncate text-[11px] text-[#8a8a99]">{subtitle}</p>
+        </div>
+        <ChevronRight size={15} className="shrink-0 text-[#4a4a55]" />
+      </button>
     </div>
   );
 }
