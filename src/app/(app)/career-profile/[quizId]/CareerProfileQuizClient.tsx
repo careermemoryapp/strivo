@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, AnimatePresence, type Variants } from "framer-motion";
+import { Lock, ChevronRight, Sparkles } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { trackEvent } from "@/lib/trackEvent";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES, type CareerProfileQuizDefinition } from "@/lib/careerProfile";
@@ -72,7 +73,7 @@ export function CareerProfileQuizClient({ quiz }: { quiz: CareerProfileQuizDefin
   }
 
   if (result) {
-    return <ResultReveal quiz={quiz} result={result} />;
+    return <ResultReveal result={result} />;
   }
 
   return (
@@ -119,13 +120,22 @@ export function CareerProfileQuizClient({ quiz }: { quiz: CareerProfileQuizDefin
   );
 }
 
-function ResultReveal({ quiz, result }: { quiz: CareerProfileQuizDefinition; result: SubmitResult }) {
+function ResultReveal({ result }: { result: SubmitResult }) {
   const router = useRouter();
   const { result: r, progress } = result;
 
-  const nextQuizId = CAREER_PROFILE_QUIZ_ORDER.find(
-    (id) => id !== quiz.meta.id && !progress.completedQuizIds.includes(id) && CAREER_PROFILE_QUIZZES[id].implemented
-  );
+  // "Left to do" -- every quiz not yet completed, in fixed roster order,
+  // shown as its own tappable row (locked ones read "Coming soon" and stay
+  // non-interactive, same convention as the hub/home rows). No single
+  // auto-picked "next" quiz anymore -- the user chooses. Once all 5 are
+  // done there's nothing left to list, and the copy below shifts entirely
+  // to revealing the card -- no "next discovery" language survives that.
+  const remaining = CAREER_PROFILE_QUIZ_ORDER.filter((id) => !progress.completedQuizIds.includes(id));
+
+  function openQuiz(quizId: string) {
+    trackEvent("career_quiz_started", { quizId, source: "result_reveal" });
+    router.push(`/career-profile/${quizId}`);
+  }
 
   return (
     <div className="min-h-screen px-5 pb-10 pt-6" style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}>
@@ -158,22 +168,42 @@ function ResultReveal({ quiz, result }: { quiz: CareerProfileQuizDefinition; res
           </div>
         </div>
 
-        {nextQuizId ? (
+        {progress.isComplete ? (
           <button
-            onClick={() => router.push(`/career-profile/${nextQuizId}`)}
+            onClick={() => router.push("/career-profile/card")}
             className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-pill py-3.5 text-sm font-semibold text-white"
-            style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+            style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
           >
-            Discover my {CAREER_PROFILE_QUIZZES[nextQuizId].title.replace(/^What'?s? (your|is your) /i, "")} →
+            <Sparkles size={15} /> Reveal my Career Profile Card
           </button>
         ) : (
-          <button
-            onClick={() => router.push("/career-profile")}
-            className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-pill py-3.5 text-sm font-semibold text-white"
-            style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
-          >
-            Back to Career Profile
-          </button>
+          <div className="mt-6">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-white/45">Left to do</p>
+            <div className="space-y-2">
+              {remaining.map((quizId) => {
+                const meta = CAREER_PROFILE_QUIZZES[quizId];
+                const clickable = meta.implemented;
+                return (
+                  <button
+                    key={quizId}
+                    onClick={clickable ? () => openQuiz(quizId) : undefined}
+                    disabled={!clickable}
+                    className="flex w-full items-center gap-3 rounded-[14px] p-3 text-left disabled:opacity-50"
+                    style={{ background: "rgba(255,255,255,0.06)" }}
+                  >
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-base">
+                      {clickable ? meta.icon : <Lock size={13} className="text-white/40" />}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-[13px] font-semibold text-white/85">{meta.title}</span>
+                      {!clickable && <span className="block truncate text-[11px] text-white/45">Coming soon</span>}
+                    </span>
+                    {clickable && <ChevronRight size={16} className="shrink-0 text-white/35" />}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
       </motion.div>
     </div>

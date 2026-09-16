@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { Lock, ChevronRight } from "lucide-react";
+import { Lock, ChevronRight, Check } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { trackEvent } from "@/lib/trackEvent";
 import { CAREER_PROFILE_QUIZ_ORDER, type CareerProfileQuizId, type CareerProfileQuizMeta } from "@/lib/careerProfile";
@@ -55,11 +55,17 @@ export function CareerProfileHubClient({ progress, quizzes }: { progress: Career
   }, []);
 
   const byId = new Map(quizzes.map((q) => [q.quizId, q]));
-  const nextQuiz = CAREER_PROFILE_QUIZ_ORDER.map((id) => byId.get(id)!).find((q) => !q.completed && q.meta.implemented);
   const { title: heroTitle, subtitle: heroSubtitle } = heroCopy(progress);
 
-  function startQuiz(quizId: CareerProfileQuizId) {
-    trackEvent(progress.completedCount === 0 ? "career_profile_started" : "career_quiz_started", { quizId });
+  // No forced order: tapping ANY row (including an already-completed one,
+  // to retake it -- see lib/repo/careerProfile.ts's overwrite-in-place
+  // behavior) opens that quiz directly. There's no separate "next
+  // discovery" funnel -- every row is its own equally-valid entry point.
+  function startQuiz(quizId: CareerProfileQuizId, alreadyDone: boolean) {
+    trackEvent(alreadyDone ? "career_quiz_started" : progress.completedCount === 0 ? "career_profile_started" : "career_quiz_started", {
+      quizId,
+      retake: alreadyDone,
+    });
     router.push(`/career-profile/${quizId}`);
   }
 
@@ -107,28 +113,15 @@ export function CareerProfileHubClient({ progress, quizzes }: { progress: Career
           </div>
         </motion.div>
 
-        <motion.div variants={variants} className="space-y-2.5">
-          {CAREER_PROFILE_QUIZ_ORDER.map((quizId) => {
-            const quiz = byId.get(quizId)!;
-            return <QuizChip key={quizId} quiz={quiz} onStart={() => startQuiz(quizId)} />;
-          })}
+        <motion.div variants={variants}>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">All 5 discoveries — any order</p>
+          <div className="space-y-2.5">
+            {CAREER_PROFILE_QUIZ_ORDER.map((quizId) => {
+              const quiz = byId.get(quizId)!;
+              return <QuizChip key={quizId} quiz={quiz} onStart={() => startQuiz(quizId, quiz.completed)} />;
+            })}
+          </div>
         </motion.div>
-
-        {nextQuiz && (
-          <motion.div variants={variants}>
-            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">Next discovery</p>
-            <button
-              onClick={() => startQuiz(nextQuiz.quizId)}
-              className="flex w-full items-center justify-between rounded-[18px] border border-border bg-surface p-4 text-left"
-            >
-              <span className="flex items-center gap-3">
-                <span className="text-2xl">{nextQuiz.meta.icon}</span>
-                <span className="text-[13.5px] font-semibold text-ink">{nextQuiz.meta.title}</span>
-              </span>
-              <ChevronRight size={18} className="shrink-0 text-ink-faint" />
-            </button>
-          </motion.div>
-        )}
       </motion.div>
     </div>
   );
@@ -136,14 +129,17 @@ export function CareerProfileHubClient({ progress, quizzes }: { progress: Career
 
 function QuizChip({ quiz, onStart }: { quiz: QuizSummary; onStart: () => void }) {
   const locked = !quiz.meta.implemented;
-  const clickable = !quiz.completed && !locked;
+  // Locked (no content yet) is the only non-interactive state -- a
+  // completed quiz stays tappable so the user can retake it whenever they
+  // want, in whatever order, per the "no forced sequence" product feedback.
+  const clickable = !locked;
 
   return (
     <button
       onClick={clickable ? onStart : undefined}
       disabled={!clickable}
       className={`flex w-full items-center gap-3 rounded-[16px] p-3.5 text-left ${clickable ? "bg-white/8" : "bg-white/[0.04]"}`}
-      style={{ background: quiz.completed ? "rgba(255,255,255,0.06)" : undefined }}
+      style={{ background: quiz.completed ? "rgba(244,183,63,0.08)" : undefined }}
     >
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white/10 text-lg">
         {locked ? <Lock size={15} className="text-white/40" /> : quiz.meta.icon}
@@ -156,11 +152,8 @@ function QuizChip({ quiz, onStart }: { quiz: QuizSummary; onStart: () => void })
           {quiz.completed && quiz.result ? `${quiz.result.emoji} ${quiz.result.title}` : locked ? "Coming soon" : "Not started"}
         </span>
       </span>
-      {quiz.completed ? (
-        <span className="shrink-0 text-[11px] font-semibold text-emerald-300">✓</span>
-      ) : (
-        !locked && <ChevronRight size={16} className="shrink-0 text-white/35" />
-      )}
+      {quiz.completed && <Check size={15} className="shrink-0 text-amber-300" />}
+      {clickable && <ChevronRight size={16} className="shrink-0 text-white/35" />}
     </button>
   );
 }
