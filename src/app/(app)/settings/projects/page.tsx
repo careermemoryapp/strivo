@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Folder, Plus, Pencil, Trash2, X, Check } from "lucide-react";
+import { FolderKanban, FolderPlus, Pencil, Trash2, X, Check, Sparkles } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Spinner } from "@/components/Spinner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -15,6 +15,13 @@ type ProjectWithCount = Project & { memoryCount: number };
 // than a modal off the memory detail view: creating/renaming/deleting a
 // project is account-level housekeeping, not something tied to any one
 // memory.
+//
+// Visually this leans on the same dark-header + gradient-card + gradient-CTA
+// language as Record and the memory detail hero card, rather than the flat
+// divided-list treatment the rest of Settings uses -- this is a page people
+// come back to and act on (create, assign, tidy up), not a row of static
+// toggles, so it gets the more "alive" treatment other action-heavy screens
+// already use.
 export default function ProjectsSettingsPage() {
   const [projects, setProjects] = useState<ProjectWithCount[] | null>(null);
   const [loadError, setLoadError] = useState(false);
@@ -52,6 +59,11 @@ export default function ProjectsSettingsPage() {
       cancelled = true;
     };
   }, [retryKey]);
+
+  function startCreating() {
+    setCreating(true);
+    setCreateError(null);
+  }
 
   async function createProject() {
     const trimmed = newName.trim();
@@ -131,16 +143,81 @@ export default function ProjectsSettingsPage() {
 
   return (
     <div className="pb-8">
-      <DarkHeader back inlineTitle="Projects" />
+      <DarkHeader
+        back
+        title="Projects"
+        subtitle="Group memories under real, ongoing work. We'll suggest one when it's obvious — you decide the rest."
+      />
 
-      <div className="px-5 pt-5">
-        <p className="text-sm text-ink-soft">
-          Group memories under real, ongoing projects. When you save a memory that sounds like it belongs to one,
-          we&apos;ll suggest it — you always get to confirm, change, or skip.
-        </p>
+      <div className="px-5 pt-5 space-y-4">
+        {/* Gradient hero card, same family as Record's capture card -- the
+            primary action (create a project) lives right here rather than
+            buried as the last row of a plain list. */}
+        <div className="rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-5">
+          <div className="flex items-center gap-3.5">
+            <div
+              className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-white"
+              style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)", boxShadow: "0 8px 20px rgba(139,92,246,0.3)" }}
+            >
+              <FolderKanban size={22} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-[#3c3650]">
+                {projects && projects.length > 0
+                  ? `${projects.length} ${projects.length === 1 ? "project" : "projects"}`
+                  : "No projects yet"}
+              </p>
+              <p className="mt-0.5 text-xs text-[#8a82a8]">Create one, then assign memories to it any time.</p>
+            </div>
+          </div>
+          {!creating && (
+            <button
+              onClick={startCreating}
+              className="mt-4 flex w-full items-center justify-center gap-2 rounded-pill py-3 text-sm font-semibold text-white"
+              style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+            >
+              <FolderPlus size={16} /> New Project
+            </button>
+          )}
+          {creating && (
+            <div className="mt-4 rounded-[13px] border border-[#ece5f5] bg-surface p-3">
+              <input
+                autoFocus
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && createProject()}
+                placeholder="Project name"
+                maxLength={60}
+                className="w-full rounded-[10px] border border-[#ece5f5] bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-[#a78bfa]"
+              />
+              {createError && <p className="mt-1.5 text-xs text-red-600">{createError}</p>}
+              <div className="mt-2.5 flex gap-2">
+                <button
+                  onClick={() => {
+                    setCreating(false);
+                    setNewName("");
+                    setCreateError(null);
+                  }}
+                  className="flex-1 rounded-pill border border-[#ece5f5] py-2 text-xs font-semibold text-ink-soft"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={createProject}
+                  disabled={!newName.trim() || saving}
+                  className="flex flex-1 items-center justify-center gap-1.5 rounded-pill py-2 text-xs font-semibold text-white disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                >
+                  {saving ? <Spinner className="h-3 w-3 border-white/40 border-t-white" /> : <Check size={13} />}
+                  Create
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {loadError && (
-          <div className="mt-4 flex items-center gap-2">
+          <div className="flex items-center gap-2 px-1">
             <p className="text-sm text-red-600">Couldn&apos;t load your projects.</p>
             <button
               onClick={() => {
@@ -160,17 +237,33 @@ export default function ProjectsSettingsPage() {
           </div>
         )}
 
-        {projects && (
-          <div className="mt-4 rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
-            {projects.length === 0 && !creating && (
-              <div className="px-4 py-6 text-center">
-                <Folder size={22} className="mx-auto text-[#cec7dd]" />
-                <p className="mt-2 text-sm text-ink-soft">No projects yet.</p>
-              </div>
-            )}
+        {projects && projects.length === 0 && (
+          <div className="rounded-[16px] border border-dashed border-[#d9d2ea] bg-[#faf9fc] px-5 py-8 text-center">
+            <div
+              className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl text-white"
+              style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)", opacity: 0.85 }}
+            >
+              <Sparkles size={20} />
+            </div>
+            <p className="mt-3 text-sm font-semibold text-[#3c3650]">Nothing filed yet</p>
+            <p className="mt-1 text-xs text-[#8a82a8] max-w-[220px] mx-auto">
+              Create your first project above, or assign one straight from any memory.
+            </p>
+          </div>
+        )}
 
+        {/* Each project as its own elevated card -- individually tappable
+            surfaces with a gradient icon, rather than a flat divided list,
+            so the page reads as something you interact with, not a
+            settings table. */}
+        {projects && projects.length > 0 && (
+          <div className="space-y-2.5">
             {projects.map((p) => (
-              <div key={p.id} className="px-4 py-3.5">
+              <div
+                key={p.id}
+                className="rounded-[15px] border border-[#f0ecf7] bg-surface p-3.5"
+                style={{ boxShadow: "0 2px 10px rgba(60,50,90,0.05)" }}
+              >
                 {editingId === p.id ? (
                   <div>
                     <input
@@ -202,26 +295,31 @@ export default function ProjectsSettingsPage() {
                   </div>
                 ) : (
                   <div className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-[#f2effa] text-[#8b5cf6]">
-                      <Folder size={16} />
+                    <span
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[12px] text-white"
+                      style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+                    >
+                      <FolderKanban size={17} />
                     </span>
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-semibold text-ink">{p.name}</p>
                       <p className="text-xs text-ink-faint">
-                        {p.memoryCount} {p.memoryCount === 1 ? "memory" : "memories"}
+                        {p.memoryCount === 0
+                          ? "No memories yet"
+                          : `${p.memoryCount} ${p.memoryCount === 1 ? "memory" : "memories"}`}
                       </p>
                     </div>
                     <button
                       onClick={() => startEdit(p)}
                       aria-label={`Rename ${p.name}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a29ab9] hover:text-[#8b5cf6]"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a29ab9] hover:bg-[#f5f2fb] hover:text-[#8b5cf6]"
                     >
                       <Pencil size={15} />
                     </button>
                     <button
                       onClick={() => setDeleteTarget(p)}
                       aria-label={`Delete ${p.name}`}
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a29ab9] hover:text-red-600"
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[#a29ab9] hover:bg-red-50 hover:text-red-600"
                     >
                       <Trash2 size={15} />
                     </button>
@@ -229,52 +327,6 @@ export default function ProjectsSettingsPage() {
                 )}
               </div>
             ))}
-
-            {creating ? (
-              <div className="px-4 py-3.5">
-                <input
-                  autoFocus
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && createProject()}
-                  placeholder="Project name"
-                  maxLength={60}
-                  className="w-full rounded-[10px] border border-[#ece5f5] bg-surface px-3 py-2 text-sm text-ink outline-none focus:border-[#a78bfa]"
-                />
-                {createError && <p className="mt-1.5 text-xs text-red-600">{createError}</p>}
-                <div className="mt-2 flex gap-2">
-                  <button
-                    onClick={() => {
-                      setCreating(false);
-                      setNewName("");
-                      setCreateError(null);
-                    }}
-                    className="flex items-center gap-1 rounded-pill border border-[#ece5f5] px-3 py-1.5 text-xs font-semibold text-ink-soft"
-                  >
-                    <X size={13} /> Cancel
-                  </button>
-                  <button
-                    onClick={createProject}
-                    disabled={!newName.trim() || saving}
-                    className="flex items-center gap-1 rounded-pill px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
-                    style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
-                  >
-                    {saving ? <Spinner className="h-3 w-3 border-white/40 border-t-white" /> : <Plus size={13} />}
-                    Create
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <button
-                onClick={() => setCreating(true)}
-                className="flex w-full items-center gap-3 px-4 py-3.5 text-left"
-              >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-[#f2effa] text-[#8b5cf6]">
-                  <Plus size={16} />
-                </span>
-                <span className="text-sm font-semibold text-[#8b5cf6]">New project</span>
-              </button>
-            )}
           </div>
         )}
       </div>
