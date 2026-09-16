@@ -70,7 +70,14 @@ export function CareerProfileHubClient({ progress, quizzes }: { progress: Career
   }
 
   return (
-    <div className="pb-10" style={{ background: "linear-gradient(180deg,#1a1330 0%,#191527 220px,#f8f7fc 220px)" }}>
+    // Fully dark all the way down -- was cutting to a light #f8f7fc
+    // background at 220px while the quiz rows below it (QuizChip) are
+    // styled with white/light text for a dark background, which made
+    // every row unreadable (near-invisible white-on-near-white). Now
+    // matches the individual quiz question screen's own background
+    // exactly (see CareerProfileQuizClient.tsx) so the hub and the quiz
+    // itself read as one continuous dark surface, not two different pages.
+    <div className="min-h-screen pb-10" style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}>
       <DarkHeader back inlineTitle="Career Profile" />
 
       <motion.div initial="hidden" animate="show" variants={stagger} className="px-5 pt-5 space-y-5">
@@ -114,7 +121,7 @@ export function CareerProfileHubClient({ progress, quizzes }: { progress: Career
         </motion.div>
 
         <motion.div variants={variants}>
-          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-ink-faint">All 5 discoveries — any order</p>
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-white/45">All 5 discoveries — any order</p>
           <div className="space-y-2.5">
             {CAREER_PROFILE_QUIZ_ORDER.map((quizId) => {
               const quiz = byId.get(quizId)!;
