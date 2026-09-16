@@ -200,6 +200,14 @@ export function detectDateRange(englishQuery: string, now: Date = new Date()): D
   return null;
 }
 
+// What detectProjectMention below resolved a query to: a single confident
+// project, a genuine tie between two or more of the user's own projects
+// (see the "ambiguous" case in its comment), or nothing recognized at all.
+export type ProjectMatch =
+  | { kind: "matched"; project: Project }
+  | { kind: "ambiguous"; candidates: Project[] }
+  | { kind: "none" };
+
 // Detects "let's discuss Strivo app development", "what have I done on the
 // onboarding revamp project" style project references in an (already
 // English-translated) chat query, against this user's own Projects (Settings
@@ -209,35 +217,128 @@ export function detectDateRange(englishQuery: string, now: Date = new Date()): D
 // A direct substring match is the confident case; failing that, a project
 // still counts as mentioned when MOST of its own significant words show up
 // in the query, so garbled individual words don't sink the match as long as
-// the rest of the name is intact. Never returns a project on a single
-// incidentally-shared word (a project named "Sales Deck" shouldn't match
-// every question that happens to mention "sales").
+// the rest of the name is intact.
 //
-// This never narrows retrieval down to ONLY this project's memories (see its
-// use in retrieveRelevantMemories) -- it biases toward it while still
+// Three passes, most confident first, each checked across ALL projects
+// before deciding (never the first plausible project found) -- so that when
+// a short/generic project name like "Sales" would equally fit several of the
+// user's own projects ("Sales Planning," "Sales Strategy," "Sales Ops"), that
+// comes back "ambiguous" with every real candidate, instead of silently
+// guessing one of them (the previous behavior) or quietly matching none. See
+// retrieveRelevantMemories's use of this -- an "ambiguous" result reaches
+// buildSystemPrompt as an instruction for the chat AI to actually ask the
+// user which one they mean, rather than something resolved here in code
+// with no chance to ask.
+//
+// A single strong match never narrows retrieval down to ONLY that project's
+// memories (see retrieveRelevantMemories) -- it biases toward it while still
 // letting a genuinely strong match from a different project through, which
 // is what lets the chat surface "you showed this skill in that other
 // project too" rather than only ever discussing the named project in
 // isolation.
-function detectProjectMention(query: string, projects: Project[]): Project | null {
-  if (projects.length === 0) return null;
+function detectProjectMention(query: string, projects: Project[]): ProjectMatch {
+  if (projects.length === 0) return { kind: "none" };
   const q = query.toLowerCase();
-  let best: { project: Project; ratio: number } | null = null;
-  for (const project of projects) {
-    const name = project.name.toLowerCase().trim();
-    if (!name) continue;
-    if (q.includes(name)) return project; // exact phrase -- as confident as this gets
+  const queryTokens = new Set(tokenize(query));
 
+  // Pass 1: exact full-name substring. Collected across every project
+  // rather than returning on the first hit -- a project named "Sales" is
+  // trivially also a substring of a query that names a more specific
+  // project like "Sales Planning," so more than one can legitimately match
+  // the same query. The longest (most specific) match wins outright only
+  // when every other hit's name is itself contained inside it (i.e. those
+  // others aren't real competitors, just shorter prefixes/substrings of the
+  // same name); genuinely distinct exact matches of comparable specificity
+  // are a real tie.
+  const exactMatches = projects.filter((p) => {
+    const name = p.name.toLowerCase().trim();
+    return name.length > 0 && q.includes(name);
+  });
+  if (exactMatches.length > 0) {
+    const longest = exactMatches.reduce((a, b) => (b.name.length > a.name.length ? b : a));
+    const longestName = longest.name.toLowerCase().trim();
+    const others = exactMatches.filter((p) => p.id !== longest.id);
+    const allSubsumed = others.every((p) => longestName.includes(p.name.toLowerCase().trim()));
+    return allSubsumed ? { kind: "matched", project: longest } : { kind: "ambiguous", candidates: exactMatches };
+  }
+
+  // Pass 2: partial (ratio) match -- most of a project's own significant
+  // words show up in the query. Every project clearing the bar is
+  // collected; if more than one ties at the best ratio found, that's
+  // ambiguous rather than an arbitrary pick between comparably-strong
+  // matches.
+  const partialMatches: { project: Project; ratio: number }[] = [];
+  for (const project of projects) {
     const nameTokens = tokenize(project.name);
     if (nameTokens.length === 0) continue;
-    const queryTokens = new Set(tokenize(query));
     const hits = nameTokens.filter((t) => queryTokens.has(t)).length;
     const ratio = hits / nameTokens.length;
-    if (ratio >= 0.6 && (nameTokens.length === 1 || hits >= 2) && (!best || ratio > best.ratio)) {
-      best = { project, ratio };
+    if (ratio >= 0.6 && (nameTokens.length === 1 || hits >= 2)) {
+      partialMatches.push({ project, ratio });
     }
   }
-  return best?.project ?? null;
+  if (partialMatches.length > 0) {
+    const topRatio = Math.max(...partialMatches.map((m) => m.ratio));
+    const top = partialMatches.filter((m) => m.ratio >= topRatio - 0.001);
+    return top.length === 1
+      ? { kind: "matched", project: top[0].project }
+      : { kind: "ambiguous", candidates: top.map((m) => m.project) };
+  }
+
+  // Pass 3: nickname fallback -- in real conversation people essentially
+  // never say a multi-word project's full name ("let's discuss Strivo," not
+  // "let's discuss Strivo App Development"), so a project's FIRST word
+  // (usually the proper-noun/brand part of the name) alone counts as a
+  // mention, guarded to real words only (>= 4 characters). When that first
+  // word is shared by more than one of the user's own projects (exactly the
+  // "Sales" / "Sales Planning" / "Sales Strategy" case), every project in
+  // that group is a real candidate -- ambiguous, not silently skipped the
+  // way this used to give up entirely rather than ask.
+  const firstWordGroups = new Map<string, Project[]>();
+  for (const project of projects) {
+    const first = tokenize(project.name)[0];
+    if (!first || first.length < 4) continue;
+    const group = firstWordGroups.get(first);
+    if (group) group.push(project);
+    else firstWordGroups.set(first, [project]);
+  }
+  for (const [word, group] of firstWordGroups) {
+    if (!queryTokens.has(word)) continue;
+    return group.length === 1 ? { kind: "matched", project: group[0] } : { kind: "ambiguous", candidates: group };
+  }
+
+  return { kind: "none" };
+}
+
+// Fallback for a long-running conversation about one project where the
+// user names it once near the start and then never again -- normal, real
+// behavior (nobody says "on the Strivo App Development project" every
+// single message), but detectProjectMention above only looks at the
+// current turn (folded with a short few-message window for pronoun
+// resolution -- see chatService.ts's retrievalQuery). When that finds
+// nothing, this scans the REST of this chat's own messages, most recent
+// first, for the last time the user actually named a project, and that
+// becomes the sticky fallback -- so "what did I struggle with" ten
+// messages after "let's talk about Strivo App Development" still resolves
+// to that project without making the user repeat themselves.
+//
+// Deliberately raw (untranslated) text, unlike translatedQuery above -- a
+// project's own name is a short proper noun the user types/says the same
+// way regardless of the sentence's language, so this skips a
+// translateToEnglish call per historical message for no real accuracy
+// gain. An ambiguous hit (two projects tie in some earlier message) stops
+// the scan and yields nothing rather than continuing further back -- both
+// because asking the user to disambiguate something they said many
+// messages ago, with probably no memory of saying it, is worse UX than
+// just not biasing retrieval, and because an explicit mention this turn
+// (handled above, before this ever runs) always takes priority anyway.
+function findRecentProjectMention(priorUserMessages: string[], projects: Project[]): Project | null {
+  for (let i = priorUserMessages.length - 1; i >= 0; i--) {
+    const match = detectProjectMention(priorUserMessages[i], projects);
+    if (match.kind === "matched") return match.project;
+    if (match.kind === "ambiguous") return null;
+  }
+  return null;
 }
 
 function messageKeywordScore(queryTokens: string[], message: Message): number {
@@ -290,6 +391,35 @@ export type RetrievalResult = {
   // exclude the current chat by) or when nothing cleared the similarity bar.
   recalledMessages: RecalledMessage[];
   method: "semantic" | "keyword" | "date" | "none";
+  // Set when the query named one of the user's own projects (see
+  // detectProjectMention) but that project has zero memories filed under
+  // it -- e.g. a brand-new project, or one nobody's assigned anything to
+  // yet. `memories` below can still be non-empty in this case (the normal
+  // cross-project search still runs), but none of those are actually FROM
+  // the named project, so buildSystemPrompt uses this to have the AI say
+  // plainly "nothing's filed under that yet" instead of presenting an
+  // unrelated memory as if it were. Null whenever no project was matched,
+  // or the matched one already has memories.
+  emptyProjectName: string | null;
+  // Set when the query's project reference was a genuine tie between two or
+  // more of the user's own projects (see the "ambiguous" case on
+  // detectProjectMention -- e.g. "sales" matching "Sales Planning," "Sales
+  // Strategy," and "Sales Ops" equally). Retrieval deliberately does NOT
+  // guess one of them in this case (no project gets the guaranteed-memories
+  // treatment), and buildSystemPrompt uses this list to have the chat AI
+  // actually ask the user which project they mean instead of silently
+  // picking one or ignoring the reference. Null the rest of the time.
+  ambiguousProjectNames: string[] | null;
+  // Set specifically for a project+date combination ("what did I do on
+  // Strivo last quarter") where the project matched but nothing was filed
+  // under it IN THAT WINDOW -- distinct from emptyProjectName, which means
+  // the project has never had anything filed at all. `memories` here falls
+  // back to that project's own memories generally (not date-filtered), so
+  // buildSystemPrompt uses this to have the AI say plainly that nothing was
+  // recorded in the specific window asked about, rather than presenting
+  // those (real, but out-of-window) memories as if they answered the date
+  // question. Null the rest of the time.
+  outOfWindowProjectName: string | null;
 };
 
 // How many cross-chat messages to surface per query. Kept small (vs. topK's
@@ -302,7 +432,13 @@ export async function retrieveRelevantMemories(
   userId: string,
   query: string,
   currentChatId: string | null = null,
-  topK = 5
+  topK = 5,
+  // This chat's own prior USER messages (oldest first, raw/untranslated),
+  // for the sticky project fallback below -- see findRecentProjectMention's
+  // comment. Optional and empty by default so a caller that doesn't have
+  // this handy (or a test) just gets the pre-existing current-turn-only
+  // behavior.
+  priorUserMessages: string[] = []
 ): Promise<RetrievalResult> {
   // Translate the query to English before embedding/keyword-matching so it
   // lands in the same space as search_text (the English gloss generated
@@ -317,47 +453,119 @@ export async function retrieveRelevantMemories(
   // request if translation is unavailable.
   const translatedQuery = await translateToEnglish(query);
 
-  // 0. "What did I do today/yesterday/this week...?" is a date recap, not a
-  // content search -- see detectDateRange's comment for why semantic/keyword
-  // matching structurally can't serve it. Resolve it as a literal date-range
-  // lookup first. If nothing was recorded in that window we deliberately
-  // fall through to the normal search below instead of returning empty,
-  // in case the date word was incidental to an otherwise-matchable question.
+  // 0. Project-aware retrieval: "let's discuss Strivo app development" is
+  // asking about a specific project (Settings > Projects), not a generic
+  // semantic search -- see detectProjectMention's comment for why a named
+  // match is detected this way. Resolved BEFORE the date-range check below
+  // on purpose, so "what did I do on Strivo last quarter" can scope the
+  // date recap to that project instead of the date logic winning outright
+  // and ignoring the project mention entirely. When nothing is named in the
+  // current turn, falls back to the last time this chat's own history named
+  // a project (findRecentProjectMention) -- covers a long-running
+  // conversation about one project where the name was only ever said once,
+  // near the start.
+  //
+  // A single strong match never narrows retrieval down to ONLY this
+  // project's memories (see its use further below) -- it biases toward it
+  // while still letting a genuinely strong match from a different project
+  // through, which is what lets the chat surface "you showed this skill in
+  // that other project too" rather than only ever discussing the named
+  // project in isolation. When the reference is a genuine tie between two
+  // or more projects, none of them get this treatment -- guessing wrong
+  // would be worse than asking, so that's left entirely to
+  // ambiguousProjectNames/buildSystemPrompt.
+  const projects = listProjects(userId);
+  let projectMatch = detectProjectMention(translatedQuery, projects);
+  if (projectMatch.kind === "none" && priorUserMessages.length > 0) {
+    const sticky = findRecentProjectMention(priorUserMessages, projects);
+    if (sticky) projectMatch = { kind: "matched", project: sticky };
+  }
+  const matchedProject = projectMatch.kind === "matched" ? projectMatch.project : null;
+  const ambiguousProjectNames = projectMatch.kind === "ambiguous" ? projectMatch.candidates.map((p) => p.name) : null;
+
+  // 0.5. "What did I do today/yesterday/this week...?" is a date recap, not
+  // a content search -- see detectDateRange's comment for why
+  // semantic/keyword matching structurally can't serve it. Resolve it as a
+  // literal date-range lookup first. If a project was also matched above,
+  // the date window is scoped to just that project's memories (a
+  // performance-review-style "what did I do on Strivo last quarter" wants
+  // Strivo's log for that window, not everything filed under any project in
+  // that window). If nothing was recorded in that window for this specific
+  // project, fall back to the project's own memories generally (flagged via
+  // outOfWindowProjectName so buildSystemPrompt has the AI say the window
+  // came up empty rather than presenting older memories as if they were
+  // from it) rather than silently widening to the user's whole date-range
+  // log, which could easily belong to a different project entirely. If
+  // nothing was recorded in that window and no project was matched either,
+  // fall through to the normal search below instead of returning empty, in
+  // case the date word was incidental to an otherwise-matchable question.
+  // An ambiguous project reference is resolved (or not) before any of this
+  // -- asking the user which project they mean matters just as much with a
+  // date phrase attached as without one.
+  //
   // Cross-chat message recall is deliberately skipped for this branch: a
   // date recap ("what did I do today") is asking for a *log*, not "did I
   // mention X anywhere" -- pulling in unrelated cross-chat asides here would
   // dilute a request that already has a clean, literal answer.
   const dateRange = detectDateRange(translatedQuery);
   if (dateRange) {
-    const inRange = listMemoriesByDateRange(userId, dateRange.startUtcIso, dateRange.endUtcIso);
-    if (inRange.length > 0) {
-      return { memories: inRange.slice(0, topK), recalledMessages: [], method: "date" };
+    if (ambiguousProjectNames) {
+      return {
+        memories: [],
+        recalledMessages: [],
+        method: "none",
+        emptyProjectName: null,
+        ambiguousProjectNames,
+        outOfWindowProjectName: null,
+      };
     }
+    const inRange = listMemoriesByDateRange(userId, dateRange.startUtcIso, dateRange.endUtcIso);
+    const scoped = matchedProject ? inRange.filter((m) => m.project_id === matchedProject.id) : inRange;
+    if (scoped.length > 0) {
+      return {
+        memories: scoped.slice(0, topK),
+        recalledMessages: [],
+        method: "date",
+        emptyProjectName: null,
+        ambiguousProjectNames: null,
+        outOfWindowProjectName: null,
+      };
+    }
+    if (matchedProject) {
+      const fallbackProjectMemories = listMemoriesByProject(userId, matchedProject.id).slice(0, topK);
+      return fallbackProjectMemories.length > 0
+        ? {
+            memories: fallbackProjectMemories,
+            recalledMessages: [],
+            method: "date",
+            emptyProjectName: null,
+            ambiguousProjectNames: null,
+            outOfWindowProjectName: matchedProject.name,
+          }
+        : {
+            memories: [],
+            recalledMessages: [],
+            method: "date",
+            emptyProjectName: matchedProject.name,
+            ambiguousProjectNames: null,
+            outOfWindowProjectName: null,
+          };
+    }
+    // No project matched, and nothing in the date window either -- fall
+    // through to the normal search below, same as before this change.
   }
 
-  // 0.5. Project-aware retrieval: "let's discuss Strivo app development" is
-  // asking about a specific project (Settings > Projects), not a generic
-  // semantic search -- see detectProjectMention's comment for why a named
-  // match is detected this way. When one is found, that project's own
-  // memories (most recent first -- a project recap wants breadth, not just
-  // whatever best matches leftover query text) are guaranteed a spot,
-  // ahead of and separate from the semantic/keyword search below. They are
-  // NOT the whole result, though: the remaining topK slots still run the
-  // normal cross-user-memory search further down, so a memory from a
-  // DIFFERENT project that's a strong match can still surface alongside
-  // them -- that's what lets buildSystemPrompt's chat AI say "you showed
-  // this skill during <other project> too" instead of only ever discussing
-  // the named project in isolation.
-  const projects = listProjects(userId);
-  const matchedProject = detectProjectMention(translatedQuery, projects);
   const projectMemories = matchedProject ? listMemoriesByProject(userId, matchedProject.id).slice(0, topK) : [];
   const projectMemoryIds = new Set(projectMemories.map((m) => m.id));
   const remainingSlots = Math.max(0, topK - projectMemories.length);
+  const emptyProjectName = matchedProject && projectMemories.length === 0 ? matchedProject.name : null;
 
-  // 1. Try semantic retrieval -- for both formal memories AND cross-chat
-  // messages that were never saved as one. One embedding call for the query
-  // is reused against both candidate pools below, since it's the same query
-  // vector either way and embedding calls are the expensive part.
+  // 1. Try semantic retrieval, biased toward matchedProject's own memories
+  // when one was resolved above (see the "0." comment for the full
+  // reasoning) -- for both formal memories AND cross-chat messages that
+  // were never saved as one. One embedding call for the query is reused
+  // against both candidate pools below, since it's the same query vector
+  // either way and embedding calls are the expensive part.
   const withEmbeddings = listMemoriesWithEmbeddings(userId);
   const withMessageEmbeddings = currentChatId ? listMessagesWithEmbeddings(userId, currentChatId) : [];
   const queryTokensForGate = tokenize(translatedQuery);
@@ -453,7 +661,14 @@ export async function retrieveRelevantMemories(
       // project match (guaranteed above regardless of semantic score) or a
       // semantic hit, or both together.
       if (projectMemories.length > 0 || scored.length > 0) {
-        return { memories: [...projectMemories, ...scored.map((s) => s.memory)], recalledMessages, method: "semantic" };
+        return {
+          memories: [...projectMemories, ...scored.map((s) => s.memory)],
+          recalledMessages,
+          method: "semantic",
+          emptyProjectName,
+          ambiguousProjectNames,
+          outOfWindowProjectName: null,
+        };
       }
     }
   }
@@ -478,6 +693,9 @@ export async function retrieveRelevantMemories(
   return {
     memories: [...projectMemories, ...keywordMatches],
     recalledMessages,
+    emptyProjectName,
+    ambiguousProjectNames,
+    outOfWindowProjectName: null,
     method: projectMemories.length > 0 || keywordMatches.length > 0 ? "keyword" : recalledMessages.length ? "semantic" : "none",
   };
 }

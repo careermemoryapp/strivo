@@ -41,9 +41,17 @@ export async function sendUserMessageAndGetReply(
       .catch(() => {});
   }
 
-  const priorMessages = listMessages(userId, chatId)
-    .filter((m) => m.status !== "error")
-    .slice(-HISTORY_LIMIT);
+  // Unsliced -- the full (up to listMessages' own 500-row cap) history of
+  // this chat, not just the recent window below. Two different things get
+  // built from it: priorMessages (recent, for the actual chat reply and the
+  // short retrieval query) and priorUserMessages (the full thing, for the
+  // sticky-project fallback -- see its use below and
+  // findRecentProjectMention in lib/retrieval.ts) -- a project named once
+  // near the start of a long conversation shouldn't fall out of scope just
+  // because HISTORY_LIMIT did.
+  const allMessages = listMessages(userId, chatId).filter((m) => m.status !== "error");
+  const priorMessages = allMessages.slice(-HISTORY_LIMIT);
+  const priorUserMessages = allMessages.filter((m) => m.sender === "user").map((m) => m.content);
 
   // Short follow-ups ("what did I do in that presentation?") lean on
   // pronouns that only resolve using the recent conversation — searched on
@@ -67,7 +75,7 @@ export async function sendUserMessageAndGetReply(
   // would double the wait on every brand-new chat for no reason.
   const isFirstMessage = priorMessages.length === 1;
   const [retrieval, generatedTitle] = await Promise.all([
-    retrieveRelevantMemories(userId, retrievalQuery || content, chatId),
+    retrieveRelevantMemories(userId, retrievalQuery || content, chatId, 5, priorUserMessages),
     isFirstMessage ? generateChatTitle(content) : Promise.resolve(null),
   ]);
   const history: ChatMessage[] = priorMessages.map((m) => ({
@@ -121,7 +129,10 @@ export async function sendUserMessageAndGetReply(
     firstName,
     retrieval.recalledMessages,
     recurringEntities,
-    user?.resume_text ?? null
+    user?.resume_text ?? null,
+    retrieval.emptyProjectName,
+    retrieval.ambiguousProjectNames,
+    retrieval.outOfWindowProjectName
   );
   const result = await chatCompletion(systemPrompt, history);
 

@@ -1071,15 +1071,54 @@ export function buildSystemPrompt(
   firstName?: string | null,
   recalledMessages: RecalledMessage[] = [],
   recurringEntities: { name: string; count: number }[] = [],
-  resumeText?: string | null
+  resumeText?: string | null,
+  // Set by chatService.ts from retrieval.emptyProjectName (lib/retrieval.ts)
+  // when the user named one of their own projects but nothing's filed under
+  // it yet. See emptyProjectContext below -- this is what stops the model
+  // from quietly presenting an unrelated memory as if it belonged to that
+  // project just because a project name was recognized in the query.
+  emptyProjectName: string | null = null,
+  // Set by chatService.ts from retrieval.ambiguousProjectNames when the
+  // query's project reference was a genuine tie between two or more of the
+  // user's own projects (e.g. "sales" matching "Sales Planning," "Sales
+  // Strategy," and "Sales Ops" equally -- see detectProjectMention in
+  // lib/retrieval.ts). See ambiguousProjectCtx below.
+  ambiguousProjectNames: string[] | null = null,
+  // Set by chatService.ts from retrieval.outOfWindowProjectName -- a
+  // project+date combination ("what did I do on Strivo last quarter") where
+  // the project matched but nothing was filed under it in that specific
+  // window. `memories` below are that project's memories generally (NOT
+  // filtered to the requested window), so see outOfWindowProjectCtx for why
+  // that distinction has to be spelled out to the model explicitly.
+  outOfWindowProjectName: string | null = null
 ): string {
   const dateContext = `\n\nToday's date is ${todayIstLabel(now)} (India Standard Time). Use this to correctly judge date-relative questions ("today," "yesterday," "this week," a specific date, etc.) against each memory's Date field below. If a memory's date genuinely falls in the period the user is asking about, treat it as relevant with confidence -- do not hedge or claim "no relevant memory" out of uncertainty about what day it is; you now know.`;
   const nameCtx = firstName ? nameContext(firstName) : "";
   const recalledCtx = recalledMessagesContext(recalledMessages);
   const entitiesCtx = recurringEntitiesContext(recurringEntities);
   const resumeCtx = resumeContext(resumeText);
+  const emptyProjectCtx = emptyProjectName
+    ? `\n\nThe user appears to be asking about a project of theirs called "${emptyProjectName}" (Settings > Projects), but nothing has been filed under it yet. If that's genuinely what they're asking about, say so plainly -- nothing's there yet -- rather than treating any memory below as if it belonged to that project; none of them were actually matched to it.`
+    : "";
+  // Deliberately worded as an instruction to ASK, not to guess: retrieval
+  // (lib/retrieval.ts) already decided this couldn't be resolved safely on
+  // its own -- the memories below (if any) are from generic search, NOT
+  // biased toward any one of these projects, so answering as if one of them
+  // were obviously meant would likely be wrong.
+  const ambiguousProjectCtx =
+    ambiguousProjectNames && ambiguousProjectNames.length > 0
+      ? `\n\nThe user's message seems to reference one of their projects (Settings > Projects), but the name given could equally mean any of these: ${ambiguousProjectNames.join(", ")}. Don't guess which one and don't quietly answer using memories below as if they belonged to one of these -- they weren't matched to any of them. Ask the user which project they mean, listing the options, unless the rest of the conversation already makes it unambiguous.`
+      : "";
+  // The user asked a DATE-scoped question about this project ("what did I
+  // do on X last quarter") and nothing was actually filed under it in that
+  // window -- but the project does have memories, listed below, just not
+  // from the requested period. Without this, the model has no way to know
+  // those memories aren't an answer to the date part of the question.
+  const outOfWindowProjectCtx = outOfWindowProjectName
+    ? `\n\nThe user asked about their "${outOfWindowProjectName}" project for a specific time period, but nothing is filed under that project from that specific window -- the memories below are from that project generally (other dates). Say plainly that nothing's recorded for that particular period before using them, rather than presenting them as if they were from the period asked about.`
+    : "";
   if (memories.length === 0) {
-    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.${recalledCtx}${entitiesCtx}${resumeCtx}`;
+    return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.${recalledCtx}${entitiesCtx}${resumeCtx}${emptyProjectCtx}${ambiguousProjectCtx}`;
   }
   const competencyContext = `\n\nEach memory below may list Competencies -- behavioral-interview qualities (Leadership, Problem-Solving, etc.) that memory was independently identified as genuinely demonstrating, generated when it was recorded (see generateMemoryMetadata). The user themselves may not realize a memory qualifies -- they might have just described a normal day, not framed it as a "leadership story." When asked for an example of a specific competency (e.g. "give me a leadership example," "tell me about a time you solved a problem"), actively use this field to find the match rather than only pattern-matching the user's own wording against the transcript, and you can point out to them that this is a strong example of that competency even if they didn't call it that themselves.`;
   // A memory's Project field (Settings > Projects -- see lib/repo/projects.ts
@@ -1107,7 +1146,7 @@ export function buildSystemPrompt(
       return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${m.project_name ? `\nProject: ${m.project_name}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}${projectContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}${entitiesCtx}${resumeCtx}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}${projectContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}${entitiesCtx}${resumeCtx}${emptyProjectCtx}${ambiguousProjectCtx}${outOfWindowProjectCtx}`;
 }
 
 function safeParseStringArray(value: string | null): string[] {
