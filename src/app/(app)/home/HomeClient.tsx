@@ -17,6 +17,8 @@ import { timeOfDayGreeting } from "@/lib/utils";
 import { ACTION_ICON_DEFS, chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 import { CareerWrappedHomePreview, type CareerWrappedHomePreviewData } from "@/components/CareerWrappedHomePreview";
+import { CareerProfileHomeHero } from "@/components/CareerProfileHomeHero";
+import type { CareerProfileProgress } from "@/lib/repo/careerProfile";
 
 type HomeData = {
   user: { id: string; firstName: string; lastName: string; email: string } | null;
@@ -52,6 +54,9 @@ type HomeData = {
   // renders nothing at all in that case, same "hidden, not broken" contract
   // as every other feature-flagged surface in this app.
   careerWrapped: CareerWrappedHomePreviewData | null;
+  // Null when the career_profile feature flag is off (see page.tsx) -- same
+  // "hidden, not broken" contract as careerWrapped above.
+  careerProfile: CareerProfileProgress | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -219,6 +224,15 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
   return (
     <div className="pb-6">
       {header}
+
+      {/* Career Profile -- the fun, quiz-based "front door" (Home redesign
+          spec section 1), placed ahead of even Career Wrapped so a
+          brand-new, zero-data user sees something to discover immediately
+          rather than an empty evidence-based feature. Deliberately a
+          separate system from Career Wrapped below -- see
+          lib/careerProfile.ts's file comment. Renders nothing when the
+          career_profile feature flag is off. */}
+      {data.careerProfile && <CareerProfileHomeHero progress={data.careerProfile} />}
 
       {/* Career Wrapped -- placed immediately after the header, ahead of
           every other Home surface (trial banner, check-in, recap, growth,

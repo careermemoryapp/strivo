@@ -6,9 +6,12 @@ import {
   aggregateCareerWrappedCounts,
   computeCareerWrappedInsights,
   computeMemoryCareerSignals,
+  computeSecondaryCareerWrappedInsights,
+  getCareerWrappedDataTier,
   isCareerWrappedSnapshotStale,
   type CareerMuscle,
   type MuscleEvidence,
+  type SecondaryCareerWrappedInsights,
 } from "@/lib/careerWrapped";
 
 export type CareerWrappedSnapshot = {
@@ -132,6 +135,17 @@ export function parseMuscleScores(snapshot: CareerWrappedSnapshot): MuscleEviden
   } catch {
     return {} as MuscleEvidence;
   }
+}
+
+// Second strength + career breadth (see computeSecondaryCareerWrappedInsights
+// in lib/careerWrapped.ts) -- derived on read from the snapshot's own
+// already-persisted muscle_scores JSON, so every caller that already has a
+// CareerWrappedSnapshot (Home, /career-wrapped, the card routes) can get
+// these two extra aspects with no new query and no cache/version bump.
+export function getCareerWrappedSecondaryInsights(snapshot: CareerWrappedSnapshot): SecondaryCareerWrappedInsights {
+  const muscles = parseMuscleScores(snapshot);
+  const tier = getCareerWrappedDataTier(snapshot.memory_count_at_generation);
+  return computeSecondaryCareerWrappedInsights(muscles, snapshot.strongest_muscle as CareerMuscle | null, tier);
 }
 
 // ---- Career Card shares (see app/api/career-wrapped/share/route.ts and

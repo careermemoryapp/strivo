@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { Sparkles, TrendingUp, Lock, Compass, Plus, Share2 } from "lucide-react";
+import { Sparkles, TrendingUp, Lock, Compass, Plus, Share2, Award } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { trackEvent } from "@/lib/trackEvent";
 import { CAREER_WRAPPED_THRESHOLDS, type CareerWrappedDataTier } from "@/lib/careerWrapped";
@@ -17,6 +17,16 @@ type Snapshot = {
   strongestMuscle: string | null;
   growingMuscle: string | null;
   underrepresentedMuscle: string | null;
+  // A punchy 2-4 word persona title -- see buildCareerArchetype in
+  // lib/careerWrapped.ts. Round 4 product feedback: replaces the "Also
+  // strong" and "Career breadth" cards with a single archetype card, so the
+  // page shows exactly four insight cards (strongest, growing, under-
+  // represented, archetype) matching the shareable card's own four beats.
+  archetype: string;
+  // The card's "headline read" on the person -- see buildCareerPersonaHeadline
+  // in lib/careerWrapped.ts. Surfaced here too so the in-app page and the
+  // shareable card never say something different about the same person.
+  personaHeadline: string;
 };
 
 type Props = {
@@ -135,6 +145,19 @@ export function CareerWrappedClient({ firstName, tier, snapshot }: Props) {
               </motion.div>
             )}
 
+            {snapshot.archetype && (
+              <motion.div variants={variants}>
+                <InsightCard
+                  icon={<Award size={19} />}
+                  eyebrow="Your archetype"
+                  title={snapshot.archetype}
+                  body={snapshot.personaHeadline}
+                  gradient="linear-gradient(135deg,#241a42,#2f1f52)"
+                  iconColor="text-violet-200"
+                />
+              </motion.div>
+            )}
+
             <motion.div variants={variants} ref={lastCardRef}>
               <RewardLoopCard onGenerateCard={() => router.push("/career-wrapped/card")} />
             </motion.div>
@@ -166,6 +189,7 @@ function HeadlineCard({ firstName, snapshot }: { firstName: string | null; snaps
         <StatBlock value={snapshot.problemsSolvedCount} label="Problems solved" />
         <StatBlock value={snapshot.seniorStakeholderCount} label="Senior-stakeholder interactions" />
       </div>
+      <p className="mt-5 border-t border-white/10 pt-4 text-[13px] leading-relaxed text-white/75">{snapshot.personaHeadline}</p>
     </div>
   );
 }

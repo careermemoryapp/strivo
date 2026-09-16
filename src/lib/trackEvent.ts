@@ -1,4 +1,11 @@
-import type { CAREER_WRAPPED_EVENTS } from "@/lib/config";
+import type { CAREER_PROFILE_EVENTS, CAREER_WRAPPED_EVENTS } from "@/lib/config";
+
+// The full set of trackable event names -- the union of every feature's own
+// allow-list array (see each array's comment in lib/config.ts for why the
+// list is split per-feature rather than one flat list). Add a new feature's
+// array to this union, not to either existing array, when the next surface
+// needs its own events.
+type TrackableEventName = (typeof CAREER_WRAPPED_EVENTS)[number] | (typeof CAREER_PROFILE_EVENTS)[number];
 
 // Client-safe fire-and-forget event logger -- posts to
 // app/api/analytics/event/route.ts, which persists into the analytics_events
@@ -14,7 +21,7 @@ import type { CAREER_WRAPPED_EVENTS } from "@/lib/config";
 // as the embedText/generateChatTitle fire-and-forget calls in
 // chatService.ts -- a failed event log should never block or visibly affect
 // anything the user is doing.
-export function trackEvent(eventName: (typeof CAREER_WRAPPED_EVENTS)[number], properties?: Record<string, unknown>): void {
+export function trackEvent(eventName: TrackableEventName, properties?: Record<string, unknown>): void {
   try {
     fetch("/api/analytics/event", {
       method: "POST",

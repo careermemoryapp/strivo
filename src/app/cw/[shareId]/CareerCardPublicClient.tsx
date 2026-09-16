@@ -5,14 +5,10 @@ import { APP_NAME } from "@/lib/config";
 type CardData = {
   title: string;
   periodLabel: string;
-  winsCount: number;
-  leadershipCount: number;
-  problemsSolvedCount: number;
-  seniorStakeholderCount: number;
+  archetype: string;
   strongestMuscle: string | null;
-  growingMuscle: string | null;
-  underrepresentedMuscle: string | null;
-  insights: string[];
+  personaHeadline: string;
+  achievementPotential: string[];
 };
 
 // Deliberately plain/static (no motion library needed for a one-off public
@@ -34,13 +30,8 @@ export function CareerCardPublicClient({ shareId, cardData, imageUrl }: { shareI
 
         <div className="mt-6 text-center">
           <p className="text-lg font-bold">{cardData.title}</p>
-          <p className="mt-1 text-sm text-white/60">
-            {cardData.winsCount} wins · {cardData.leadershipCount} leadership moments · {cardData.problemsSolvedCount} problems
-            solved · {cardData.seniorStakeholderCount} senior-stakeholder interactions
-          </p>
-          {cardData.insights.length > 0 && (
-            <p className="mx-auto mt-3 max-w-xs text-[12.5px] leading-relaxed text-white/50">{cardData.insights[0]}</p>
-          )}
+          <p className="mt-1 text-sm font-semibold text-white/80">{cardData.archetype}</p>
+          <p className="mx-auto mt-2 max-w-xs text-[13px] leading-relaxed text-white/70">{cardData.personaHeadline}</p>
         </div>
 
         <a

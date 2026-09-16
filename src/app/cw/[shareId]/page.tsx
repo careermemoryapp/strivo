@@ -21,14 +21,10 @@ export default async function CareerCardPage({ params }: { params: Promise<{ sha
   let cardData: {
     title: string;
     periodLabel: string;
-    winsCount: number;
-    leadershipCount: number;
-    problemsSolvedCount: number;
-    seniorStakeholderCount: number;
+    archetype: string;
     strongestMuscle: string | null;
-    growingMuscle: string | null;
-    underrepresentedMuscle: string | null;
-    insights: string[];
+    personaHeadline: string;
+    achievementPotential: string[];
   };
   try {
     cardData = JSON.parse(share.card_data);

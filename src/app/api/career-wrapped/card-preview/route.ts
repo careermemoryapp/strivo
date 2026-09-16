@@ -3,8 +3,14 @@ import { NextResponse } from "next/server";
 import { requireUserId } from "@/lib/serverAuth";
 import { getUserById } from "@/lib/repo/users";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
-import { getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
-import { ALL_TIME_PERIOD_KEY, buildCareerCardInsights, type CareerMuscle } from "@/lib/careerWrapped";
+import { getCareerWrappedSecondaryInsights, getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
+import {
+  ALL_TIME_PERIOD_KEY,
+  buildCareerAchievementPotential,
+  buildCareerArchetype,
+  buildCareerPersonaHeadline,
+  type CareerMuscle,
+} from "@/lib/careerWrapped";
 import { buildCareerCardElement, CAREER_CARD_SIZE, type CareerCardData } from "@/lib/careerCardImage";
 
 // Lets the "Generate My Career Card" flow show the user a REAL rendered
@@ -31,26 +37,23 @@ export async function GET() {
 
   const user = getUserById(userId);
   const snapshot = getOrComputeCareerWrappedSnapshot(userId, ALL_TIME_PERIOD_KEY);
+  const secondary = getCareerWrappedSecondaryInsights(snapshot);
 
   const cardData: CareerCardData = {
     title: `${user?.first_name ? `${user.first_name}'s` : "Your"} Career`,
     periodLabel: "All Time",
-    winsCount: snapshot.wins_count,
-    leadershipCount: snapshot.leadership_count,
-    problemsSolvedCount: snapshot.problems_solved_count,
-    seniorStakeholderCount: snapshot.senior_stakeholder_count,
+    archetype: buildCareerArchetype(snapshot.strongest_muscle as CareerMuscle | null),
     strongestMuscle: snapshot.strongest_muscle,
-    growingMuscle: snapshot.growing_muscle,
-    underrepresentedMuscle: snapshot.underrepresented_muscle,
-    insights: buildCareerCardInsights({
+    personaHeadline: buildCareerPersonaHeadline({
+      strongestMuscle: snapshot.strongest_muscle as CareerMuscle | null,
+      secondStrongestMuscle: secondary.secondStrongestMuscle,
       winsCount: snapshot.wins_count,
       leadershipCount: snapshot.leadership_count,
-      problemsSolvedCount: snapshot.problems_solved_count,
-      seniorStakeholderCount: snapshot.senior_stakeholder_count,
-      strongestMuscle: snapshot.strongest_muscle as CareerMuscle | null,
-      growingMuscle: snapshot.growing_muscle as CareerMuscle | null,
-      underrepresentedMuscle: snapshot.underrepresented_muscle as CareerMuscle | null,
     }),
+    achievementPotential: buildCareerAchievementPotential(
+      snapshot.strongest_muscle as CareerMuscle | null,
+      secondary.secondStrongestMuscle
+    ),
   };
 
   return new ImageResponse(buildCareerCardElement(cardData), { ...CAREER_CARD_SIZE });

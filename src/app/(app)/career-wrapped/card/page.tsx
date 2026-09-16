@@ -2,8 +2,15 @@ import { redirect } from "next/navigation";
 import { requireUserId } from "@/lib/serverAuth";
 import { getUserById } from "@/lib/repo/users";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
-import { getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
-import { ALL_TIME_PERIOD_KEY, buildCareerCardInsights, getCareerWrappedDataTier, type CareerMuscle } from "@/lib/careerWrapped";
+import { getCareerWrappedSecondaryInsights, getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
+import {
+  ALL_TIME_PERIOD_KEY,
+  buildCareerAchievementPotential,
+  buildCareerArchetype,
+  buildCareerPersonaHeadline,
+  getCareerWrappedDataTier,
+  type CareerMuscle,
+} from "@/lib/careerWrapped";
 import type { CareerCardData } from "@/lib/careerCardImage";
 import { CareerWrappedCardClient } from "./CareerWrappedCardClient";
 
@@ -29,6 +36,7 @@ export default async function CareerWrappedCardPage() {
   const user = getUserById(userId);
   const snapshot = getOrComputeCareerWrappedSnapshot(userId, ALL_TIME_PERIOD_KEY);
   const tier = getCareerWrappedDataTier(snapshot.memory_count_at_generation);
+  const secondary = getCareerWrappedSecondaryInsights(snapshot);
 
   // Nothing worth putting on a card yet -- send them back to Career Wrapped
   // itself rather than rendering an empty/broken card flow. RewardLoopCard
@@ -39,22 +47,18 @@ export default async function CareerWrappedCardPage() {
   const previewData: CareerCardData = {
     title: `${user?.first_name ? `${user.first_name}'s` : "Your"} Career`,
     periodLabel: "All Time",
-    winsCount: snapshot.wins_count,
-    leadershipCount: snapshot.leadership_count,
-    problemsSolvedCount: snapshot.problems_solved_count,
-    seniorStakeholderCount: snapshot.senior_stakeholder_count,
+    archetype: buildCareerArchetype(snapshot.strongest_muscle as CareerMuscle | null),
     strongestMuscle: snapshot.strongest_muscle,
-    growingMuscle: snapshot.growing_muscle,
-    underrepresentedMuscle: snapshot.underrepresented_muscle,
-    insights: buildCareerCardInsights({
+    personaHeadline: buildCareerPersonaHeadline({
+      strongestMuscle: snapshot.strongest_muscle as CareerMuscle | null,
+      secondStrongestMuscle: secondary.secondStrongestMuscle,
       winsCount: snapshot.wins_count,
       leadershipCount: snapshot.leadership_count,
-      problemsSolvedCount: snapshot.problems_solved_count,
-      seniorStakeholderCount: snapshot.senior_stakeholder_count,
-      strongestMuscle: snapshot.strongest_muscle as CareerMuscle | null,
-      growingMuscle: snapshot.growing_muscle as CareerMuscle | null,
-      underrepresentedMuscle: snapshot.underrepresented_muscle as CareerMuscle | null,
     }),
+    achievementPotential: buildCareerAchievementPotential(
+      snapshot.strongest_muscle as CareerMuscle | null,
+      secondary.secondStrongestMuscle
+    ),
   };
 
   return <CareerWrappedCardClient previewData={previewData} />;

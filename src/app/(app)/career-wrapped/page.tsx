@@ -2,8 +2,14 @@ import { redirect } from "next/navigation";
 import { requireUserId } from "@/lib/serverAuth";
 import { getUserById } from "@/lib/repo/users";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
-import { getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
-import { ALL_TIME_PERIOD_KEY, getCareerWrappedDataTier } from "@/lib/careerWrapped";
+import { getCareerWrappedSecondaryInsights, getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
+import {
+  ALL_TIME_PERIOD_KEY,
+  buildCareerArchetype,
+  buildCareerPersonaHeadline,
+  getCareerWrappedDataTier,
+  type CareerMuscle,
+} from "@/lib/careerWrapped";
 import { CareerWrappedClient } from "./CareerWrappedClient";
 
 // The full, immersive Career Wrapped experience (spec section 2) -- reached
@@ -28,6 +34,7 @@ export default async function CareerWrappedPage() {
   const user = getUserById(userId);
   const snapshot = getOrComputeCareerWrappedSnapshot(userId, ALL_TIME_PERIOD_KEY);
   const tier = getCareerWrappedDataTier(snapshot.memory_count_at_generation);
+  const secondary = getCareerWrappedSecondaryInsights(snapshot);
 
   return (
     <CareerWrappedClient
@@ -42,6 +49,13 @@ export default async function CareerWrappedPage() {
         strongestMuscle: snapshot.strongest_muscle,
         growingMuscle: snapshot.growing_muscle,
         underrepresentedMuscle: snapshot.underrepresented_muscle,
+        archetype: buildCareerArchetype(snapshot.strongest_muscle as CareerMuscle | null),
+        personaHeadline: buildCareerPersonaHeadline({
+          strongestMuscle: snapshot.strongest_muscle as CareerMuscle | null,
+          secondStrongestMuscle: secondary.secondStrongestMuscle,
+          winsCount: snapshot.wins_count,
+          leadershipCount: snapshot.leadership_count,
+        }),
       }}
     />
   );

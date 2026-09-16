@@ -159,6 +159,26 @@ export const CAREER_WRAPPED_EVENTS = [
   "career_wrapped_add_memory_clicked",
 ] as const;
 
+// Career Profile (the quiz-based Home experience, kept deliberately separate
+// from Career Wrapped -- see lib/careerProfile.ts's file comment) analytics
+// events. Same closed-allow-list convention as CAREER_WRAPPED_EVENTS just
+// above: lib/trackEvent.ts's type and the server zod enum in
+// app/api/analytics/event/route.ts both derive from the UNION of this array
+// and CAREER_WRAPPED_EVENTS, not from this one alone -- see trackEvent.ts.
+// Only the events actually wired up in phase-3-stage-1 (engine + the
+// Career Superpower quiz) are listed here so far; the rest of the funnel
+// (career_profile_card_revealed, share-platform events, signup-funnel
+// events, etc.) gets added in the same place once that later work ships.
+export const CAREER_PROFILE_EVENTS = [
+  "career_profile_viewed",
+  "career_profile_started",
+  "career_profile_progress",
+  "career_quiz_started",
+  "career_quiz_question_answered",
+  "career_quiz_completed",
+  "career_profile_completed",
+] as const;
+
 export const NEW_CHAT_TEMPLATES = [
   { category: "Interview", title: "Interview Preparation", prompt: "I want to prepare for an interview." },
   { category: "Resume", title: "Resume Builder", prompt: "I want to update my resume." },

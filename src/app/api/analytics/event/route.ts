@@ -3,17 +3,18 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { logAnalyticsEvent } from "@/lib/repo/analyticsEvents";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
-import { CAREER_WRAPPED_EVENTS } from "@/lib/config";
+import { CAREER_PROFILE_EVENTS, CAREER_WRAPPED_EVENTS } from "@/lib/config";
 
-// Only Career Wrapped events are accepted for now -- see the allow-list's
-// own comment in lib/config.ts. Deliberately closed rather than accepting
-// an arbitrary string: this table has no per-event schema, so an open
-// event_name would let a bug (or abuse) fill it with junk that's expensive
-// to clean up later. Extend CAREER_WRAPPED_EVENTS when a new event is
-// actually needed, same "add here, use there" discipline as
-// FEATURE_FLAGS/NOTIFICATION_TYPES elsewhere in this app.
+// Only events from one of the closed per-feature allow-lists are accepted --
+// see each array's own comment in lib/config.ts. Deliberately closed rather
+// than accepting an arbitrary string: this table has no per-event schema, so
+// an open event_name would let a bug (or abuse) fill it with junk that's
+// expensive to clean up later. Extend the relevant array (or add a new one
+// and union it in here) when a new event is actually needed, same "add
+// here, use there" discipline as FEATURE_FLAGS/NOTIFICATION_TYPES elsewhere
+// in this app.
 const bodySchema = z.object({
-  eventName: z.enum(CAREER_WRAPPED_EVENTS),
+  eventName: z.union([z.enum(CAREER_WRAPPED_EVENTS), z.enum(CAREER_PROFILE_EVENTS)]),
   // Small, flat metadata only (e.g. { periodKey: "2026", template: "A" }) --
   // bounded by JSON.stringify length below rather than a strict shape, since
   // different events legitimately carry different fields.

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { Download, Link as LinkIcon, Check, Share2, Sparkles, ShieldCheck } from "lucide-react";
+import { Download, Link as LinkIcon, Check, Share2, ShieldCheck } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -83,15 +83,6 @@ export function CareerWrappedCardClient({ previewData }: { previewData: CareerCa
   );
 }
 
-function IncludedRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between border-b border-border/70 py-2.5 last:border-b-0">
-      <span className="text-[12.5px] text-ink-soft">{label}</span>
-      <span className="text-[13px] font-semibold text-ink">{value}</span>
-    </div>
-  );
-}
-
 function PreviewStep({
   previewData,
   generating,
@@ -112,38 +103,10 @@ function PreviewStep({
 
       <div className="mt-4 overflow-hidden rounded-[20px] border border-border bg-surface">
         {/* eslint-disable-next-line @next/next/no-img-element -- dynamically generated PNG (next/og) */}
-        <img src={PREVIEW_IMAGE_URL} alt="Career Card preview" className="w-full" style={{ aspectRatio: "1080 / 1350" }} />
+        <img src={PREVIEW_IMAGE_URL} alt={previewData.title} className="w-full" style={{ aspectRatio: "1080 / 1350" }} />
       </div>
 
-      <div className="mt-4 rounded-[16px] border border-border bg-surface p-4">
-        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-ink-soft">
-          <Sparkles size={13} /> What&apos;s included
-        </p>
-        <div className="mt-1">
-          <IncludedRow label="Title" value={previewData.title} />
-          <IncludedRow label="Wins captured" value={String(previewData.winsCount)} />
-          <IncludedRow label="Leadership moments" value={String(previewData.leadershipCount)} />
-          <IncludedRow label="Problems solved" value={String(previewData.problemsSolvedCount)} />
-          <IncludedRow label="Senior-stakeholder interactions" value={String(previewData.seniorStakeholderCount)} />
-          {previewData.strongestMuscle && <IncludedRow label="Strongest career muscle" value={previewData.strongestMuscle} />}
-          {previewData.growingMuscle && <IncludedRow label="Growing fastest" value={previewData.growingMuscle} />}
-          {previewData.underrepresentedMuscle && <IncludedRow label="Underrepresented" value={previewData.underrepresentedMuscle} />}
-        </div>
-        {previewData.insights.length > 0 && (
-          <div className="mt-3 border-t border-border/70 pt-3">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-soft">Key insights</p>
-            <ul className="mt-1.5 space-y-1">
-              {previewData.insights.map((line) => (
-                <li key={line} className="text-[12.5px] leading-relaxed text-ink">
-                  • {line}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-
-      <div className="mt-3 rounded-[16px] border border-emerald-100 bg-emerald-50 p-4">
+      <div className="mt-4 rounded-[16px] border border-emerald-100 bg-emerald-50 p-4">
         <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">
           <ShieldCheck size={13} /> Never included
         </p>

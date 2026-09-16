@@ -559,6 +559,50 @@ function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_analytics_events_name_created ON analytics_events(event_name, created_at);
     CREATE INDEX IF NOT EXISTS idx_analytics_events_user ON analytics_events(user_id, created_at);
+
+    -- Career Profile: the fun, quiz-answer-based "front door" experience
+    -- (Home redesign, phase 3 stage 1) -- deliberately a SEPARATE system
+    -- from career_wrapped_snapshots/career_wrapped_shares above. Career
+    -- Wrapped is evidence derived from real memories; Career Profile is
+    -- purely "what your quiz answers say about you" and must never be
+    -- blended with or presented as memory-derived evidence -- see
+    -- lib/careerProfile.ts's file comment. One row per completed quiz per
+    -- user; a retake overwrites the existing row in place (no history kept
+    -- -- product decision, matches "don't make users repeat quizzes unless
+    -- they choose to" while keeping this simple). quiz_version lets a
+    -- future change to a quiz's questions/scoring invalidate old rows
+    -- without a data migration, same convention as career_wrapped_snapshots'
+    -- analysis_version. dimension_scores/answers are JSON blobs, same
+    -- pragmatism as every other JSON column in this file.
+    CREATE TABLE IF NOT EXISTS career_profile_results (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      quiz_id TEXT NOT NULL,
+      quiz_version INTEGER NOT NULL,
+      answers TEXT NOT NULL,
+      dimension_scores TEXT NOT NULL,
+      result_key TEXT NOT NULL,
+      completed_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_career_profile_results_user_quiz ON career_profile_results(user_id, quiz_id);
+
+    -- One row per generated shareable Career Profile Card, once all 5
+    -- quizzes are complete -- same shape/purpose as career_wrapped_shares
+    -- above (id is the public unguessable slug embedded in /cp/[shareId],
+    -- card_data is a frozen JSON snapshot taken at reveal time so the link
+    -- keeps showing what the user actually shared even if they retake a
+    -- quiz afterward, revoked is a soft-delete). Not populated yet as of
+    -- phase-3-stage-1 (only one of five quizzes is implemented so far) --
+    -- created now so the schema is ready when the remaining quizzes ship.
+    CREATE TABLE IF NOT EXISTS career_profile_shares (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      card_data TEXT NOT NULL,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      revoked INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_career_profile_shares_user ON career_profile_shares(user_id, created_at);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---
@@ -771,6 +815,7 @@ function migrate(db: DatabaseSync) {
     { key: "push_notifications" },
     { key: "chat_tts" },
     { key: "career_wrapped" },
+    { key: "career_profile" },
   ];
   for (const f of seedFlags) {
     const exists = db.prepare(`SELECT 1 FROM feature_flags WHERE key = ?`).get(f.key);

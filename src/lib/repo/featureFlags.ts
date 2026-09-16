@@ -32,6 +32,11 @@ export const FEATURE_FLAGS = [
     label: "Career Wrapped",
     description: "The Home page preview, the full /career-wrapped experience, and Career Card generation/sharing. Turning this off hides the Home section entirely and redirects /career-wrapped away rather than showing a broken or empty page -- it doesn't touch the underlying memory/competency data, so nothing is lost while it's off.",
   },
+  {
+    key: "career_profile",
+    label: "Career Profile",
+    description: "The quiz-based Career Profile experience on Home (Superpower/Character/Red Flag/AI-Era Advantage/Career Mode) and its /career-profile pages. Deterministic quiz scoring only, no AI cost either way. Turning this off hides the Home hero and redirects /career-profile away rather than showing a broken page -- saved quiz results are untouched while it's off.",
+  },
 ] as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[number]["key"];

@@ -152,6 +152,83 @@ describe("Career Wrapped: data tiers by memory volume", () => {
   });
 });
 
+describe("Career Wrapped: second strength + career breadth (secondary aspects)", () => {
+  it("stay null/zero below the patterns tier, then unlock together with strongestMuscle", () => {
+    const user = makeUser();
+    makeClassifiedMemory(user.id, { competencies: ["Leadership"] });
+    let snapshot = careerWrappedRepo.getOrComputeCareerWrappedSnapshot(user.id, careerWrapped.ALL_TIME_PERIOD_KEY);
+    let secondary = careerWrappedRepo.getCareerWrappedSecondaryInsights(snapshot);
+    expect(secondary.secondStrongestMuscle).toBeNull();
+    expect(secondary.muscleBreadthCount).toBe(0);
+
+    makeClassifiedMemory(user.id, { competencies: ["Leadership"] });
+    makeClassifiedMemory(user.id, { competencies: ["Communication"] });
+    snapshot = careerWrappedRepo.getOrComputeCareerWrappedSnapshot(user.id, careerWrapped.ALL_TIME_PERIOD_KEY);
+    secondary = careerWrappedRepo.getCareerWrappedSecondaryInsights(snapshot);
+    expect(snapshot.strongest_muscle).toBe("Leadership");
+    expect(secondary.secondStrongestMuscle).toBe("Communication");
+    expect(secondary.muscleBreadthCount).toBe(2);
+  });
+});
+
+describe("Career Wrapped: persona headline (\"the read\" on the person)", () => {
+  it("names the strongest muscle by an evaluative line, not a bare count restatement", () => {
+    const headline = careerWrapped.buildCareerPersonaHeadline({
+      strongestMuscle: "Leadership",
+      secondStrongestMuscle: null,
+      winsCount: 3,
+      leadershipCount: 2,
+    });
+    expect(headline).toContain("leadership");
+    expect(headline).not.toMatch(/^\d/); // not "3 wins captured" style
+  });
+
+  it("blends in the second-strongest muscle when there is one", () => {
+    const headline = careerWrapped.buildCareerPersonaHeadline({
+      strongestMuscle: "Execution",
+      secondStrongestMuscle: "Communication",
+      winsCount: 5,
+      leadershipCount: 1,
+    });
+    expect(headline).toContain("Communication");
+  });
+
+  it("falls back to an honest, still-evaluative line when no muscle has unlocked yet", () => {
+    const headline = careerWrapped.buildCareerPersonaHeadline({
+      strongestMuscle: null,
+      secondStrongestMuscle: null,
+      winsCount: 0,
+      leadershipCount: 0,
+    });
+    expect(headline.length).toBeGreaterThan(0);
+  });
+});
+
+describe("Career Wrapped: archetype + achievement potential (the Career Card's four beats)", () => {
+  it("buildCareerArchetype returns a short persona title per muscle, and an honest fallback with none yet", () => {
+    expect(careerWrapped.buildCareerArchetype("Leadership")).toBe("The Natural Leader");
+    expect(careerWrapped.buildCareerArchetype(null)).toBe("The Rising Talent");
+  });
+
+  it("buildCareerAchievementPotential returns forward-looking lines with no raw counts, blending in the second muscle when present", () => {
+    const soloLines = careerWrapped.buildCareerAchievementPotential("Leadership", null);
+    expect(soloLines.length).toBe(2);
+    for (const line of soloLines) {
+      expect(line).not.toMatch(/\d/); // no counts ("1 leadership moment captured")
+    }
+
+    const blendedLines = careerWrapped.buildCareerAchievementPotential("Leadership", "Communication");
+    expect(blendedLines.length).toBe(3);
+    expect(blendedLines[2]).toContain("Communication");
+  });
+
+  it("buildCareerAchievementPotential falls back to an honest, still-positive line when no muscle has unlocked yet", () => {
+    const lines = careerWrapped.buildCareerAchievementPotential(null, null);
+    expect(lines.length).toBeGreaterThan(0);
+    expect(lines[0]).not.toMatch(/\d/);
+  });
+});
+
 describe("Career Wrapped: multi-year data and the year filter", () => {
   it("a year filter isolates that year's memories; All Time includes every year", () => {
     const user = makeUser();
@@ -229,27 +306,24 @@ describe("Career Wrapped: privacy of a generated share", () => {
     makeClassifiedMemory(user.id, { competencies: ["Communication"] });
 
     const snapshot = careerWrappedRepo.getOrComputeCareerWrappedSnapshot(user.id, careerWrapped.ALL_TIME_PERIOD_KEY);
+    const secondary = careerWrappedRepo.getCareerWrappedSecondaryInsights(snapshot);
     // Mirrors exactly what app/api/career-wrapped/share/route.ts builds --
     // only aggregated counts and muscle names, never memory text.
     const cardData = {
       title: "Test User's Career",
       periodLabel: "All Time",
-      winsCount: snapshot.wins_count,
-      leadershipCount: snapshot.leadership_count,
-      problemsSolvedCount: snapshot.problems_solved_count,
-      seniorStakeholderCount: snapshot.senior_stakeholder_count,
+      archetype: careerWrapped.buildCareerArchetype(snapshot.strongest_muscle as CareerMuscle | null),
       strongestMuscle: snapshot.strongest_muscle,
-      growingMuscle: snapshot.growing_muscle,
-      underrepresentedMuscle: snapshot.underrepresented_muscle,
-      insights: careerWrapped.buildCareerCardInsights({
+      personaHeadline: careerWrapped.buildCareerPersonaHeadline({
+        strongestMuscle: snapshot.strongest_muscle as CareerMuscle | null,
+        secondStrongestMuscle: secondary.secondStrongestMuscle,
         winsCount: snapshot.wins_count,
         leadershipCount: snapshot.leadership_count,
-        problemsSolvedCount: snapshot.problems_solved_count,
-        seniorStakeholderCount: snapshot.senior_stakeholder_count,
-        strongestMuscle: snapshot.strongest_muscle as CareerMuscle | null,
-        growingMuscle: snapshot.growing_muscle as CareerMuscle | null,
-        underrepresentedMuscle: snapshot.underrepresented_muscle as CareerMuscle | null,
       }),
+      achievementPotential: careerWrapped.buildCareerAchievementPotential(
+        snapshot.strongest_muscle as CareerMuscle | null,
+        secondary.secondStrongestMuscle
+      ),
     };
     const share = careerWrappedRepo.createCareerWrappedShare({
       userId: user.id,
@@ -275,14 +349,10 @@ describe("Career Wrapped: privacy of a generated share", () => {
       cardData: {
         title: "x",
         periodLabel: "All Time",
-        winsCount: 0,
-        leadershipCount: 0,
-        problemsSolvedCount: 0,
-        seniorStakeholderCount: 0,
+        archetype: "The Rising Talent",
         strongestMuscle: null,
-        growingMuscle: null,
-        underrepresentedMuscle: null,
-        insights: [],
+        personaHeadline: "Every memory captured here becomes part of this career story.",
+        achievementPotential: [],
       },
     });
 

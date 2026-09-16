@@ -287,20 +287,238 @@ function bestMuscleCount(muscles: MuscleEvidence): number {
   return Math.max(...CAREER_MUSCLES_LIST.map((m) => muscles[m]));
 }
 
-// Short, card-length insight lines for the shareable Career Card (spec
-// feedback: the card felt "very empty" -- this is what fills it, without
-// an AI call. Deterministic, same "prefer computation over generation"
-// posture as the rest of this file: every line here is derived straight
-// from numbers/muscles the caller already computed (getOrComputeCareerWrappedSnapshot),
-// never fabricated and never phrased by a model.
+// Two more "aspects" beyond strongest/growing/underrepresented (product
+// feedback: those three read as thin once the card and the /career-wrapped
+// page filled out everywhere else). Both are derived purely from the SAME
+// muscle_scores map career_wrapped_snapshots already persists in full (see
+// muscle_scores in lib/repo/careerWrapped.ts) -- no new DB column, no new
+// memory query, no AI call. Gated behind the same "patterns"/"full" tier as
+// strongestMuscle: a second-place muscle or a breadth count is just as easy
+// to over-read from 1-2 memories as a "strongest" claim would be.
+export type SecondaryCareerWrappedInsights = {
+  secondStrongestMuscle: CareerMuscle | null;
+  // How many of the 12 career muscles have at least one piece of evidence --
+  // 0 when the tier gate isn't met yet, so a caller can treat 0 as "don't
+  // show this aspect" the same way it already treats a null muscle.
+  muscleBreadthCount: number;
+};
+
+export function computeSecondaryCareerWrappedInsights(
+  muscles: MuscleEvidence,
+  strongestMuscle: CareerMuscle | null,
+  tier: CareerWrappedDataTier
+): SecondaryCareerWrappedInsights {
+  if (tier !== "patterns" && tier !== "full") {
+    return { secondStrongestMuscle: null, muscleBreadthCount: 0 };
+  }
+
+  let secondStrongestMuscle: CareerMuscle | null = null;
+  if (strongestMuscle) {
+    let best: CareerMuscle | null = null;
+    let bestCount = 0;
+    for (const m of CAREER_MUSCLES_LIST) {
+      if (m === strongestMuscle) continue;
+      if (muscles[m] > bestCount) {
+        best = m;
+        bestCount = muscles[m];
+      }
+    }
+    secondStrongestMuscle = bestCount > 0 ? best : null;
+  }
+
+  const muscleBreadthCount = CAREER_MUSCLES_LIST.filter((m) => muscles[m] > 0).length;
+
+  return { secondStrongestMuscle, muscleBreadthCount };
+}
+
+// One evocative "read" per muscle -- an actual character judgment ("what do
+// you think of this person"), not a restatement of a count. Still fully
+// deterministic: a fixed lookup keyed on the muscle Strivo.ai already
+// computed as strongest, not a model's free-form opinion, and every claim
+// stays grounded in something the muscle taxonomy itself already asserts
+// (see COMPETENCY_TO_MUSCLE above) rather than inventing a new fact about
+// the person. A dev-time assertion at the bottom of this file keeps this in
+// sync with CAREER_MUSCLES_LIST the same way COMPETENCY_TO_MUSCLE is.
+const MUSCLE_IDENTITY: Record<CareerMuscle, string> = {
+  Leadership: "Someone people look to when things get hard — this career reads leadership-first",
+  Execution: "A finisher, not just a planner — this record is built on shipped outcomes",
+  "Strategic Thinking": "Thinks several moves ahead — the pattern here is foresight, not firefighting",
+  "Stakeholder Management": "Comfortable in the room with senior stakeholders — trust earned upward, not just managed",
+  Communication: "Explains the 'why' clearly enough that other people act on it",
+  Collaboration: "A multiplier — makes the people around them better, not just their own output",
+  Innovation: "Brings new ideas to the table instead of waiting for permission to try something different",
+  Ownership: "Takes the wheel without being asked — initiative is the throughline here",
+  "Commercial Impact": "Thinks like an owner — ties the work back to real business outcomes",
+  "Customer Focus": "Decisions run through what the user actually needs, not just what's easy to ship",
+  "People Development": "Builds other people up — a career defined as much by mentorship as by output",
+  "Problem Solving": "The one who gets called in when things go sideways — a fixer, not just a doer",
+};
+
+if (process.env.NODE_ENV !== "production") {
+  const missingIdentity = CAREER_MUSCLES_LIST.filter((m) => !(m in MUSCLE_IDENTITY));
+  if (missingIdentity.length > 0) {
+    console.error(`MUSCLE_IDENTITY is missing a line for: ${missingIdentity.join(", ")}`);
+  }
+}
+
+// A single headline "read" on the person -- the card's actual centerpiece
+// insight (product feedback: the old count-restatement lines weren't real
+// insight, this is what "what do you think of the person" becomes without
+// an AI call). Below the pattern tier, there's no strongest muscle yet to
+// characterize, so this falls back to an honest, still-evaluative line
+// about the record itself rather than guessing at a personality.
+export function buildCareerPersonaHeadline(input: {
+  strongestMuscle: CareerMuscle | null;
+  secondStrongestMuscle: CareerMuscle | null;
+  winsCount: number;
+  leadershipCount: number;
+}): string {
+  if (input.strongestMuscle) {
+    const base = MUSCLE_IDENTITY[input.strongestMuscle];
+    if (input.secondStrongestMuscle) {
+      return `${base}, backed by real range in ${input.secondStrongestMuscle} too — not a one-trick record.`;
+    }
+    return `${base}.`;
+  }
+  if (input.winsCount > 0) {
+    return `Already building a real record — ${input.winsCount} documented win${input.winsCount === 1 ? "" : "s"} and counting, with sharper patterns to come as more memories are captured.`;
+  }
+  if (input.leadershipCount > 0) {
+    return `Early days, but the evidence already on file points toward leadership — worth capturing more to see the full pattern.`;
+  }
+  return `Every memory captured here becomes part of this career story — the patterns get sharper as more get added.`;
+}
+
+// A short, punchy persona title per muscle -- the "archetype" badge on the
+// shareable Career Card (product feedback: the card needs a headline
+// identity someone would be proud to post, not a data dump). Same
+// deterministic lookup pattern as MUSCLE_IDENTITY, just compressed to a
+// 2-4 word title instead of a full sentence.
+const MUSCLE_ARCHETYPE: Record<CareerMuscle, string> = {
+  Leadership: "The Natural Leader",
+  Execution: "The Finisher",
+  "Strategic Thinking": "The Strategic Mind",
+  "Stakeholder Management": "The Trusted Operator",
+  Communication: "The Clear Communicator",
+  Collaboration: "The Team Multiplier",
+  Innovation: "The Innovator",
+  Ownership: "The Self-Starter",
+  "Commercial Impact": "The Business Builder",
+  "Customer Focus": "The Customer Champion",
+  "People Development": "The Mentor",
+  "Problem Solving": "The Fixer",
+};
+
+if (process.env.NODE_ENV !== "production") {
+  const missingArchetype = CAREER_MUSCLES_LIST.filter((m) => !(m in MUSCLE_ARCHETYPE));
+  if (missingArchetype.length > 0) {
+    console.error(`MUSCLE_ARCHETYPE is missing a title for: ${missingArchetype.join(", ")}`);
+  }
+}
+
+// The archetype badge itself -- "The Rising Talent" is the one non-muscle
+// entry, an honest and still-positive placeholder for accounts that haven't
+// unlocked a strongest muscle yet (same tier gate as strongestMuscle).
+export function buildCareerArchetype(strongestMuscle: CareerMuscle | null): string {
+  return strongestMuscle ? MUSCLE_ARCHETYPE[strongestMuscle] : "The Rising Talent";
+}
+
+// 2 short, forward-looking "what this person is well-suited for" lines per
+// muscle, plus an optional 3rd that blends in the second-strongest muscle
+// when there is one. Deliberately phrased as fit/potential ("well-suited
+// for", "positioned to") rather than asserted fact -- a genuine, positive
+// inference from a real signal, not a fabricated claim about the person's
+// actual job history. This is what makes the card feel worth sharing
+// (product feedback: "what can they aim for") instead of a private data
+// dump ("1 leadership moment on record").
+const MUSCLE_POTENTIAL: Record<CareerMuscle, [string, string]> = {
+  Leadership: [
+    "Well-suited for people-leadership roles — team lead, manager, or beyond.",
+    "A strong fit for leading through ambiguity when others are looking for direction.",
+  ],
+  Execution: [
+    "Well-suited for roles that live or die on delivery — program or delivery leadership.",
+    "Positioned to scale personal execution into leading a high-output team.",
+  ],
+  "Strategic Thinking": [
+    "Well-suited for roles that shape direction, not just execute it — strategy or planning leadership.",
+    "A strong fit for turning complexity into a clear plan others can follow.",
+  ],
+  "Stakeholder Management": [
+    "Well-suited for roles at the center of competing priorities — cross-functional or client-facing leadership.",
+    "A strong fit for representing the team in rooms where trust matters as much as title.",
+  ],
+  Communication: [
+    "Well-suited for roles that need someone to align people around an idea.",
+    "A strong fit for turning complex work into a story other people rally behind.",
+  ],
+  Collaboration: [
+    "Well-suited for roles that connect teams rather than sit inside one — program or platform leadership.",
+    "Positioned to be the glue that holds cross-team work together.",
+  ],
+  Innovation: [
+    "Well-suited for roles that reward new thinking — product, R&D, or 0-to-1 work.",
+    "Positioned to lead the next thing rather than maintain the last one.",
+  ],
+  Ownership: [
+    "Well-suited for roles with real autonomy — founder, GM, or independent ownership of a business line.",
+    "Positioned to run something end-to-end without needing to be told how.",
+  ],
+  "Commercial Impact": [
+    "Well-suited for roles that own outcomes, not just output — GM or revenue-facing leadership.",
+    "A strong fit for being trusted with real business-line responsibility.",
+  ],
+  "Customer Focus": [
+    "Well-suited for roles closest to the customer — product or CX leadership.",
+    "A strong fit for being the voice of the customer in rooms that need one.",
+  ],
+  "People Development": [
+    "Well-suited for people-manager or mentorship-heavy roles — team lead or people-ops leadership.",
+    "Positioned to build the next generation of leaders around them.",
+  ],
+  "Problem Solving": [
+    "Well-suited for roles that need a fixer — crisis response or high-ambiguity problem spaces.",
+    "Positioned to be the person called in when something's broken.",
+  ],
+};
+
+if (process.env.NODE_ENV !== "production") {
+  const missingPotential = CAREER_MUSCLES_LIST.filter((m) => !(m in MUSCLE_POTENTIAL));
+  if (missingPotential.length > 0) {
+    console.error(`MUSCLE_POTENTIAL is missing lines for: ${missingPotential.join(", ")}`);
+  }
+}
+
+export function buildCareerAchievementPotential(
+  strongestMuscle: CareerMuscle | null,
+  secondStrongestMuscle: CareerMuscle | null
+): string[] {
+  if (!strongestMuscle) {
+    return ["Every new memory sharpens this picture — the potential here is still being written."];
+  }
+  const lines: string[] = [...MUSCLE_POTENTIAL[strongestMuscle]];
+  if (secondStrongestMuscle) {
+    lines.push(`Combine that with real ${secondStrongestMuscle} range, and it's a case for roles that need both.`);
+  }
+  return lines;
+}
+
+// Short, card-length insight lines for the shareable Career Card -- the
+// supporting evidence underneath the headline read above. Deliberately
+// evaluative rather than a flat count restatement (feedback: "just don't
+// say X captured, say what you think of the person") -- but still
+// deterministic, same "prefer computation over generation" posture as the
+// rest of this file: every line is a fixed template around a real number
+// the caller already computed, never fabricated and never phrased by a
+// model.
 //
-// Muscle-pattern insights (strongest/growing/underrepresented) come first
-// since they're the most specific, genuinely "we noticed something about
-// you" claims -- but a newer account may not have any yet (they're tier-
-// gated in computeCareerWrappedInsights, same as the in-app page), so this
-// backfills with count-based lines until there are at least 2, up to a cap
-// of 3, so the card never looks sparse just because someone is early on
-// with muscle-level patterns specifically.
+// Muscle-pattern insights (growing/underrepresented) come first since
+// they're the most specific, genuinely "we noticed something about you"
+// claims -- strongest and second-strongest are already the headline above,
+// so they're deliberately excluded here to avoid repeating the same claim
+// twice on one card. A newer account may not have any muscle-level pattern
+// yet (tier-gated in computeCareerWrappedInsights), so this backfills with
+// count-based lines until there are at least 2, up to a cap of 3.
 export function buildCareerCardInsights(input: {
   winsCount: number;
   leadershipCount: number;
@@ -312,21 +530,18 @@ export function buildCareerCardInsights(input: {
 }): string[] {
   const insights: string[] = [];
 
-  if (input.strongestMuscle) {
-    insights.push(`${input.strongestMuscle} is your strongest, most consistent career pattern.`);
-  }
   if (input.growingMuscle) {
-    insights.push(`${input.growingMuscle} is growing fastest right now.`);
+    insights.push(`${input.growingMuscle} is on the rise — noticeably more evidence recently than before, a real shift, not a one-off.`);
   }
   if (input.underrepresentedMuscle) {
-    insights.push(`${input.underrepresentedMuscle} is underrepresented — worth capturing more of.`);
+    insights.push(`${input.underrepresentedMuscle} shows up least so far — not necessarily a gap in the work, but one worth capturing more of.`);
   }
 
   const countBackfill: { count: number; line: string }[] = [
-    { count: input.winsCount, line: `${input.winsCount} real career win${input.winsCount === 1 ? "" : "s"} captured, straight from memory.` },
-    { count: input.leadershipCount, line: `${input.leadershipCount} moment${input.leadershipCount === 1 ? "" : "s"} of leadership evidence on record.` },
-    { count: input.problemsSolvedCount, line: `${input.problemsSolvedCount} problem${input.problemsSolvedCount === 1 ? "" : "s"} solved and documented.` },
-    { count: input.seniorStakeholderCount, line: `${input.seniorStakeholderCount} senior-stakeholder interaction${input.seniorStakeholderCount === 1 ? "" : "s"} captured.` },
+    { count: input.winsCount, line: `A track record of turning effort into outcomes — ${input.winsCount} documented win${input.winsCount === 1 ? "" : "s"}, not just activity.` },
+    { count: input.leadershipCount, line: `Steps up when it counts — ${input.leadershipCount} leadership moment${input.leadershipCount === 1 ? "" : "s"} on record.` },
+    { count: input.problemsSolvedCount, line: `Doesn't shy away from hard problems — ${input.problemsSolvedCount} solved and documented.` },
+    { count: input.seniorStakeholderCount, line: `Operates comfortably at the senior level — ${input.seniorStakeholderCount} senior-stakeholder interaction${input.seniorStakeholderCount === 1 ? "" : "s"} on record.` },
   ];
   for (const candidate of countBackfill.sort((a, b) => b.count - a.count)) {
     if (insights.length >= 3) break;
