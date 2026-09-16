@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import type { CareerMuscle } from "@/lib/careerWrapped";
 
 // Phase 5 QA for Career Wrapped -- same "throwaway SQLite file per suite"
 // pattern as tests/security/idor.test.ts (see tests/README.md), run against
@@ -231,13 +232,24 @@ describe("Career Wrapped: privacy of a generated share", () => {
     // Mirrors exactly what app/api/career-wrapped/share/route.ts builds --
     // only aggregated counts and muscle names, never memory text.
     const cardData = {
-      title: "Test User's All Time Career",
+      title: "Test User's Career",
       periodLabel: "All Time",
       winsCount: snapshot.wins_count,
       leadershipCount: snapshot.leadership_count,
       problemsSolvedCount: snapshot.problems_solved_count,
+      seniorStakeholderCount: snapshot.senior_stakeholder_count,
       strongestMuscle: snapshot.strongest_muscle,
       growingMuscle: snapshot.growing_muscle,
+      underrepresentedMuscle: snapshot.underrepresented_muscle,
+      insights: careerWrapped.buildCareerCardInsights({
+        winsCount: snapshot.wins_count,
+        leadershipCount: snapshot.leadership_count,
+        problemsSolvedCount: snapshot.problems_solved_count,
+        seniorStakeholderCount: snapshot.senior_stakeholder_count,
+        strongestMuscle: snapshot.strongest_muscle as CareerMuscle | null,
+        growingMuscle: snapshot.growing_muscle as CareerMuscle | null,
+        underrepresentedMuscle: snapshot.underrepresented_muscle as CareerMuscle | null,
+      }),
     };
     const share = careerWrappedRepo.createCareerWrappedShare({
       userId: user.id,
@@ -260,7 +272,18 @@ describe("Career Wrapped: privacy of a generated share", () => {
       userId: owner.id,
       periodKey: careerWrapped.ALL_TIME_PERIOD_KEY,
       template: "A",
-      cardData: { title: "x", periodLabel: "All Time", winsCount: 0, leadershipCount: 0, problemsSolvedCount: 0, strongestMuscle: null, growingMuscle: null },
+      cardData: {
+        title: "x",
+        periodLabel: "All Time",
+        winsCount: 0,
+        leadershipCount: 0,
+        problemsSolvedCount: 0,
+        seniorStakeholderCount: 0,
+        strongestMuscle: null,
+        growingMuscle: null,
+        underrepresentedMuscle: null,
+        insights: [],
+      },
     });
 
     // A different user's revoke call is scoped by user_id and has no

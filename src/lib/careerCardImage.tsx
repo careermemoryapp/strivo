@@ -1,11 +1,22 @@
-// Builds the JSX passed to next/og's ImageResponse for a shareable Career
+// Builds the JSX passed to next/og's ImageResponse for the shareable Career
 // Card -- shared by app/api/career-wrapped/share-image/[shareId]/route.ts
-// (the Download button / native-share file) and app/cw/[shareId]/
-// opengraph-image.tsx (what LinkedIn/X/WhatsApp unfurl when the public
-// share LINK is posted, since none of those platforms accept a raw image
-// upload via a web share intent -- see the sharing plan in the Career
-// Wrapped audit). Both call this same function so the two can never
-// visually drift out of sync.
+// (the Download button / native-share file), app/api/career-wrapped/
+// card-preview/route.ts (the in-app live preview before anything is
+// generated), and app/cw/[shareId]/opengraph-image.tsx (what LinkedIn/X/
+// WhatsApp unfurl when the public share LINK is posted, since none of those
+// platforms accept a raw image upload via a web share intent -- see the
+// sharing plan in the Career Wrapped audit). All three call this same
+// function so none of them can visually drift out of sync.
+//
+// Only one design now (originally offered 3 selectable templates -- product
+// feedback was that the picker added a step for no reason, since this dark
+// style already matches the rest of the app, so the picker was removed and
+// this is the only one left). Deliberately dense rather than the older,
+// sparser version -- feedback was that a card with only 3 stats and 2
+// muscle lines read as "very empty." Every field below still comes straight
+// from the caller's already-computed CareerCardData -- see
+// buildCareerCardInsights in lib/careerWrapped.ts for how the insights
+// array itself is derived (deterministic, no AI call, no fabrication).
 //
 // Satori (what next/og renders through) only understands inline styles and
 // a constrained CSS subset -- no Tailwind classes, `display: "flex"` set
@@ -15,16 +26,24 @@
 // file -- falls back to Satori's default system font.
 
 export type CareerCardData = {
-  title: string; // e.g. "Shikhar's 2026 Career" or "Your 2026 Career"
-  periodLabel: string; // "2026" or "All Time"
+  title: string; // e.g. "Shikhar's Career"
+  periodLabel: string; // "All Time" today; kept for when a year filter returns
   winsCount: number;
   leadershipCount: number;
   problemsSolvedCount: number;
+  seniorStakeholderCount: number;
   strongestMuscle: string | null;
   growingMuscle: string | null;
+  underrepresentedMuscle: string | null;
+  // Up to 3 short, already-composed sentences -- see buildCareerCardInsights.
+  // Rendered as-is; this file does no copywriting of its own.
+  insights: string[];
 };
 
-export type CareerCardTemplate = "A" | "B" | "C";
+// Single design now -- kept as a type (rather than inlining "A" everywhere)
+// so the DB column, share-creation code, and any future re-introduction of
+// alternate styles don't need a wider change.
+export type CareerCardTemplate = "A";
 
 export const CAREER_CARD_SIZE = { width: 1080, height: 1350 };
 
@@ -55,9 +74,40 @@ function LogoMarkSvg({ size = 44 }: { size?: number }) {
   );
 }
 
-// Template A -- clean professional/premium (dark, matches the app's own
-// DarkHeader tone).
+function StatCell({ label, value }: { label: string; value: number }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", width: "44%" }}>
+      <div style={{ display: "flex", fontSize: 52, fontWeight: 800, color: "#ffffff" }}>{value}</div>
+      <div style={{ display: "flex", marginTop: 2, fontSize: 20, color: "rgba(255,255,255,0.55)" }}>{label}</div>
+    </div>
+  );
+}
+
+function MuscleLine({ eyebrow, value }: { eyebrow: string; value: string }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column" }}>
+      <div style={{ display: "flex", fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 1 }}>
+        {eyebrow}
+      </div>
+      <div style={{ display: "flex", marginTop: 2, fontSize: 30, fontWeight: 800, color: "#ffffff" }}>{value}</div>
+    </div>
+  );
+}
+
+function InsightLine({ text }: { text: string }) {
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", gap: 12 }}>
+      <div style={{ display: "flex", width: 7, height: 7, marginTop: 9, borderRadius: 4, background: "#f4b73f" }} />
+      <div style={{ display: "flex", flex: 1, fontSize: 22, lineHeight: 1.35, color: "rgba(255,255,255,0.82)" }}>{text}</div>
+    </div>
+  );
+}
+
+// The one and only card design -- clean, dark, professional (matches the
+// app's own DarkHeader tone; see the file comment above for why the other
+// two candidate styles were dropped).
 function TemplateA(data: CareerCardData) {
+  const hasMuscleLines = data.strongestMuscle || data.growingMuscle || data.underrepresentedMuscle;
   return (
     <div
       style={{
@@ -66,183 +116,58 @@ function TemplateA(data: CareerCardData) {
         display: "flex",
         flexDirection: "column",
         justifyContent: "space-between",
-        padding: 72,
+        padding: 68,
         background: "linear-gradient(135deg,#221a38,#2f1f3d)",
         fontFamily: "sans-serif",
       }}
     >
       <div style={{ display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", fontSize: 28, fontWeight: 700, color: "#f4b73f", letterSpacing: 2 }}>
-          {data.periodLabel.toUpperCase()} CAREER
+        <div style={{ display: "flex", fontSize: 24, fontWeight: 700, color: "#f4b73f", letterSpacing: 3 }}>
+          CAREER WRAPPED
         </div>
-        <div style={{ display: "flex", marginTop: 14, fontSize: 56, fontWeight: 800, color: "#ffffff", lineHeight: 1.15 }}>
+        <div style={{ display: "flex", marginTop: 12, fontSize: 52, fontWeight: 800, color: "#ffffff", lineHeight: 1.15 }}>
           {data.title}
         </div>
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 28 }}>
-        <StatRow label="Wins captured" value={data.winsCount} />
-        <StatRow label="Leadership moments" value={data.leadershipCount} />
-        <StatRow label="Problems solved" value={data.problemsSolvedCount} />
+      <div style={{ display: "flex", flexWrap: "wrap", rowGap: 26, columnGap: 24 }}>
+        <StatCell label="Wins captured" value={data.winsCount} />
+        <StatCell label="Leadership moments" value={data.leadershipCount} />
+        <StatCell label="Problems solved" value={data.problemsSolvedCount} />
+        <StatCell label="Senior-stakeholder interactions" value={data.seniorStakeholderCount} />
       </div>
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-        {data.strongestMuscle && <MuscleLine eyebrow="STRONGEST CAREER MUSCLE" value={data.strongestMuscle} />}
-        {data.growingMuscle && <MuscleLine eyebrow="GROWING FASTEST" value={data.growingMuscle} />}
-      </div>
-
-      <Attribution light />
-    </div>
-  );
-}
-
-// Template B -- bold "Wrapped" style, vibrant gradient, bigger numbers, more
-// visual personality. Deliberately not Spotify's own colors/typography --
-// this takes the IDEA of an annual personal summary, not its protected
-// visual identity.
-function TemplateB(data: CareerCardData) {
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        padding: 72,
-        background: "linear-gradient(160deg,#fb923c,#f472b6 45%,#a855f7 90%)",
-        fontFamily: "sans-serif",
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", fontSize: 30, fontWeight: 800, color: "rgba(28,10,40,0.65)", letterSpacing: 2 }}>
-          {data.periodLabel.toUpperCase()}
+      {hasMuscleLines && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+          {data.strongestMuscle && <MuscleLine eyebrow="STRONGEST CAREER MUSCLE" value={data.strongestMuscle} />}
+          {data.growingMuscle && <MuscleLine eyebrow="GROWING FASTEST" value={data.growingMuscle} />}
+          {data.underrepresentedMuscle && <MuscleLine eyebrow="UNDERREPRESENTED" value={data.underrepresentedMuscle} />}
         </div>
-        <div style={{ display: "flex", marginTop: 10, fontSize: 68, fontWeight: 900, color: "#1c0a28", lineHeight: 1.05 }}>
-          {data.title}
-        </div>
-      </div>
+      )}
 
-      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-        <BigStat label="Wins captured" value={data.winsCount} />
-        <BigStat label="Leadership moments" value={data.leadershipCount} />
-        <BigStat label="Problems solved" value={data.problemsSolvedCount} />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {data.strongestMuscle && (
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              padding: "20px 26px",
-              borderRadius: 20,
-              background: "rgba(28,10,40,0.16)",
-            }}
-          >
-            <div style={{ display: "flex", fontSize: 22, fontWeight: 700, color: "rgba(28,10,40,0.6)" }}>
-              STRONGEST CAREER MUSCLE
-            </div>
-            <div style={{ display: "flex", marginTop: 4, fontSize: 36, fontWeight: 800, color: "#1c0a28" }}>
-              {data.strongestMuscle}
-            </div>
+      {data.insights.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ display: "flex", fontSize: 18, fontWeight: 700, color: "rgba(255,255,255,0.45)", letterSpacing: 1 }}>
+            KEY INSIGHTS
           </div>
-        )}
-      </div>
-
-      <Attribution light={false} />
-    </div>
-  );
-}
-
-// Template C -- minimal, light "career intelligence" card.
-function TemplateC(data: CareerCardData) {
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-        justifyContent: "space-between",
-        padding: 72,
-        background: "#ffffff",
-        fontFamily: "sans-serif",
-        border: "1px solid #ece9f5",
-      }}
-    >
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", fontSize: 26, fontWeight: 700, color: "#7c3aed", letterSpacing: 2 }}>
-          {data.periodLabel.toUpperCase()} CAREER
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {data.insights.map((text) => (
+              <InsightLine key={text} text={text} />
+            ))}
+          </div>
         </div>
-        <div style={{ display: "flex", marginTop: 14, fontSize: 52, fontWeight: 800, color: "#0f172a", lineHeight: 1.15 }}>
-          {data.title}
+      )}
+
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <LogoMarkSvg size={30} />
+        <div style={{ display: "flex", fontSize: 20, fontWeight: 600, color: "rgba(255,255,255,0.55)" }}>
+          Generated by Strivo.ai
         </div>
       </div>
-
-      <div style={{ display: "flex", gap: 40 }}>
-        <MinimalStat label="Wins" value={data.winsCount} />
-        <MinimalStat label="Leadership" value={data.leadershipCount} />
-        <MinimalStat label="Problems solved" value={data.problemsSolvedCount} />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-        {data.strongestMuscle && <MuscleLine dark eyebrow="STRONGEST CAREER MUSCLE" value={data.strongestMuscle} />}
-        {data.growingMuscle && <MuscleLine dark eyebrow="GROWING FASTEST" value={data.growingMuscle} />}
-      </div>
-
-      <Attribution light={false} dark />
     </div>
   );
 }
 
-function StatRow({ label, value }: { label: string; value: number }) {
-  return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 18 }}>
-      <div style={{ display: "flex", fontSize: 64, fontWeight: 800, color: "#ffffff" }}>{value}</div>
-      <div style={{ display: "flex", fontSize: 26, color: "rgba(255,255,255,0.6)" }}>{label}</div>
-    </div>
-  );
-}
-function BigStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div style={{ display: "flex", alignItems: "baseline", gap: 16 }}>
-      <div style={{ display: "flex", fontSize: 56, fontWeight: 900, color: "#1c0a28" }}>{value}</div>
-      <div style={{ display: "flex", fontSize: 26, fontWeight: 600, color: "rgba(28,10,40,0.7)" }}>{label}</div>
-    </div>
-  );
-}
-function MinimalStat({ label, value }: { label: string; value: number }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", fontSize: 48, fontWeight: 800, color: "#0f172a" }}>{value}</div>
-      <div style={{ display: "flex", fontSize: 20, color: "#5b6478" }}>{label}</div>
-    </div>
-  );
-}
-function MuscleLine({ eyebrow, value, dark }: { eyebrow: string; value: string; dark?: boolean }) {
-  return (
-    <div style={{ display: "flex", flexDirection: "column" }}>
-      <div style={{ display: "flex", fontSize: 20, fontWeight: 700, color: dark ? "#94a0b8" : "rgba(255,255,255,0.45)" }}>
-        {eyebrow}
-      </div>
-      <div style={{ display: "flex", fontSize: 34, fontWeight: 800, color: dark ? "#0f172a" : "#ffffff" }}>{value}</div>
-    </div>
-  );
-}
-
-function Attribution({ light, dark }: { light: boolean; dark?: boolean }) {
-  const textColor = dark ? "#5b6478" : light ? "rgba(255,255,255,0.55)" : "rgba(28,10,40,0.6)";
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 8 }}>
-      <LogoMarkSvg size={30} />
-      <div style={{ display: "flex", fontSize: 20, fontWeight: 600, color: textColor }}>Generated by Strivo.ai</div>
-    </div>
-  );
-}
-
-export function buildCareerCardElement(data: CareerCardData, template: CareerCardTemplate) {
-  if (template === "B") return <TemplateB {...data} />;
-  if (template === "C") return <TemplateC {...data} />;
+export function buildCareerCardElement(data: CareerCardData) {
   return <TemplateA {...data} />;
 }

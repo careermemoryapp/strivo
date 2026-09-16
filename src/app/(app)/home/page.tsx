@@ -10,7 +10,7 @@ import { getActiveCheckinForUser } from "@/lib/repo/pendingCheckins";
 import { computeStreak } from "@/lib/utils";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 import { getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
-import { getCareerWrappedDataTier, periodKeyForYear } from "@/lib/careerWrapped";
+import { ALL_TIME_PERIOD_KEY, getCareerWrappedDataTier } from "@/lib/careerWrapped";
 import { HomeClient } from "./HomeClient";
 
 // How recent a weekly recap has to be to still show on Home -- a recap is
@@ -69,16 +69,16 @@ export default async function HomePage() {
   // is what flips a row to 'active' in the first place).
   const activeCheckin = getActiveCheckinForUser(userId);
 
-  // Career Wrapped Home preview (spec section 1) -- current year, same
-  // default the full /career-wrapped experience opens to. Computed
-  // synchronously (no AI call, see getOrComputeCareerWrappedSnapshot's own
-  // comment) so this doesn't add a network round trip the way the
-  // AI-authored recap/growth/benchmark digests would. Gated by the
-  // career_wrapped feature flag -- off means the whole section is omitted
-  // from Home entirely, not shown broken/empty.
-  const careerWrappedYear = new Date().getUTCFullYear();
+  // Career Wrapped Home preview (spec section 1) -- always the user's whole
+  // career (ALL_TIME_PERIOD_KEY), same default the full /career-wrapped
+  // experience opens to -- see that page's comment for why the year filter
+  // was pulled. Computed synchronously (no AI call, see
+  // getOrComputeCareerWrappedSnapshot's own comment) so this doesn't add a
+  // network round trip the way the AI-authored recap/growth/benchmark
+  // digests would. Gated by the career_wrapped feature flag -- off means the
+  // whole section is omitted from Home entirely, not shown broken/empty.
   const careerWrapped = isFeatureEnabled("career_wrapped")
-    ? getOrComputeCareerWrappedSnapshot(userId, periodKeyForYear(careerWrappedYear))
+    ? getOrComputeCareerWrappedSnapshot(userId, ALL_TIME_PERIOD_KEY)
     : null;
 
   return (
@@ -116,7 +116,6 @@ export default async function HomePage() {
         careerWrapped: careerWrapped
           ? {
               tier: getCareerWrappedDataTier(careerWrapped.memory_count_at_generation),
-              year: careerWrappedYear,
               winsCount: careerWrapped.wins_count,
               leadershipCount: careerWrapped.leadership_count,
               problemsSolvedCount: careerWrapped.problems_solved_count,

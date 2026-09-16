@@ -8,8 +8,11 @@ type CardData = {
   winsCount: number;
   leadershipCount: number;
   problemsSolvedCount: number;
+  seniorStakeholderCount: number;
   strongestMuscle: string | null;
   growingMuscle: string | null;
+  underrepresentedMuscle: string | null;
+  insights: string[];
 };
 
 // Deliberately plain/static (no motion library needed for a one-off public
@@ -33,8 +36,11 @@ export function CareerCardPublicClient({ shareId, cardData, imageUrl }: { shareI
           <p className="text-lg font-bold">{cardData.title}</p>
           <p className="mt-1 text-sm text-white/60">
             {cardData.winsCount} wins · {cardData.leadershipCount} leadership moments · {cardData.problemsSolvedCount} problems
-            solved
+            solved · {cardData.seniorStakeholderCount} senior-stakeholder interactions
           </p>
+          {cardData.insights.length > 0 && (
+            <p className="mx-auto mt-3 max-w-xs text-[12.5px] leading-relaxed text-white/50">{cardData.insights[0]}</p>
+          )}
         </div>
 
         <a

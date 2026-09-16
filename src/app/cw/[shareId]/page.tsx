@@ -18,7 +18,18 @@ export default async function CareerCardPage({ params }: { params: Promise<{ sha
 
   incrementCareerWrappedShareViews(shareId);
 
-  let cardData: { title: string; periodLabel: string; winsCount: number; leadershipCount: number; problemsSolvedCount: number; strongestMuscle: string | null; growingMuscle: string | null };
+  let cardData: {
+    title: string;
+    periodLabel: string;
+    winsCount: number;
+    leadershipCount: number;
+    problemsSolvedCount: number;
+    seniorStakeholderCount: number;
+    strongestMuscle: string | null;
+    growingMuscle: string | null;
+    underrepresentedMuscle: string | null;
+    insights: string[];
+  };
   try {
     cardData = JSON.parse(share.card_data);
   } catch {

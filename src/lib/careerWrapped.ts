@@ -287,6 +287,55 @@ function bestMuscleCount(muscles: MuscleEvidence): number {
   return Math.max(...CAREER_MUSCLES_LIST.map((m) => muscles[m]));
 }
 
+// Short, card-length insight lines for the shareable Career Card (spec
+// feedback: the card felt "very empty" -- this is what fills it, without
+// an AI call. Deterministic, same "prefer computation over generation"
+// posture as the rest of this file: every line here is derived straight
+// from numbers/muscles the caller already computed (getOrComputeCareerWrappedSnapshot),
+// never fabricated and never phrased by a model.
+//
+// Muscle-pattern insights (strongest/growing/underrepresented) come first
+// since they're the most specific, genuinely "we noticed something about
+// you" claims -- but a newer account may not have any yet (they're tier-
+// gated in computeCareerWrappedInsights, same as the in-app page), so this
+// backfills with count-based lines until there are at least 2, up to a cap
+// of 3, so the card never looks sparse just because someone is early on
+// with muscle-level patterns specifically.
+export function buildCareerCardInsights(input: {
+  winsCount: number;
+  leadershipCount: number;
+  problemsSolvedCount: number;
+  seniorStakeholderCount: number;
+  strongestMuscle: CareerMuscle | null;
+  growingMuscle: CareerMuscle | null;
+  underrepresentedMuscle: CareerMuscle | null;
+}): string[] {
+  const insights: string[] = [];
+
+  if (input.strongestMuscle) {
+    insights.push(`${input.strongestMuscle} is your strongest, most consistent career pattern.`);
+  }
+  if (input.growingMuscle) {
+    insights.push(`${input.growingMuscle} is growing fastest right now.`);
+  }
+  if (input.underrepresentedMuscle) {
+    insights.push(`${input.underrepresentedMuscle} is underrepresented — worth capturing more of.`);
+  }
+
+  const countBackfill: { count: number; line: string }[] = [
+    { count: input.winsCount, line: `${input.winsCount} real career win${input.winsCount === 1 ? "" : "s"} captured, straight from memory.` },
+    { count: input.leadershipCount, line: `${input.leadershipCount} moment${input.leadershipCount === 1 ? "" : "s"} of leadership evidence on record.` },
+    { count: input.problemsSolvedCount, line: `${input.problemsSolvedCount} problem${input.problemsSolvedCount === 1 ? "" : "s"} solved and documented.` },
+    { count: input.seniorStakeholderCount, line: `${input.seniorStakeholderCount} senior-stakeholder interaction${input.seniorStakeholderCount === 1 ? "" : "s"} captured.` },
+  ];
+  for (const candidate of countBackfill.sort((a, b) => b.count - a.count)) {
+    if (insights.length >= 3) break;
+    if (candidate.count > 0) insights.push(candidate.line);
+  }
+
+  return insights.slice(0, 3);
+}
+
 // A cached career_wrapped_snapshots row is stale (needs recomputing) if
 // either the taxonomy/logic version moved on, or the user has recorded
 // (or presumably edited) memories since it was generated -- a plain

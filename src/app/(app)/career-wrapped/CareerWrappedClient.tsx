@@ -6,7 +6,7 @@ import { motion, useReducedMotion, type Variants } from "framer-motion";
 import { Sparkles, TrendingUp, Lock, Compass, Plus, Share2 } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { trackEvent } from "@/lib/trackEvent";
-import { ALL_TIME_PERIOD_KEY, CAREER_WRAPPED_THRESHOLDS, type CareerWrappedDataTier } from "@/lib/careerWrapped";
+import { CAREER_WRAPPED_THRESHOLDS, type CareerWrappedDataTier } from "@/lib/careerWrapped";
 
 type Snapshot = {
   winsCount: number;
@@ -21,9 +21,6 @@ type Snapshot = {
 
 type Props = {
   firstName: string | null;
-  periodKey: string;
-  periodLabel: string;
-  yearOptions: number[];
   tier: CareerWrappedDataTier;
   snapshot: Snapshot;
 };
@@ -52,7 +49,7 @@ function underrepresentedMuscleCopy(muscle: string): string {
   return `We found less evidence of ${muscle} in your memories so far. That doesn't mean it's not part of your work — just that it's underrepresented in what you've captured.`;
 }
 
-export function CareerWrappedClient({ firstName, periodKey, periodLabel, yearOptions, tier, snapshot }: Props) {
+export function CareerWrappedClient({ firstName, tier, snapshot }: Props) {
   const router = useRouter();
   const prefersReducedMotion = useReducedMotion();
   const variants = prefersReducedMotion ? reducedMotionVariants : fadeUp;
@@ -60,7 +57,7 @@ export function CareerWrappedClient({ firstName, periodKey, periodLabel, yearOpt
   const lastCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    trackEvent("career_wrapped_opened", { tier, periodKey });
+    trackEvent("career_wrapped_opened", { tier });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per mount
   }, []);
 
@@ -71,43 +68,18 @@ export function CareerWrappedClient({ firstName, periodKey, periodLabel, yearOpt
       (entries) => {
         if (entries[0]?.isIntersecting && !completedFiredRef.current) {
           completedFiredRef.current = true;
-          trackEvent("career_wrapped_completed", { tier, periodKey });
+          trackEvent("career_wrapped_completed", { tier });
         }
       },
       { threshold: 0.6 }
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [tier, periodKey]);
-
-  function selectYear(next: string) {
-    router.push(`/career-wrapped?year=${next}`);
-  }
+  }, [tier]);
 
   return (
     <div className="pb-10">
-      <DarkHeader
-        back
-        inlineTitle="Career Wrapped"
-        right={
-          <div className="flex gap-1 rounded-pill bg-white/10 p-1">
-            {[...yearOptions.map(String), ALL_TIME_PERIOD_KEY].map((opt) => (
-              <button
-                key={opt}
-                onClick={() => selectYear(opt)}
-                className="rounded-pill px-2.5 py-1 text-[11px] font-semibold transition-colors"
-                style={
-                  periodKey === opt
-                    ? { background: "linear-gradient(135deg,#fbbf24,#f472b6)", color: "#1c1830" }
-                    : { color: "rgba(255,255,255,0.6)" }
-                }
-              >
-                {opt === ALL_TIME_PERIOD_KEY ? "All Time" : opt}
-              </button>
-            ))}
-          </div>
-        }
-      />
+      <DarkHeader back inlineTitle="Career Wrapped" />
 
       <motion.div initial="hidden" animate="show" variants={stagger} className="px-5 pt-5 space-y-4">
         {tier === "empty" ? (
@@ -117,7 +89,7 @@ export function CareerWrappedClient({ firstName, periodKey, periodLabel, yearOpt
         ) : (
           <>
             <motion.div variants={variants}>
-              <HeadlineCard firstName={firstName} periodLabel={periodLabel} snapshot={snapshot} />
+              <HeadlineCard firstName={firstName} snapshot={snapshot} />
             </motion.div>
 
             {snapshot.strongestMuscle ? (
@@ -164,7 +136,7 @@ export function CareerWrappedClient({ firstName, periodKey, periodLabel, yearOpt
             )}
 
             <motion.div variants={variants} ref={lastCardRef}>
-              <RewardLoopCard onGenerateCard={() => router.push(`/career-wrapped/card?year=${periodKey}`)} />
+              <RewardLoopCard onGenerateCard={() => router.push("/career-wrapped/card")} />
             </motion.div>
           </>
         )}
@@ -182,11 +154,11 @@ function StatBlock({ value, label }: { value: number; label: string }) {
   );
 }
 
-function HeadlineCard({ firstName, periodLabel, snapshot }: { firstName: string | null; periodLabel: string; snapshot: Snapshot }) {
+function HeadlineCard({ firstName, snapshot }: { firstName: string | null; snapshot: Snapshot }) {
   return (
     <div className="rounded-[20px] p-6" style={{ background: "linear-gradient(135deg,#2a2140,#3a2145)" }}>
       <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/80">
-        {firstName ? `${firstName}'s` : "Your"} {periodLabel} Career
+        {firstName ? `${firstName}'s` : "Your"} Career
       </p>
       <div className="mt-4 grid grid-cols-2 gap-y-5">
         <StatBlock value={snapshot.winsCount} label="Wins captured" />

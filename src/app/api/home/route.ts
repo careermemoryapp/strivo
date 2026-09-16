@@ -10,7 +10,7 @@ import { getActiveCheckinForUser } from "@/lib/repo/pendingCheckins";
 import { computeStreak } from "@/lib/utils";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 import { getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
-import { getCareerWrappedDataTier, periodKeyForYear } from "@/lib/careerWrapped";
+import { ALL_TIME_PERIOD_KEY, getCareerWrappedDataTier } from "@/lib/careerWrapped";
 
 // Kept in sync with the identical constants in page.tsx (the Server
 // Component's first-render fetch) -- see the comments there for why these
@@ -31,9 +31,11 @@ export async function GET() {
   const recentGrowth = getRecentGrowthNarrative(userId, GROWTH_VISIBLE_MS);
   const recentBenchmark = getRecentQuarterlyBenchmark(userId, BENCHMARK_VISIBLE_MS);
   const activeCheckin = getActiveCheckinForUser(userId);
-  const careerWrappedYear = new Date().getUTCFullYear();
+  // Always the user's whole career (ALL_TIME_PERIOD_KEY), not a per-year
+  // snapshot -- see the comment on app/(app)/career-wrapped/page.tsx for why
+  // the year filter was pulled.
   const careerWrapped = isFeatureEnabled("career_wrapped")
-    ? getOrComputeCareerWrappedSnapshot(userId, periodKeyForYear(careerWrappedYear))
+    ? getOrComputeCareerWrappedSnapshot(userId, ALL_TIME_PERIOD_KEY)
     : null;
 
   return NextResponse.json({
@@ -52,7 +54,6 @@ export async function GET() {
     careerWrapped: careerWrapped
       ? {
           tier: getCareerWrappedDataTier(careerWrapped.memory_count_at_generation),
-          year: careerWrappedYear,
           winsCount: careerWrapped.wins_count,
           leadershipCount: careerWrapped.leadership_count,
           problemsSolvedCount: careerWrapped.problems_solved_count,

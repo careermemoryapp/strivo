@@ -8,7 +8,6 @@ import type { CareerWrappedDataTier } from "@/lib/careerWrapped";
 
 export type CareerWrappedHomePreviewData = {
   tier: CareerWrappedDataTier;
-  year: number;
   winsCount: number;
   leadershipCount: number;
   problemsSolvedCount: number;
@@ -30,7 +29,7 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
   // 12 (career_wrapped_home_impression). Deliberately NOT gated on tier: an
   // impression of the empty state is still an impression.
   useEffect(() => {
-    trackEvent("career_wrapped_home_impression", { tier: data.tier, year: data.year });
+    trackEvent("career_wrapped_home_impression", { tier: data.tier });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fire once per mount, not on every data change
   }, []);
 
@@ -83,7 +82,7 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
       >
         <div className="flex items-center justify-between">
           <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/80">
-            Your {data.year} Career
+            Your Career
           </p>
           <ChevronRight size={16} className="shrink-0 text-white/40" />
         </div>

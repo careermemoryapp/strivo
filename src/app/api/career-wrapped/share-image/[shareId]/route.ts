@@ -1,7 +1,7 @@
 import { ImageResponse } from "next/og";
 import { NextResponse } from "next/server";
 import { getCareerWrappedShareById } from "@/lib/repo/careerWrapped";
-import { buildCareerCardElement, CAREER_CARD_SIZE, type CareerCardData, type CareerCardTemplate } from "@/lib/careerCardImage";
+import { buildCareerCardElement, CAREER_CARD_SIZE, type CareerCardData } from "@/lib/careerCardImage";
 
 // The actual downloadable/shareable PNG for a given Career Card share (see
 // app/api/career-wrapped/share/route.ts for how a share is created). Public
@@ -26,7 +26,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ shareId
     return NextResponse.json({ error: "Corrupt card data" }, { status: 500 });
   }
 
-  return new ImageResponse(buildCareerCardElement(cardData, share.template as CareerCardTemplate), {
+  return new ImageResponse(buildCareerCardElement(cardData), {
     ...CAREER_CARD_SIZE,
   });
 }

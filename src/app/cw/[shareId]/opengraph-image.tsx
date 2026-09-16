@@ -1,6 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getCareerWrappedShareById } from "@/lib/repo/careerWrapped";
-import { buildCareerCardElement, CAREER_CARD_SIZE, type CareerCardData, type CareerCardTemplate } from "@/lib/careerCardImage";
+import { buildCareerCardElement, CAREER_CARD_SIZE, type CareerCardData } from "@/lib/careerCardImage";
 
 // This is what makes a Career Card LINK posted to LinkedIn/X/WhatsApp
 // actually show the card image in the unfurled preview -- those platforms'
@@ -26,5 +26,5 @@ export default async function CareerCardOgImage({ params }: { params: Promise<{ 
     );
   }
   const cardData = JSON.parse(share.card_data) as CareerCardData;
-  return new ImageResponse(buildCareerCardElement(cardData, share.template as CareerCardTemplate), { ...size });
+  return new ImageResponse(buildCareerCardElement(cardData), { ...size });
 }
