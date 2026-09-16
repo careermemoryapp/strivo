@@ -461,6 +461,104 @@ function migrate(db: DatabaseSync) {
       category_insight INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL
     );
+
+    -- Cached "Career Wrapped" aggregate for one user + one period (a
+    -- calendar year, e.g. "2026", or the literal string "all" -- see
+    -- periodKeyForYear/ALL_TIME_PERIOD_KEY in lib/careerWrapped.ts; never a
+    -- hardcoded year in code, only in this column's stored value). Unlike
+    -- weekly_recaps/growth_narratives/quarterly_benchmarks/
+    -- underplayed_win_callouts above, this is NOT an AI-authored text --
+    -- muscle_scores is deterministic aggregation over memories.competencies
+    -- (see computeCareerWrappedSnapshot in lib/careerWrapped.ts), so there's
+    -- no OpenAI cost to gate with a cron/eligibility check the way those
+    -- four do. Instead this is a plain read-through cache: Home/the
+    -- /career-wrapped page reads the latest row for (user_id, period_key);
+    -- if it's missing or stale (memory_count_at_generation /
+    -- analysis_version don't match current reality -- see
+    -- isCareerWrappedSnapshotStale), the caller recomputes synchronously
+    -- (cheap: bounded SQL scan of one user's memories, no network call) and
+    -- upserts a fresh row before rendering. analysis_version exists purely
+    -- so a future change to the muscle taxonomy/mapping can invalidate every
+    -- old cached row at once without a data migration -- bump
+    -- CAREER_WRAPPED_ANALYSIS_VERSION and every snapshot recomputes on next
+    -- read.
+    CREATE TABLE IF NOT EXISTS career_wrapped_snapshots (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      period_key TEXT NOT NULL,
+      wins_count INTEGER NOT NULL DEFAULT 0,
+      leadership_count INTEGER NOT NULL DEFAULT 0,
+      problems_solved_count INTEGER NOT NULL DEFAULT 0,
+      senior_stakeholder_count INTEGER NOT NULL DEFAULT 0,
+      muscle_scores TEXT NOT NULL,
+      strongest_muscle TEXT,
+      growing_muscle TEXT,
+      underrepresented_muscle TEXT,
+      memory_count_at_generation INTEGER NOT NULL,
+      analysis_version INTEGER NOT NULL,
+      generated_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_career_wrapped_snapshots_period ON career_wrapped_snapshots(user_id, period_key);
+
+    -- One row per generated shareable Career Card (see
+    -- app/api/career-wrapped/share/route.ts and app/cw/[shareId]). id is the
+    -- unguessable public slug used in the /cw/[shareId] landing page's URL
+    -- and as the seed for that page's opengraph-image, so it has to be
+    -- unpredictable (crypto-random, same newId() convention as every other
+    -- table) -- unlike every other id in this app, this one is embedded in
+    -- a link meant to be posted publicly on LinkedIn/X/WhatsApp. card_data
+    -- is the exact JSON snapshot of ONLY the aggregated fields the user
+    -- approved on the pre-share preview (never raw memory text/project/
+    -- client names -- see the privacy preview step in
+    -- CareerCardClient.tsx) -- stored as its own copy, deliberately not a
+    -- live join against career_wrapped_snapshots, so a share link keeps
+    -- showing exactly what the user agreed to even if their underlying data
+    -- (or the muscle taxonomy) changes afterward. revoked lets a user pull a
+    -- link down after the fact (see DELETE /api/career-wrapped/share/[id])
+    -- without deleting the row outright, so view_count history survives.
+    CREATE TABLE IF NOT EXISTS career_wrapped_shares (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      period_key TEXT NOT NULL,
+      template TEXT NOT NULL DEFAULT 'A',
+      card_data TEXT NOT NULL,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      revoked INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_career_wrapped_shares_user ON career_wrapped_shares(user_id, created_at);
+
+    -- Minimal in-app product-analytics event log (see lib/analytics.ts and
+    -- POST /api/analytics/event). Added specifically because
+    -- components/Analytics.tsx deliberately excludes GA4 from every
+    -- (app)/admin route and the native shell (isNativeApp() ||
+    -- pathname.startsWith('/app') || pathname.startsWith('/admin') all
+    -- return null, i.e. no gtag ever loads there), and Singular
+    -- (lib/singular.ts) only does native install attribution, not custom
+    -- in-product events -- so there was no working destination for events
+    -- like career_wrapped_opened/career_card_shared_linkedin fired from
+    -- inside the signed-in product. A plain owned table (rather than a
+    -- third-party SDK) also means the retention/virality questions in the
+    -- Career Wrapped spec ("does this improve weekly retention," "do cards
+    -- generate new signups") can be answered with a normal SQL query against
+    -- data we already have, no export/warehouse needed. user_id is nullable
+    -- because the public /cw/[shareId] landing page can fire
+    -- career_card_share_clicked-style events from a logged-out visitor.
+    -- properties is a loose JSON blob (same pragmatism as notifications.type
+    -- elsewhere in this file) -- this is an event log, not a normalized
+    -- schema, and is expected to grow the fastest of any table here once
+    -- Career Wrapped ships, so keep queries against it scoped by
+    -- event_name/created_at, mirroring the messages-table indexing lesson
+    -- above.
+    CREATE TABLE IF NOT EXISTS analytics_events (
+      id TEXT PRIMARY KEY,
+      user_id TEXT REFERENCES users(id) ON DELETE SET NULL,
+      event_name TEXT NOT NULL,
+      properties TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_analytics_events_name_created ON analytics_events(event_name, created_at);
+    CREATE INDEX IF NOT EXISTS idx_analytics_events_user ON analytics_events(user_id, created_at);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---
@@ -672,6 +770,7 @@ function migrate(db: DatabaseSync) {
     { key: "uploads" },
     { key: "push_notifications" },
     { key: "chat_tts" },
+    { key: "career_wrapped" },
   ];
   for (const f of seedFlags) {
     const exists = db.prepare(`SELECT 1 FROM feature_flags WHERE key = ?`).get(f.key);
@@ -1074,6 +1173,37 @@ function migrate(db: DatabaseSync) {
   // compliance gap being closed retroactively, not just a new-user thing.
   if (!userColumns.includes("ai_consent_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN ai_consent_at TEXT;`);
+  }
+
+  // Whether this memory's transcript describes interacting with a
+  // senior/executive-level stakeholder (a VP, director, C-suite exec, a
+  // client's own leadership, etc.) -- classified in the SAME AI round trip
+  // as competencies/praise/entities (see generateMemoryMetadata in
+  // lib/ai.ts), not a separate call, so new memories get this for free with
+  // no added latency or cost. Feeds the "senior-stakeholder interactions"
+  // stat on the Career Wrapped Home preview (see lib/careerWrapped.ts).
+  // Nullable and tri-state on purpose (NULL/0/1, not just 0/1 like
+  // has_metric) -- NULL specifically means "created before this existed,
+  // never classified," which is what lets the backfill route
+  // (app/api/career-wrapped/backfill/route.ts) find exactly the memories
+  // that still need a pass, the same "safely backfill without touching
+  // memories that already went through it" requirement the Career Wrapped
+  // spec calls for. Deliberately scoped narrow in the prompt (see
+  // classifySeniorStakeholder's comment in lib/ai.ts) so it doesn't fire on
+  // every mention of "my manager."
+  if (!memoryColumns.includes("mentions_senior_stakeholder")) {
+    db.exec(`ALTER TABLE memories ADD COLUMN mentions_senior_stakeholder INTEGER;`);
+  }
+
+  // 8th notification type -- "New career signal discovered" / "Your
+  // Leadership evidence just got stronger" pushes fired when a fresh memory
+  // meaningfully changes the user's Career Wrapped picture (see
+  // maybeNotifyCareerSignal in lib/careerWrapped.ts, called from
+  // chatService.ts/record's save path the same way underplayed-win and
+  // category-insight are). Same lazy "no row means on" default as every
+  // other column on this table -- see its own comment above.
+  if (!notificationPrefColumns.includes("career_wrapped_signal")) {
+    db.exec(`ALTER TABLE notification_prefs ADD COLUMN career_wrapped_signal INTEGER NOT NULL DEFAULT 1;`);
   }
 }
 

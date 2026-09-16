@@ -16,6 +16,7 @@ import { HOME_SUBTITLE, QUICK_ACTIONS } from "@/lib/config";
 import { timeOfDayGreeting } from "@/lib/utils";
 import { ACTION_ICON_DEFS, chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
+import { CareerWrappedHomePreview, type CareerWrappedHomePreviewData } from "@/components/CareerWrappedHomePreview";
 
 type HomeData = {
   user: { id: string; firstName: string; lastName: string; email: string } | null;
@@ -47,6 +48,10 @@ type HomeData = {
   // delivery is still a push notification (see app/api/checkins/run) -- this
   // is the secondary surface for anyone who opens the app without tapping it.
   checkin: { id: string; question: string } | null;
+  // Null when the career_wrapped feature flag is off (see page.tsx) --
+  // renders nothing at all in that case, same "hidden, not broken" contract
+  // as every other feature-flagged surface in this app.
+  careerWrapped: CareerWrappedHomePreviewData | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -122,6 +127,10 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
       });
       const json = await res.json();
       if (!res.ok) throw new Error();
+      // See the matching comment in ChatsListClient.tsx's startChat -- same
+      // fix, same reason: without this, going Back to the Chats list after
+      // starting a chat from Home can show a stale cached copy that doesn't
+      // include the chat just created.
       router.refresh();
       router.push(`/chats/${json.chat.id}`);
     } catch {
@@ -210,6 +219,13 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
   return (
     <div className="pb-6">
       {header}
+
+      {/* Career Wrapped -- placed immediately after the header, ahead of
+          every other Home surface (trial banner, check-in, recap, growth,
+          benchmark) per the spec: this is meant to read as a core part of
+          the product, not one more secondary digest teaser. Renders nothing
+          at all when the career_wrapped feature flag is off (see page.tsx). */}
+      {data.careerWrapped && <CareerWrappedHomePreview data={data.careerWrapped} />}
 
       {error && (
         <div className="px-5 pt-4">

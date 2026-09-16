@@ -15,6 +15,9 @@ import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired, getUserById } from "@/lib/repo/users";
 import { createPendingCheckin, countOpenCheckins } from "@/lib/repo/pendingCheckins";
 import { listProjects, withProjectNames } from "@/lib/repo/projects";
+import { isFeatureEnabled } from "@/lib/repo/featureFlags";
+import { computeCareerSignalNotification } from "@/lib/repo/careerWrapped";
+import { notifyUser } from "@/lib/notify";
 
 export async function GET(req: Request) {
   const userId = await requireUserId();
@@ -177,6 +180,13 @@ export async function POST(req: Request) {
       // prompt (see recurringEntitiesContext/buildSystemPrompt, lib/ai.ts)
       // as a lightweight personal glossary.
       entities: JSON.stringify(metadata.entities),
+      // See mentionsSeniorStakeholder in generateMemoryMetadata (lib/ai.ts)
+      // and the migration comment in lib/db.ts -- feeds the
+      // "senior-stakeholder interactions" stat on Career Wrapped (see
+      // lib/careerWrapped.ts). Stored as 0/1 here (never null) since this IS
+      // a successful classification -- null is reserved for memories that
+      // predate this field and haven't been backfilled yet.
+      mentions_senior_stakeholder: metadata.mentionsSeniorStakeholder ? 1 : 0,
       metadata_status: "ready",
     });
 
@@ -193,6 +203,25 @@ export async function POST(req: Request) {
         question: metadata.futureCheckin.question,
         targetDate: metadata.futureCheckin.targetDate,
       });
+    }
+
+    // Career Wrapped reward loop (spec section 9 / Phase 4) -- re-reads the
+    // memory so computeCareerSignalNotification sees the competencies/
+    // category/mentions_senior_stakeholder just written above, not the
+    // pre-metadata placeholder. Best-effort and rare by design (see that
+    // function's comment in lib/repo/careerWrapped.ts) -- most memories
+    // trigger nothing here, which is intentional.
+    if (isFeatureEnabled("career_wrapped")) {
+      const classifiedMemory = getMemoryById(userId, memory.id);
+      const signal = classifiedMemory ? computeCareerSignalNotification(userId, classifiedMemory) : null;
+      if (signal) {
+        await notifyUser(userId, {
+          type: "career_wrapped_signal",
+          title: signal.title,
+          body: signal.body,
+          route: "/career-wrapped",
+        });
+      }
     }
   } else {
     updateMemoryMetadata(userId, memory.id, { metadata_status: "failed" });

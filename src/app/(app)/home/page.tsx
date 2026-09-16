@@ -8,6 +8,9 @@ import { getRecentGrowthNarrative } from "@/lib/repo/growthNarratives";
 import { getRecentQuarterlyBenchmark } from "@/lib/repo/quarterlyBenchmarks";
 import { getActiveCheckinForUser } from "@/lib/repo/pendingCheckins";
 import { computeStreak } from "@/lib/utils";
+import { isFeatureEnabled } from "@/lib/repo/featureFlags";
+import { getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
+import { getCareerWrappedDataTier, periodKeyForYear } from "@/lib/careerWrapped";
 import { HomeClient } from "./HomeClient";
 
 // How recent a weekly recap has to be to still show on Home -- a recap is
@@ -66,6 +69,18 @@ export default async function HomePage() {
   // is what flips a row to 'active' in the first place).
   const activeCheckin = getActiveCheckinForUser(userId);
 
+  // Career Wrapped Home preview (spec section 1) -- current year, same
+  // default the full /career-wrapped experience opens to. Computed
+  // synchronously (no AI call, see getOrComputeCareerWrappedSnapshot's own
+  // comment) so this doesn't add a network round trip the way the
+  // AI-authored recap/growth/benchmark digests would. Gated by the
+  // career_wrapped feature flag -- off means the whole section is omitted
+  // from Home entirely, not shown broken/empty.
+  const careerWrappedYear = new Date().getUTCFullYear();
+  const careerWrapped = isFeatureEnabled("career_wrapped")
+    ? getOrComputeCareerWrappedSnapshot(userId, periodKeyForYear(careerWrappedYear))
+    : null;
+
   return (
     <HomeClient
       initialData={{
@@ -96,6 +111,19 @@ export default async function HomePage() {
         // Just the question -- tapping the teaser goes to /check-in/[id]
         // for the actual answer flow.
         checkin: activeCheckin ? { id: activeCheckin.id, question: activeCheckin.question } : null,
+        // See the comment above -- null entirely when the feature flag is
+        // off, which is what tells HomeClient to render nothing here.
+        careerWrapped: careerWrapped
+          ? {
+              tier: getCareerWrappedDataTier(careerWrapped.memory_count_at_generation),
+              year: careerWrappedYear,
+              winsCount: careerWrapped.wins_count,
+              leadershipCount: careerWrapped.leadership_count,
+              problemsSolvedCount: careerWrapped.problems_solved_count,
+              seniorStakeholderCount: careerWrapped.senior_stakeholder_count,
+              strongestMuscle: careerWrapped.strongest_muscle,
+            }
+          : null,
       }}
     />
   );

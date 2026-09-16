@@ -60,6 +60,15 @@ export type Memory = {
   source: "voice" | "text" | "file";
   key_points: string | null; // JSON string array
   summary_feedback: "yes" | "no" | null;
+  // Whether this memory describes interacting with a senior/executive-level
+  // stakeholder -- see classifySeniorStakeholder in lib/ai.ts and the
+  // migration comment in lib/db.ts. NULL means "not yet classified"
+  // (created before this existed, or the backfill hasn't reached it yet),
+  // distinct from 0 ("classified, no senior stakeholder found") -- Career
+  // Wrapped (lib/careerWrapped.ts) treats both as "no evidence" the same
+  // way, but the backfill route relies on the NULL/non-NULL distinction to
+  // find memories it hasn't looked at yet.
+  mentions_senior_stakeholder: number | null;
   created_at: string;
   updated_at: string;
 };
@@ -236,6 +245,7 @@ export function updateMemoryMetadata(
       | "metadata_status"
       | "key_points"
       | "summary_feedback"
+      | "mentions_senior_stakeholder"
     >
   >
 ): Memory | undefined {
@@ -261,8 +271,16 @@ export function updateMemoryMetadata(
   const metadata_status = input.metadata_status ?? current.metadata_status;
   const key_points = input.key_points ?? current.key_points;
   const summary_feedback = input.summary_feedback ?? current.summary_feedback;
+  // Explicit `in` check, not `??` -- 0 is a valid, meaningful classification
+  // ("no senior stakeholder found") and `??` would only skip `null`/
+  // `undefined`, so 0 would actually be fine with `??` too, but this is kept
+  // explicit since the whole point of this column is a real tri-state
+  // (null/0/1) and a future refactor changing the other fields' pattern
+  // shouldn't accidentally break this one's null-means-unclassified meaning.
+  const mentions_senior_stakeholder =
+    "mentions_senior_stakeholder" in input ? input.mentions_senior_stakeholder! : current.mentions_senior_stakeholder;
   db.prepare(
-    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, reflective_question = ?, reflective_answer = ?, self_minimized = ?, self_minimized_reason = ?, entities = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, updated_at = ?
+    `UPDATE memories SET title = ?, transcript = ?, summary = ?, category = ?, tags = ?, embedding = ?, search_text = ?, competencies = ?, praise = ?, resume_line = ?, has_metric = ?, reflective_question = ?, reflective_answer = ?, self_minimized = ?, self_minimized_reason = ?, entities = ?, metadata_status = ?, key_points = ?, summary_feedback = ?, mentions_senior_stakeholder = ?, updated_at = ?
      WHERE id = ? AND user_id = ?`
   ).run(
     title,
@@ -284,11 +302,28 @@ export function updateMemoryMetadata(
     metadata_status,
     key_points,
     summary_feedback,
+    mentions_senior_stakeholder,
     nowIso(),
     id,
     userId
   );
   return getMemoryById(userId, id);
+}
+
+// Memories created before mentions_senior_stakeholder existed (or that
+// slipped through some other way) -- the candidate pool for the backfill
+// route (app/api/career-wrapped/backfill/route.ts). Bounded by `limit` and
+// oldest-first, same "small batch, cheap" reasoning as every other AI-backed
+// batch job in this app (see listSelfMinimizedCandidates above) -- a backfill
+// covering years of history for every user should never be one unbounded
+// pass in a single request.
+export function listMemoriesMissingSeniorStakeholderFlag(userId: string, limit: number): Memory[] {
+  const db = getDb();
+  return db
+    .prepare(
+      `SELECT * FROM memories WHERE user_id = ? AND metadata_status = 'ready' AND mentions_senior_stakeholder IS NULL ORDER BY created_at ASC LIMIT ?`
+    )
+    .all(userId, limit) as Memory[];
 }
 
 export function deleteMemory(userId: string, id: string) {

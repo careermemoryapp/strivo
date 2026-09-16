@@ -8,6 +8,9 @@ import { getRecentGrowthNarrative } from "@/lib/repo/growthNarratives";
 import { getRecentQuarterlyBenchmark } from "@/lib/repo/quarterlyBenchmarks";
 import { getActiveCheckinForUser } from "@/lib/repo/pendingCheckins";
 import { computeStreak } from "@/lib/utils";
+import { isFeatureEnabled } from "@/lib/repo/featureFlags";
+import { getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
+import { getCareerWrappedDataTier, periodKeyForYear } from "@/lib/careerWrapped";
 
 // Kept in sync with the identical constants in page.tsx (the Server
 // Component's first-render fetch) -- see the comments there for why these
@@ -28,6 +31,10 @@ export async function GET() {
   const recentGrowth = getRecentGrowthNarrative(userId, GROWTH_VISIBLE_MS);
   const recentBenchmark = getRecentQuarterlyBenchmark(userId, BENCHMARK_VISIBLE_MS);
   const activeCheckin = getActiveCheckinForUser(userId);
+  const careerWrappedYear = new Date().getUTCFullYear();
+  const careerWrapped = isFeatureEnabled("career_wrapped")
+    ? getOrComputeCareerWrappedSnapshot(userId, periodKeyForYear(careerWrappedYear))
+    : null;
 
   return NextResponse.json({
     user: user
@@ -42,6 +49,17 @@ export async function GET() {
       ? { text: recentBenchmark.reflection_text, quarterLabel: recentBenchmark.quarter_label }
       : null,
     checkin: activeCheckin ? { id: activeCheckin.id, question: activeCheckin.question } : null,
+    careerWrapped: careerWrapped
+      ? {
+          tier: getCareerWrappedDataTier(careerWrapped.memory_count_at_generation),
+          year: careerWrappedYear,
+          winsCount: careerWrapped.wins_count,
+          leadershipCount: careerWrapped.leadership_count,
+          problemsSolvedCount: careerWrapped.problems_solved_count,
+          seniorStakeholderCount: careerWrapped.senior_stakeholder_count,
+          strongestMuscle: careerWrapped.strongest_muscle,
+        }
+      : null,
     // True until the user has picked Monthly/Annual on the first-run trial
     // screen (see app/welcome-trial -- deliberately outside the (app) route
     // group/layout, see the comment there). The authoritative redirect now

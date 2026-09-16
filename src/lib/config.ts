@@ -108,6 +108,57 @@ export const MEMORY_COMPETENCIES_LIST = [
   "Risk & Quality Management",
 ] as const;
 
+// "Career Muscles" -- the manageable, user-facing taxonomy Career Wrapped
+// scores (see lib/careerWrapped.ts). Deliberately a SEPARATE, coarser list
+// from MEMORY_COMPETENCIES_LIST above rather than reusing it directly: the
+// spec asks for "approximately 12" categories a person can actually hold in
+// their head, not the 22-item behavioral-interview taxonomy that already
+// exists for a different purpose (surfacing specific competencies on a
+// single memory). Every competency maps to exactly one muscle (see
+// COMPETENCY_TO_MUSCLE in lib/careerWrapped.ts) so evidence counted here is
+// 100% derived from the same AI-classified `memories.competencies` data
+// already being generated today -- no new AI classification call, no new
+// per-memory column, nothing invented. Kept in config.ts (not
+// careerWrapped.ts) for the same client-safety reason as the two lists
+// above: client components that just need the label list (e.g. a filter
+// chip row) shouldn't have to import server-only code to get it.
+export const CAREER_MUSCLES_LIST = [
+  "Strategic Thinking",
+  "Problem Solving",
+  "Leadership",
+  "Execution",
+  "Stakeholder Management",
+  "Communication",
+  "Collaboration",
+  "Innovation",
+  "Ownership",
+  "Commercial Impact",
+  "Customer Focus",
+  "People Development",
+] as const;
+
+// Fixed allow-list of Career Wrapped analytics events (see the spec's
+// analytics section) -- the single source of truth for both the client
+// trackEvent() helper (lib/trackEvent.ts) and the API route that persists
+// them (app/api/analytics/event/route.ts), so a typo in an event name fails
+// loudly in dev instead of silently creating a slightly-differently-spelled
+// event that quietly fragments the data. Kept in config.ts (not
+// trackEvent.ts or the analytics repo file) for the same client-safety
+// reason as the lists above -- client components need this list without
+// importing anything server-only.
+export const CAREER_WRAPPED_EVENTS = [
+  "career_wrapped_home_impression",
+  "career_wrapped_opened",
+  "career_wrapped_completed",
+  "career_card_generated",
+  "career_card_share_clicked",
+  "career_card_shared_linkedin",
+  "career_card_shared_x",
+  "career_card_shared_whatsapp",
+  "career_card_downloaded",
+  "career_wrapped_add_memory_clicked",
+] as const;
+
 export const NEW_CHAT_TEMPLATES = [
   { category: "Interview", title: "Interview Preparation", prompt: "I want to prepare for an interview." },
   { category: "Resume", title: "Resume Builder", prompt: "I want to update my resume." },

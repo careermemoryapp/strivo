@@ -39,6 +39,7 @@ function mockMemory(overrides: Partial<Memory> & Pick<Memory, "id" | "title" | "
     self_minimized_reason: null,
     entities: null,
     project_id: null,
+    mentions_senior_stakeholder: null,
     metadata_status: "ready",
     source: "text",
     key_points: null,

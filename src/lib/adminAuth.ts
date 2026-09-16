@@ -202,3 +202,18 @@ export function checkProductUpdateDripSecret(secret: string | null): boolean {
   if (!expected || !secret) return false;
   return timingSafeStringEqual(secret, expected);
 }
+
+// Same idea again, for the Career Wrapped "senior stakeholder" backfill
+// automation (see /api/career-wrapped/backfill/route.ts) -- its own
+// credential, separate from every other secret above. Unlike the other
+// automations in this file, Career Wrapped's own aggregation is computed
+// synchronously on read (see getOrComputeCareerWrappedSnapshot in
+// lib/repo/careerWrapped.ts) and needs no cron at all -- this secret exists
+// only to gate the one genuinely AI-backed piece, backfilling
+// mentions_senior_stakeholder on memories that predate that field. Checked
+// via a request header (`x-career-wrapped-secret`).
+export function checkCareerWrappedSecret(secret: string | null): boolean {
+  const expected = process.env.CAREER_WRAPPED_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}

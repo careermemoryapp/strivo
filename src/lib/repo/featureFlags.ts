@@ -27,6 +27,11 @@ export const FEATURE_FLAGS = [
     label: "Chat text-to-speech (fallback)",
     description: "The paid OpenAI TTS backup for the speaker button on AI chat replies. The button tries the browser's free built-in voice first and only calls OpenAI when that silently fails (mainly some Android WebViews). Turning this off just removes that backup -- those devices show \"Not supported here\" instead; everyone else is unaffected.",
   },
+  {
+    key: "career_wrapped",
+    label: "Career Wrapped",
+    description: "The Home page preview, the full /career-wrapped experience, and Career Card generation/sharing. Turning this off hides the Home section entirely and redirects /career-wrapped away rather than showing a broken or empty page -- it doesn't touch the underlying memory/competency data, so nothing is lost while it's off.",
+  },
 ] as const;
 
 export type FeatureFlagKey = (typeof FEATURE_FLAGS)[number]["key"];

@@ -134,6 +134,16 @@ export type MemoryMetadata = {
   // the transcription-cleanup pass in transcribeAudio below.
   suggestedExistingProjectName: string | null;
   suggestedNewProjectName: string | null;
+  // Whether this memory describes interacting with a SENIOR/executive-level
+  // stakeholder -- a VP, director, C-suite exec, a client's own leadership,
+  // a founder/owner, etc. -- not just any manager or colleague. Feeds the
+  // "senior-stakeholder interactions" stat on Career Wrapped (see
+  // lib/careerWrapped.ts and the migration comment on
+  // memories.mentions_senior_stakeholder in lib/db.ts). Deliberately narrow:
+  // a memory about a regular 1:1 with your direct manager, or working with
+  // "the team," does NOT count -- this exists to be a meaningful signal, not
+  // to fire on every mention of anyone above the person in an org chart.
+  mentionsSeniorStakeholder: boolean;
 };
 
 const CATEGORY_OPTIONS: string[] = [...MEMORY_CATEGORIES_LIST];
@@ -214,6 +224,7 @@ export async function generateMemoryMetadata(
             "entities (array, 0-5 items): recurring proper nouns worth remembering from this transcript -- a specific person's name (a manager, teammate, friend, client), a team name, or a recurring project/product name. Only include something genuinely name-like -- a real name or a real proper-noun team/project name -- NOT a generic role or relation with no name attached ('my manager', 'a friend', 'the team' do NOT count on their own; 'Priya', 'the Atlas team', 'Project Falcon' do). Use the transcript's own casing/spelling. Skip entirely (empty array) if nothing in the transcript is a genuine named person/team/project -- this should be empty for a large share of memories. " +
             "The transcript is machine speech-to-text and can contain an obvious mishearing of a well-known term -- most commonly a modern tech/work phrase autocorrected-by-ear into an ordinary word that happens to sound similar (e.g. 'vibe coding' -- letting an AI write code from a natural-language description -- misheard as 'white coding'). When the surrounding context makes the intended term unambiguous (the transcript is clearly about coding/apps/AI tools) and the mishearing is a well-established named term you're confident about, use the CORRECT term in title/summary/keyPoints/searchText/resumeLine instead of repeating the mistranscription -- don't build a resume line or summary around a garbled word. This is narrow: only fix a clear, confident mishearing of a real known term, never reinterpret or guess at what someone 'really meant' beyond that, and never change a plain word just because a different reading seems more interesting. The transcript text itself is never altered (the user can edit it directly) -- this only affects the metadata you're generating here. " +
             `projectSuggestion (object): the user's EXISTING projects are: ${projectListForPrompt}. Return { "existing": string or null, "new": string or null } -- ALWAYS both keys, at most ONE non-null. Set "existing" to the EXACT name (copy it verbatim from the list above, don't reword it) of one of those existing projects ONLY when this transcript is clearly, confidently about that same project -- a passing one-word mention isn't enough, and don't force a match onto the closest-sounding existing name if it's not really the same thing. If no existing project fits but the transcript clearly and repeatedly centers on ONE specific, distinctly-named initiative/project (not just "work" or "a meeting" in general) that would genuinely be worth tracking as its own project going forward, set "new" to a short, clear name for it (title case, 1-4 words, based on what the transcript actually calls it when possible). Otherwise -- by far the most common case, including plenty of ordinary work memories that don't center on a specific named project -- return both as null. This is only ever shown to the user as a suggestion they confirm or dismiss, never applied automatically, so it's fine (better, even) to return null rather than force a guess. ` +
+            "mentionsSeniorStakeholder (boolean): true ONLY when the transcript describes actually interacting with (presenting to, negotiating with, being reviewed by, getting a decision from) someone at a SENIOR/executive level -- a VP, director, C-suite exec (CEO/CFO/CTO/etc.), a client's own leadership, a founder or business owner. A regular 1:1 with your own direct manager, working with 'the team' or 'my colleague', or a vague unnamed 'stakeholder' does NOT count -- this should be false for most memories, including most workplace memories. " +
             "Outside of that narrow correction, never invent facts not present in the transcript. Base everything strictly on the transcript text.",
         },
         { role: "user", content: transcript },
@@ -297,9 +308,52 @@ export async function generateMemoryMetadata(
         !matchedExistingProjectName && typeof parsed.projectSuggestion?.new === "string" && parsed.projectSuggestion.new.trim()
           ? parsed.projectSuggestion.new.trim().slice(0, 60)
           : null,
+      mentionsSeniorStakeholder: parsed.mentionsSeniorStakeholder === true,
     };
   } catch (err) {
     console.error("generateMemoryMetadata failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
+// Narrow, single-field classifier used ONLY by the Career Wrapped backfill
+// route (app/api/career-wrapped/backfill/route.ts) for memories that predate
+// mentions_senior_stakeholder existing on generateMemoryMetadata above. A
+// full re-run of generateMemoryMetadata would also overwrite/duplicate-cost
+// every other field (competencies, praise, resumeLine, ...) that memory
+// already has -- this asks the model just the one question instead, same
+// "AI proposes once, we store the result" cost discipline as everything
+// else in this file. Returns null on any failure, same convention as every
+// other AI function here -- the caller leaves mentions_senior_stakeholder
+// NULL (still "unclassified") rather than guessing, so a failed backfill
+// attempt is safely retryable on a later run instead of silently recording
+// a wrong answer.
+export async function classifySeniorStakeholder(transcript: string): Promise<boolean | null> {
+  const openai = getClient();
+  if (!openai) return null;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "Read this first-person memory transcript (spoken or typed, any language) and answer one question. " +
+            "Respond ONLY with a JSON object: { \"mentionsSeniorStakeholder\": boolean }. " +
+            "true ONLY when the transcript describes actually interacting with (presenting to, negotiating with, being reviewed by, getting a decision from) someone at a SENIOR/executive level -- a VP, director, C-suite exec (CEO/CFO/CTO/etc.), a client's own leadership, a founder or business owner. A regular 1:1 with your own direct manager, working with 'the team' or 'my colleague', or a vague unnamed 'stakeholder' does NOT count -- this should be false for most memories, including most workplace memories.",
+        },
+        { role: "user", content: transcript },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed.mentionsSeniorStakeholder === true;
+  } catch (err) {
+    console.error("classifySeniorStakeholder failed:", err);
     Sentry.captureException(err);
     return null;
   }
