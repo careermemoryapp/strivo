@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Sparkles, ChevronDown, Plus, Check } from "lucide-react";
+import { Sparkles, ChevronDown, Plus, Check, FolderPlus } from "lucide-react";
 import { Spinner } from "@/components/Spinner";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/repo/projects";
@@ -175,31 +175,70 @@ export function ProjectAssigner({
     );
   }
 
+  // Already filed under a project -- keep this compact: a small pill with
+  // the project's name that opens the same dropdown to change it.
+  if (currentProjectId) {
+    return (
+      <div className="relative inline-block text-left">
+        <button
+          onClick={() => {
+            setOpen((o) => !o);
+            if (!open) ensureProjectsLoaded();
+          }}
+          className="flex items-center gap-1 rounded-pill bg-surface px-2.5 py-1 text-[11px] font-semibold text-[#8b5cf6]"
+        >
+          {currentProjectName}
+          <ChevronDown size={11} />
+        </button>
+        {open && (
+          <div className="absolute left-0 z-20 mt-1.5 w-60">
+            <ProjectDropdown
+              projects={projects}
+              loading={loadingProjects}
+              creatingNew={creatingNew}
+              newName={newName}
+              setNewName={setNewName}
+              setCreatingNew={setCreatingNew}
+              currentProjectId={currentProjectId}
+              saving={saving}
+              onPick={(p) => assign(p?.id ?? null, p?.name ?? null)}
+              onCreate={() => createAndAssign(newName)}
+            />
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Not filed under anything (no project, and either no AI suggestion or
+  // the user already dismissed one) -- rather than a small, easy-to-miss
+  // chip, say so plainly and offer the same list-plus-create-new picker
+  // from a real button. Every memory gets this, including ones that
+  // predate the feature entirely -- nothing is ever assigned without the
+  // user tapping this themselves.
   return (
-    <div className="relative inline-block text-left">
+    <div className="rounded-[13px] border border-dashed border-[#d9d2ea] bg-[#faf9fc] px-3.5 py-3 text-left">
+      <p className="flex items-start gap-1.5 text-sm text-ink-soft">
+        <FolderPlus size={14} className="mt-0.5 shrink-0 text-[#a29ab9]" />
+        <span>
+          <span className="font-semibold text-[#3c3650]">Not filed under a project yet.</span> If you think this
+          belongs to one, assign it below.
+        </span>
+      </p>
       <button
         onClick={() => {
           setOpen((o) => !o);
           if (!open) ensureProjectsLoaded();
         }}
-        className={cn(
-          "flex items-center gap-1 rounded-pill px-2.5 py-1 text-[11px] font-semibold",
-          currentProjectId
-            ? "bg-surface text-[#8b5cf6]"
-            : "border border-dashed border-[#d9d2ea] text-[#a29ab9] hover:text-[#8b5cf6]"
-        )}
+        disabled={saving}
+        className="mt-2.5 flex items-center gap-1.5 rounded-pill px-3.5 py-2 text-xs font-semibold text-white disabled:opacity-50"
+        style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
       >
-        {currentProjectId ? (
-          currentProjectName
-        ) : (
-          <>
-            <Plus size={11} /> Add to a project
-          </>
-        )}
-        <ChevronDown size={11} />
+        {saving ? <Spinner className="h-3 w-3 border-white/40 border-t-white" /> : <FolderPlus size={13} />}
+        Assign to a project
       </button>
       {open && (
-        <div className="absolute left-0 z-20 mt-1.5 w-60">
+        <div className="mt-2.5">
           <ProjectDropdown
             projects={projects}
             loading={loadingProjects}

@@ -1061,7 +1061,12 @@ function resumeContext(resumeText: string | null | undefined): string {
 }
 
 export function buildSystemPrompt(
-  memories: Memory[],
+  // project_name is optional (rather than always present on Memory itself)
+  // for the same reason MemoryCard's is -- see the comment there. Callers
+  // that pass it through (chatService.ts, via withProjectNames) let the
+  // model see and reason across project boundaries; callers that don't
+  // (e.g. an older/other caller) simply lose that one context line below.
+  memories: (Memory & { project_name?: string | null })[],
   now: Date = new Date(),
   firstName?: string | null,
   recalledMessages: RecalledMessage[] = [],
@@ -1077,14 +1082,32 @@ export function buildSystemPrompt(
     return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}\n\nNo memories were retrieved for this question. If the question is PERSONAL (about the user's own experience), tell them plainly you don't have a relevant memory for that -- do not substitute generic advice as if it were personal, and do not fabricate; you can suggest what they might capture as a memory going forward. If the question is GENERIC (general knowledge, not about their own past), just answer it normally using your general knowledge -- no need to mention memories at all.${recalledCtx}${entitiesCtx}${resumeCtx}`;
   }
   const competencyContext = `\n\nEach memory below may list Competencies -- behavioral-interview qualities (Leadership, Problem-Solving, etc.) that memory was independently identified as genuinely demonstrating, generated when it was recorded (see generateMemoryMetadata). The user themselves may not realize a memory qualifies -- they might have just described a normal day, not framed it as a "leadership story." When asked for an example of a specific competency (e.g. "give me a leadership example," "tell me about a time you solved a problem"), actively use this field to find the match rather than only pattern-matching the user's own wording against the transcript, and you can point out to them that this is a strong example of that competency even if they didn't call it that themselves.`;
+  // A memory's Project field (Settings > Projects -- see lib/repo/projects.ts
+  // and detectProjectMention in lib/retrieval.ts) is what lets this prompt
+  // support two related but different things the user asked for: (1) when
+  // they name a project ("let's discuss Strivo app development"), the
+  // memories below are already biased toward that project's own memories --
+  // the model just needs to recognize which ones those are and talk about
+  // the project as a whole using them; (2) when a DIFFERENT project's
+  // memory is included too (retrieval deliberately doesn't hard-filter to
+  // one project -- see retrieveRelevantMemories), the model should notice
+  // and say so explicitly ("you showed strong stakeholder management during
+  // the Gigafactory Outreach project too") rather than silently blending it
+  // in as if it belonged to the project under discussion. Only added when
+  // at least one memory actually carries a project_name -- otherwise every
+  // memory belongs to no project and this would just be dead instruction.
+  const hasProjectContext = memories.some((m) => m.project_name);
+  const projectContext = hasProjectContext
+    ? `\n\nSome memories below list a Project -- one of the user's own named projects (Settings > Projects). When the user is asking about a specific project by name, treat the memories tagged with that project as the actual answer to "what have I done on this." If a memory tagged with a DIFFERENT project is also relevant (e.g. it demonstrates a skill that matters to the project being discussed), don't just use it silently -- name the other project explicitly, the way a colleague who actually remembered would ("you handled something similar during the <other project> project"). Never invent a project a memory isn't actually tagged with, and don't mention the Project field at all for a memory that doesn't have one.`
+    : "";
   const context = memories
     .map((m, i) => {
       const tags = safeParseStringArray(m.tags);
       const competencies = safeParseStringArray(m.competencies);
-      return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
+      return `Memory ${i + 1}: "${m.title}"\nCategory: ${m.category ?? "General"}${tags.length ? ` | Tags: ${tags.join(", ")}` : ""}${m.project_name ? `\nProject: ${m.project_name}` : ""}${competencies.length ? `\nCompetencies: ${competencies.join(", ")}` : ""}\nDate: ${m.created_at.slice(0, 10)}\nSummary: ${m.summary ?? "(no summary)"}\nFull transcript: ${m.transcript}`;
     })
     .join("\n\n---\n\n");
-  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}${entitiesCtx}${resumeCtx}`;
+  return `${SYSTEM_PROMPT_BASE}${dateContext}${warmthContext}${nameCtx}${competencyContext}${projectContext}\n\nHere are the user's relevant memories for this conversation:\n\n${context}${recalledCtx}${entitiesCtx}${resumeCtx}`;
 }
 
 function safeParseStringArray(value: string | null): string[] {

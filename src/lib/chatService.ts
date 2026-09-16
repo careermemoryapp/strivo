@@ -5,6 +5,7 @@ import { buildSystemPrompt, chatCompletion, embedText, generateChatTitle, type C
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 import { getUserById } from "@/lib/repo/users";
 import { listRecurringEntities } from "@/lib/repo/memories";
+import { withProjectNames } from "@/lib/repo/projects";
 
 const HISTORY_LIMIT = 16;
 
@@ -106,8 +107,16 @@ export async function sendUserMessageAndGetReply(
   // lib/repo/memories.ts) -- no extra AI call, so no need to parallelize
   // alongside retrieval above the way generatedTitle is.
   const recurringEntities = listRecurringEntities(userId);
+  // Attach each retrieved memory's project name (same helper the Memories
+  // tab and MemoryCard's tag use -- see lib/repo/projects.ts) so
+  // buildSystemPrompt can recognize which memories belong to the project
+  // the user's asking about, and call out a genuinely relevant memory from
+  // a DIFFERENT project by name instead of blending it in unlabeled -- see
+  // retrieveRelevantMemories in lib/retrieval.ts for the retrieval side of
+  // this.
+  const memoriesWithProjects = withProjectNames(userId, retrieval.memories);
   const systemPrompt = buildSystemPrompt(
-    retrieval.memories,
+    memoriesWithProjects,
     new Date(),
     firstName,
     retrieval.recalledMessages,
@@ -137,6 +146,14 @@ export async function sendUserMessageAndGetReply(
     status: "sent",
   });
 
+  // Refine the title once the AI's first reply exists (see generateChatTitle
+  // in lib/ai.ts for why this second pass matters) -- the quick title set
+  // above from the opening line alone is frequently too thin to be specific
+  // ("Interview Preparation Tips", "Resume Update Tips"), the exact
+  // generic-label problem this whole two-pass approach exists to fix. Now
+  // that there's a real exchange to work from, regenerate and overwrite it.
+  // Fire-and-forget, same pattern as embedText above -- the user already has
+  // their reply, this just sharpens the sidebar label a moment later.
   if (isFirstMessage) {
     generateChatTitle(content, result.reply)
       .then((refinedTitle) => {

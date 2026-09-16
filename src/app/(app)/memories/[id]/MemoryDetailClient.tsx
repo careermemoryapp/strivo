@@ -4,12 +4,11 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
-  MoreVertical, Trash2, Pencil, FileText, Sparkles, Mic, Type, CheckCircle2, Paperclip,
-  ThumbsUp, ThumbsDown, Share2, Copy, ClipboardCheck,
+  Trash2, Pencil, FileText, Sparkles, Mic, Type, CheckCircle2, Paperclip,
+  ThumbsUp, ThumbsDown, Copy, ClipboardCheck,
 } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
-import { Spinner } from "@/components/Spinner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ProjectAssigner } from "@/components/ProjectAssigner";
 import { memoryCategoryDef } from "@/lib/categoryIcons";
@@ -40,14 +39,11 @@ export function MemoryDetailClient({
   // project (see its onChange handler below).
   const [projectName, setProjectName] = useState<string | null>(initialProjectName);
   const [tab, setTab] = useState<"Transcript" | "Summary">("Transcript");
-  const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [editing, setEditing] = useState(false);
   const [editText, setEditText] = useState("");
   const [saving, setSaving] = useState(false);
-  const [duplicating, setDuplicating] = useState(false);
-  const [shareMsg, setShareMsg] = useState<string | null>(null);
   const [resumeLineCopied, setResumeLineCopied] = useState(false);
 
   async function handleDelete() {
@@ -59,37 +55,6 @@ export function MemoryDetailClient({
       // Only reached if the DELETE failed and navigation didn't happen --
       // the success path leaves this page before this line would matter.
       setDeleting(false);
-    }
-  }
-
-  async function handleDuplicate() {
-    setDuplicating(true);
-    try {
-      const res = await fetch(`/api/memories/${memoryId}/duplicate`, { method: "POST" });
-      const data = await res.json();
-      if (res.ok) router.push(`/memories/${data.memory.id}`);
-    } finally {
-      setDuplicating(false);
-    }
-  }
-
-  async function handleShare() {
-    const text = `${memory.title}\n\n${memory.summary || memory.transcript}`;
-    if (typeof navigator !== "undefined" && navigator.share) {
-      try {
-        await navigator.share({ title: memory.title, text });
-        return;
-      } catch {
-        // user cancelled — fall through to clipboard
-      }
-    }
-    try {
-      await navigator.clipboard.writeText(text);
-      setShareMsg("Copied to clipboard");
-      setTimeout(() => setShareMsg(null), 2000);
-    } catch {
-      setShareMsg("Couldn't share on this device");
-      setTimeout(() => setShareMsg(null), 2000);
     }
   }
 
@@ -145,37 +110,12 @@ export function MemoryDetailClient({
 
   return (
     <div className="pb-6">
-      <DarkHeader
-        back
-        wordmark
-        right={
-          <div className="relative">
-            <button
-              onClick={() => setMenuOpen((v) => !v)}
-              aria-label="Menu"
-              className="flex h-8 w-8 items-center justify-center rounded-full text-white/85 active:bg-white/10"
-            >
-              <MoreVertical size={19} />
-            </button>
-            {menuOpen && (
-              <div
-                className="absolute right-0 top-9 z-10 w-40 rounded-card border border-border bg-surface p-1"
-                style={{ boxShadow: "var(--shadow-card)" }}
-              >
-                <button
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setConfirmDelete(true);
-                  }}
-                  className="flex w-full items-center gap-2 rounded-input px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 size={15} /> Delete memory
-                </button>
-              </div>
-            )}
-          </div>
-        }
-      />
+      {/* No top-right "..." menu -- it only ever held one item (Delete),
+          duplicating the Delete action below, and its dropdown was
+          rendering clipped/behind the header on some devices. One clear
+          Delete entry point (the button at the bottom of this page) is
+          simpler and doesn't have that bug. */}
+      <DarkHeader back wordmark />
 
       <div className="px-5 pt-5 space-y-4">
         <div className="rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-5">
@@ -402,36 +342,16 @@ export function MemoryDetailClient({
           </div>
         )}
 
-        <div className="grid grid-cols-3 gap-2">
-          <button
-            onClick={handleShare}
-            className="flex flex-col items-center gap-1 rounded-[14px] border border-[#f0ecf7] bg-surface py-3 text-[#8b5cf6]"
-          >
-            <Share2 size={17} />
-            <span className="text-xs font-medium">Share</span>
-          </button>
-          <button
-            onClick={handleDuplicate}
-            disabled={duplicating}
-            className="flex flex-col items-center gap-1 rounded-[14px] border border-[#f0ecf7] bg-surface py-3 text-[#8b5cf6]"
-          >
-            {duplicating ? <Spinner /> : <Copy size={17} />}
-            <span className="text-xs font-medium">Duplicate</span>
-          </button>
-          <button
-            onClick={() => setConfirmDelete(true)}
-            className="flex flex-col items-center gap-1 rounded-[14px] border border-[#f0ecf7] bg-surface py-3 text-red-600"
-          >
-            <Trash2 size={17} />
-            <span className="text-xs font-medium">Delete</span>
-          </button>
-        </div>
-
-        {shareMsg && (
-          <div className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 rounded-pill bg-ink px-4 py-2 text-sm text-white">
-            {shareMsg}
-          </div>
-        )}
+        {/* Just Delete now -- Share and Duplicate weren't pulling their
+            weight here, and this consolidates the memory's only destructive
+            action into one clear button instead of it being spread across
+            this row and a second (buggy) menu at the top. */}
+        <button
+          onClick={() => setConfirmDelete(true)}
+          className="flex w-full items-center justify-center gap-2 rounded-pill border border-red-200 bg-red-50 py-3.5 text-sm font-semibold text-red-600"
+        >
+          <Trash2 size={16} /> Delete Memory
+        </button>
       </div>
 
       <ConfirmDialog

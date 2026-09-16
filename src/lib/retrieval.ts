@@ -1,5 +1,12 @@
-import { listMemories, listMemoriesWithEmbeddings, listMemoriesByDateRange, type Memory } from "@/lib/repo/memories";
+import {
+  listMemories,
+  listMemoriesWithEmbeddings,
+  listMemoriesByDateRange,
+  listMemoriesByProject,
+  type Memory,
+} from "@/lib/repo/memories";
 import { listMessagesWithEmbeddings, type Message } from "@/lib/repo/messages";
+import { listProjects, type Project } from "@/lib/repo/projects";
 import { embedText, translateToEnglish } from "@/lib/ai";
 
 // ---------------------------------------------------------------------------
@@ -193,6 +200,46 @@ export function detectDateRange(englishQuery: string, now: Date = new Date()): D
   return null;
 }
 
+// Detects "let's discuss Strivo app development", "what have I done on the
+// onboarding revamp project" style project references in an (already
+// English-translated) chat query, against this user's own Projects (Settings
+// > Projects -- see lib/repo/projects.ts). Matching is deliberately forgiving
+// rather than an exact-name check: these queries are routinely voice-
+// transcribed, and a mangled project name ("Scribo" for "Strivo") is common.
+// A direct substring match is the confident case; failing that, a project
+// still counts as mentioned when MOST of its own significant words show up
+// in the query, so garbled individual words don't sink the match as long as
+// the rest of the name is intact. Never returns a project on a single
+// incidentally-shared word (a project named "Sales Deck" shouldn't match
+// every question that happens to mention "sales").
+//
+// This never narrows retrieval down to ONLY this project's memories (see its
+// use in retrieveRelevantMemories) -- it biases toward it while still
+// letting a genuinely strong match from a different project through, which
+// is what lets the chat surface "you showed this skill in that other
+// project too" rather than only ever discussing the named project in
+// isolation.
+function detectProjectMention(query: string, projects: Project[]): Project | null {
+  if (projects.length === 0) return null;
+  const q = query.toLowerCase();
+  let best: { project: Project; ratio: number } | null = null;
+  for (const project of projects) {
+    const name = project.name.toLowerCase().trim();
+    if (!name) continue;
+    if (q.includes(name)) return project; // exact phrase -- as confident as this gets
+
+    const nameTokens = tokenize(project.name);
+    if (nameTokens.length === 0) continue;
+    const queryTokens = new Set(tokenize(query));
+    const hits = nameTokens.filter((t) => queryTokens.has(t)).length;
+    const ratio = hits / nameTokens.length;
+    if (ratio >= 0.6 && (nameTokens.length === 1 || hits >= 2) && (!best || ratio > best.ratio)) {
+      best = { project, ratio };
+    }
+  }
+  return best?.project ?? null;
+}
+
 function messageKeywordScore(queryTokens: string[], message: Message): number {
   const haystack = message.content.toLowerCase();
   let score = 0;
@@ -288,6 +335,25 @@ export async function retrieveRelevantMemories(
     }
   }
 
+  // 0.5. Project-aware retrieval: "let's discuss Strivo app development" is
+  // asking about a specific project (Settings > Projects), not a generic
+  // semantic search -- see detectProjectMention's comment for why a named
+  // match is detected this way. When one is found, that project's own
+  // memories (most recent first -- a project recap wants breadth, not just
+  // whatever best matches leftover query text) are guaranteed a spot,
+  // ahead of and separate from the semantic/keyword search below. They are
+  // NOT the whole result, though: the remaining topK slots still run the
+  // normal cross-user-memory search further down, so a memory from a
+  // DIFFERENT project that's a strong match can still surface alongside
+  // them -- that's what lets buildSystemPrompt's chat AI say "you showed
+  // this skill during <other project> too" instead of only ever discussing
+  // the named project in isolation.
+  const projects = listProjects(userId);
+  const matchedProject = detectProjectMention(translatedQuery, projects);
+  const projectMemories = matchedProject ? listMemoriesByProject(userId, matchedProject.id).slice(0, topK) : [];
+  const projectMemoryIds = new Set(projectMemories.map((m) => m.id));
+  const remainingSlots = Math.max(0, topK - projectMemories.length);
+
   // 1. Try semantic retrieval -- for both formal memories AND cross-chat
   // messages that were never saved as one. One embedding call for the query
   // is reused against both candidate pools below, since it's the same query
@@ -325,6 +391,10 @@ export async function retrieveRelevantMemories(
       }
 
       const scored = withEmbeddings
+        // Already guaranteed a spot via projectMemories above -- don't
+        // score/re-add them here, and don't let them eat into the slots
+        // reserved for a genuine cross-project match.
+        .filter((m) => !projectMemoryIds.has(m.id))
         .map((m) => {
           let score = 0;
           try {
@@ -378,9 +448,12 @@ export async function retrieveRelevantMemories(
           return s.score > 0.4;
         })
         .sort((a, b) => b.score - a.score)
-        .slice(0, topK);
-      if (scored.length > 0) {
-        return { memories: scored.map((s) => s.memory), recalledMessages, method: "semantic" };
+        .slice(0, remainingSlots);
+      // Return here whenever there's anything to show -- either a real
+      // project match (guaranteed above regardless of semantic score) or a
+      // semantic hit, or both together.
+      if (projectMemories.length > 0 || scored.length > 0) {
+        return { memories: [...projectMemories, ...scored.map((s) => s.memory)], recalledMessages, method: "semantic" };
       }
     }
   }
@@ -388,21 +461,24 @@ export async function retrieveRelevantMemories(
   // 2. Fallback: keyword overlap across all of the user's memories. Note
   // `recalledMessages` (computed above, independent of which memory branch
   // fires) still carries through here -- a query can fail every memory
-  // check and still recall a cross-chat message, or the reverse.
+  // check and still recall a cross-chat message, or the reverse. Same
+  // project-memories-guaranteed-first pattern as the semantic branch above.
   const all = listMemories(userId);
   const queryTokens = tokenize(translatedQuery);
-  if (all.length === 0 || queryTokens.length === 0) {
-    return { memories: [], recalledMessages, method: recalledMessages.length ? "semantic" : "none" };
-  }
-  const scored = all
-    .map((m) => ({ memory: m, score: keywordScore(queryTokens, m) }))
-    .filter((s) => s.score > 0)
-    .sort((a, b) => b.score - a.score)
-    .slice(0, topK);
+  const keywordMatches =
+    remainingSlots > 0 && all.length > 0 && queryTokens.length > 0
+      ? all
+          .filter((m) => !projectMemoryIds.has(m.id))
+          .map((m) => ({ memory: m, score: keywordScore(queryTokens, m) }))
+          .filter((s) => s.score > 0)
+          .sort((a, b) => b.score - a.score)
+          .slice(0, remainingSlots)
+          .map((s) => s.memory)
+      : [];
   return {
-    memories: scored.map((s) => s.memory),
+    memories: [...projectMemories, ...keywordMatches],
     recalledMessages,
-    method: scored.length ? "keyword" : recalledMessages.length ? "semantic" : "none",
+    method: projectMemories.length > 0 || keywordMatches.length > 0 ? "keyword" : recalledMessages.length ? "semantic" : "none",
   };
 }
 
