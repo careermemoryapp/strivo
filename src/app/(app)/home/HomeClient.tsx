@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback, FormEvent } from "react";
+import { useState, useCallback, FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion,
+  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, ArrowRight, Briefcase,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
@@ -12,9 +12,9 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import { HOME_SUBTITLE, QUICK_ACTIONS } from "@/lib/config";
+import { HOME_SUBTITLE } from "@/lib/config";
 import { timeOfDayGreeting } from "@/lib/utils";
-import { ACTION_ICON_DEFS, chatCategoryIcon } from "@/lib/categoryIcons";
+import { chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 import { CareerWrappedHomePreview, type CareerWrappedHomePreviewData } from "@/components/CareerWrappedHomePreview";
 import { CareerProfileHomeHero } from "@/components/CareerProfileHomeHero";
@@ -144,10 +144,6 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
     }
   }
 
-  function handleQuickAction(action: (typeof QUICK_ACTIONS)[number]) {
-    startChat({ id: action.id, chatTitle: action.chatTitle, category: action.category, prompt: action.prompt });
-  }
-
   function handleHeroSubmit(e: FormEvent) {
     e.preventDefault();
     const trimmed = heroInput.trim();
@@ -224,6 +220,23 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
   return (
     <div className="pb-6">
       {header}
+
+      {/* "How Strivo.ai works" -- a brief, always-visible explainer so a
+          brand-new user understands what the app actually does before
+          being asked to record anything or take a quiz. Three steps,
+          intentionally terse (a few words each, not a paragraph) -- this
+          is orientation, not a pitch. */}
+      <div className="px-5 pt-5">
+        <div className="rounded-[18px] border border-[#ece5f5] bg-white p-4">
+          <div className="flex items-start justify-between gap-1">
+            <FlowStep icon={<Mic size={16} />} label="Record" sublabel="Talk or type about your work" />
+            <ArrowRight size={14} className="mt-3 shrink-0 text-[#cec7dd]" />
+            <FlowStep icon={<Sparkles size={16} />} label="Strivo.ai remembers" sublabel="Turns it into a career memory" />
+            <ArrowRight size={14} className="mt-3 shrink-0 text-[#cec7dd]" />
+            <FlowStep icon={<Briefcase size={16} />} label="Use it anywhere" sublabel="Resumes, interviews, reviews" />
+          </div>
+        </div>
+      </div>
 
       {/* Career Profile -- the fun, quiz-based "front door" (Home redesign
           spec section 1), placed ahead of even Career Wrapped so a
@@ -399,37 +412,6 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
         </div>
       </div>
 
-      {/* Quick actions — one restrained accent color throughout (not a
-          rainbow tint per category) and a plain vertical list rather than a
-          crowded grid. */}
-      <div className="px-5 pt-6">
-        <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
-          Or accomplish today
-        </p>
-        <div>
-          {QUICK_ACTIONS.map((action) => {
-            const Icon = ACTION_ICON_DEFS[action.icon].icon;
-            return (
-              <button
-                key={action.id}
-                onClick={() => handleQuickAction(action)}
-                disabled={!!pendingAction}
-                className="flex w-full items-center gap-3 border-t border-[#f0ecf7] py-2.5 text-left transition-colors last:border-b active:bg-[#faf8fd] disabled:opacity-50"
-              >
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[11px] bg-[#f2effa] text-[#8b5cf6]">
-                  {pendingAction === action.id ? <Spinner /> : <Icon size={17} />}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-ink">{action.title}</p>
-                  <p className="text-[11px] text-ink-faint">{action.description}</p>
-                </div>
-                <ChevronRight size={15} className="shrink-0 text-[#cec7dd]" />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
       {data.recentChats.length > 0 && (
         <div className="px-5 pt-5">
           {/* A colorful accent bar instead of a plain gray line — ties this
@@ -466,6 +448,20 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// One step in the "how Strivo.ai works" explainer above -- icon chip, a
+// short label, and a one-line sublabel. flex-1/min-w-0 so three of these
+// plus two arrow glyphs fit one row on a phone-width screen without
+// wrapping mid-word.
+function FlowStep({ icon, label, sublabel }: { icon: ReactNode; label: string; sublabel: string }) {
+  return (
+    <div className="flex min-w-0 flex-1 flex-col items-center text-center">
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f2effa] text-[#8b5cf6]">{icon}</div>
+      <p className="mt-1.5 text-[11px] font-semibold leading-tight text-ink">{label}</p>
+      <p className="mt-0.5 text-[9.5px] leading-tight text-ink-faint">{sublabel}</p>
     </div>
   );
 }
