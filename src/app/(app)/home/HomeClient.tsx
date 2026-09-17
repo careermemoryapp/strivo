@@ -3,7 +3,7 @@
 import { useState, useCallback, FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
-  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, MessageSquare,
+  ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, MessageSquare, Flame,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
@@ -17,8 +17,6 @@ import { timeOfDayGreeting } from "@/lib/utils";
 import { chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 import { CareerWrappedHomePreview, type CareerWrappedHomePreviewData } from "@/components/CareerWrappedHomePreview";
-import { CareerProfileHomeHero } from "@/components/CareerProfileHomeHero";
-import type { CareerProfileProgress } from "@/lib/repo/careerProfile";
 
 type HomeData = {
   user: { id: string; firstName: string; lastName: string; email: string } | null;
@@ -54,9 +52,6 @@ type HomeData = {
   // renders nothing at all in that case, same "hidden, not broken" contract
   // as every other feature-flagged surface in this app.
   careerWrapped: CareerWrappedHomePreviewData | null;
-  // Null when the career_profile feature flag is off (see page.tsx) -- same
-  // "hidden, not broken" contract as careerWrapped above.
-  careerProfile: CareerProfileProgress | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -94,6 +89,13 @@ type StartChatArgs = {
 // -- sections below are plain rows separated by spacing/hairlines, not
 // bordered/backgrounded boxes -- just applied to the light body instead.
 const DARK = "#26213c";
+
+// Same purple -> blue gradient used everywhere else an accent color shows
+// up on Home now -- CareerWrappedHomePreview and every gradient chip/button
+// below (see that file's own comment). One gradient, used consistently,
+// instead of the mismatched amber/pink + purple/blue combination product
+// feedback called out as making the page feel flat and disconnected.
+const BRAND_GRADIENT = "linear-gradient(135deg,#a78bfa,#60a5fa)";
 
 // initialData is fetched server-side by page.tsx (a Server Component)
 // before anything reaches the browser — see ChatDetailClient.tsx for the
@@ -191,7 +193,20 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
         </span>{" "}
         👋
       </h1>
-      <p className="relative mt-1 text-[12.5px] text-white/55">{HOME_SUBTITLE}</p>
+      <div className="relative mt-1 flex items-center gap-2">
+        <p className="text-[12.5px] text-white/55">{HOME_SUBTITLE}</p>
+        {/* Streak was already computed server-side (page.tsx) but never
+            actually shown anywhere on Home -- a real, earned number with
+            nothing to do. Its own warm amber "on a streak" color, distinct
+            from BRAND_GRADIENT, is deliberate: this is a different kind of
+            moment (a personal-best/momentum flex) from the purple/blue
+            product actions everywhere else on the page. */}
+        {data.streak > 0 && (
+          <span className="flex shrink-0 items-center gap-1 rounded-pill bg-amber-400/15 px-2 py-0.5 text-[11px] font-bold text-amber-300">
+            <Flame size={12} /> {data.streak}
+          </span>
+        )}
+      </div>
 
       <form
         onSubmit={handleHeroSubmit}
@@ -258,15 +273,6 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           />
         </div>
       </div>
-
-      {/* Career Profile -- the fun, quiz-based "front door" (Home redesign
-          spec section 1), placed ahead of even Career Wrapped so a
-          brand-new, zero-data user sees something to discover immediately
-          rather than an empty evidence-based feature. Deliberately a
-          separate system from Career Wrapped below -- see
-          lib/careerProfile.ts's file comment. Renders nothing when the
-          career_profile feature flag is off. */}
-      {data.careerProfile && <CareerProfileHomeHero progress={data.careerProfile} />}
 
       {/* Career Wrapped -- placed immediately after the header, ahead of
           every other Home surface (trial banner, check-in, recap, growth,
@@ -374,8 +380,8 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           teasers above by a plain hairline rather than a boxed container. */}
       <div className="border-t border-[#ece5f5] mt-5 px-5 pt-6 text-center">
         <div
-          className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
-          style={{ boxShadow: "0 6px 16px rgba(139,92,246,0.18)" }}
+          className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full text-white"
+          style={{ background: BRAND_GRADIENT, boxShadow: "0 6px 16px rgba(139,92,246,0.25)" }}
         >
           <Mic size={19} />
         </div>
@@ -435,7 +441,9 @@ function FlowButton({ icon, label, sublabel, onClick }: { icon: ReactNode; label
       onClick={onClick}
       className="flex min-w-0 flex-1 flex-col items-center gap-1.5 px-2 py-3 text-center transition-transform active:scale-[0.97]"
     >
-      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f2effa] text-[#8b5cf6]">{icon}</div>
+      <div className="flex h-9 w-9 items-center justify-center rounded-full text-white" style={{ background: BRAND_GRADIENT }}>
+        {icon}
+      </div>
       <p className="text-[11px] font-semibold leading-tight text-ink">{label}</p>
       <p className="text-[9.5px] leading-tight text-ink-faint">{sublabel}</p>
     </button>

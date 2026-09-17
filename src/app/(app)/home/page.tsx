@@ -11,7 +11,6 @@ import { computeStreak } from "@/lib/utils";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 import { getOrComputeCareerWrappedSnapshot } from "@/lib/repo/careerWrapped";
 import { ALL_TIME_PERIOD_KEY, getCareerWrappedDataTier } from "@/lib/careerWrapped";
-import { getCareerProfileProgress } from "@/lib/repo/careerProfile";
 import { HomeClient } from "./HomeClient";
 
 // How recent a weekly recap has to be to still show on Home -- a recap is
@@ -82,15 +81,6 @@ export default async function HomePage() {
     ? getOrComputeCareerWrappedSnapshot(userId, ALL_TIME_PERIOD_KEY)
     : null;
 
-  // Career Profile hero (Home redesign, phase 3 stage 1) -- the fun,
-  // quiz-answer-based "front door" ahead of Career Wrapped on Home. See
-  // lib/careerProfile.ts's file comment for why this is a deliberately
-  // separate system from careerWrapped above. Deterministic, no AI cost, so
-  // this is as cheap to compute on every Home load as Career Wrapped's own
-  // snapshot read. Gated by its own flag -- off means HomeClient renders
-  // nothing for it, same "hidden, not broken" convention as career_wrapped.
-  const careerProfile = isFeatureEnabled("career_profile") ? getCareerProfileProgress(userId) : null;
-
   return (
     <HomeClient
       initialData={{
@@ -133,7 +123,6 @@ export default async function HomePage() {
               strongestMuscle: careerWrapped.strongest_muscle,
             }
           : null,
-        careerProfile,
       }}
     />
   );

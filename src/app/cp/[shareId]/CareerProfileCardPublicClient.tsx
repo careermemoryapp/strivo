@@ -30,7 +30,7 @@ export function CareerProfileCardPublicClient({ shareId, cardData, imageUrl }: {
         </div>
 
         <a
-          href={`/signup?ref=career_profile&cp=${shareId}`}
+          href={`/quiz?ref=career_profile&cp=${shareId}`}
           className="mt-6 flex w-full items-center justify-center rounded-pill py-3.5 text-sm font-semibold text-white"
           style={{ background: "linear-gradient(135deg,#7c3aed,#4f6ef7)" }}
         >

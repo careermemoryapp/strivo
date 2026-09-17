@@ -120,14 +120,100 @@ export function createCareerProfileShare(input: { userId: string; cardData: unkn
 // check -- same posture as getCareerWrappedShareById.
 export function getCareerProfileShareById(id: string): CareerProfileShareRow | undefined {
   const db = getDb();
-  return db.prepare(`SELECT * FROM career_profile_shares WHERE id = ? AND revoked = 0`).get(id) as
+  const row = db.prepare(`SELECT * FROM career_profile_shares WHERE id = ? AND revoked = 0`).get(id) as
     | CareerProfileShareRow
     | undefined;
+  if (row) return row;
+
+  // Fall back to the public (no-login) shares table -- see the
+  // career_profile_public_shares comment in lib/db.ts. Adapted into the
+  // same CareerProfileShareRow shape (user_id: "" -- no caller reads it,
+  // every consumer of this function only ever touches card_data) so
+  // /cp/[shareId]/page.tsx, opengraph-image.tsx, and the share-image API
+  // route can stay completely unaware there are now two source tables.
+  const publicRow = getPublicCareerProfileShareById(id);
+  if (!publicRow) return undefined;
+  return { ...publicRow, user_id: "" };
 }
 
 export function incrementCareerProfileShareViews(id: string): void {
   const db = getDb();
-  db.prepare(`UPDATE career_profile_shares SET view_count = view_count + 1 WHERE id = ?`).run(id);
+  const result = db.prepare(`UPDATE career_profile_shares SET view_count = view_count + 1 WHERE id = ?`).run(id);
+  if (result.changes > 0) return;
+  db.prepare(`UPDATE career_profile_public_shares SET view_count = view_count + 1 WHERE id = ?`).run(id);
+}
+
+// ---- Public (no-login) Career Profile Card shares -- see the
+// career_profile_public_shares comment in lib/db.ts for why this is a
+// separate table from career_profile_shares above rather than a relaxed
+// constraint on it. Created by the marketing-site /quiz flow once a
+// logged-out visitor finishes all 5 quizzes; read back through the same
+// getCareerProfileShareById/incrementCareerProfileShareViews functions
+// above, which check this table as a fallback.
+
+export type CareerProfilePublicShareRow = {
+  id: string;
+  card_data: string; // JSON -- see CareerProfileCardData in lib/careerProfileCardImage.tsx
+  view_count: number;
+  revoked: number;
+  created_at: string;
+};
+
+export function createPublicCareerProfileShare(cardData: unknown): CareerProfilePublicShareRow {
+  const db = getDb();
+  const id = newId("cpshare");
+  const ts = nowIso();
+  db.prepare(
+    `INSERT INTO career_profile_public_shares (id, card_data, view_count, revoked, created_at)
+     VALUES (?, ?, 0, 0, ?)`
+  ).run(id, JSON.stringify(cardData), ts);
+  return db.prepare(`SELECT * FROM career_profile_public_shares WHERE id = ?`).get(id) as CareerProfilePublicShareRow;
+}
+
+function getPublicCareerProfileShareById(id: string): CareerProfilePublicShareRow | undefined {
+  const db = getDb();
+  return db.prepare(`SELECT * FROM career_profile_public_shares WHERE id = ? AND revoked = 0`).get(id) as
+    | CareerProfilePublicShareRow
+    | undefined;
+}
+
+// Builds card data from CLIENT-SUPPLIED {quizId, resultKey} pairs (the
+// public /quiz flow has no per-user DB row to read back -- progress lives
+// in the visitor's own browser). Never trusts client-supplied title/
+// description/emoji text: every row's display text is recomputed from the
+// real quiz/archetype definitions via getArchetypeByKey, exactly like
+// buildCareerProfileCardData above does from stored rows. Returns null if
+// the input doesn't cover exactly the 5 real quizzes once each, or any
+// resultKey doesn't match a real archetype for its quiz -- a public,
+// unauthenticated endpoint should never trust shape here.
+export function buildPublicCareerProfileCardData(
+  displayName: string | null,
+  results: { quizId: string; resultKey: string }[]
+): CareerProfileCardData | null {
+  if (results.length !== CAREER_PROFILE_QUIZ_ORDER.length) return null;
+  const byQuiz = new Map(results.map((r) => [r.quizId, r.resultKey]));
+  if (byQuiz.size !== CAREER_PROFILE_QUIZ_ORDER.length) return null; // dupes/unknown-quiz-id collapsed size
+
+  const rows: CareerProfileCardData["rows"] = [];
+  for (const quizId of CAREER_PROFILE_QUIZ_ORDER) {
+    const resultKey = byQuiz.get(quizId);
+    if (!resultKey) return null;
+    const meta = CAREER_PROFILE_QUIZZES[quizId];
+    const quiz = getCareerProfileQuizDefinition(quizId);
+    const archetype = quiz ? getArchetypeByKey(quiz, resultKey) : null;
+    if (!archetype) return null;
+    rows.push({
+      quizId,
+      eyebrow: meta.resultLabel,
+      title: archetype.title,
+      description: archetype.description,
+    });
+  }
+
+  return {
+    title: `${displayName ? `${displayName}'s` : "Your"} Career Profile`,
+    rows,
+  };
 }
 
 // Assembles the 5-row card data from this user's own stored results -- the

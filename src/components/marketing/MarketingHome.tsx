@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME, PLAY_STORE_URL } from "@/lib/config";
+import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES } from "@/lib/careerProfile";
 
 // Strivo's official social accounts — shown as icon links in the header
 // and footer. Kept as one list so both spots can't drift out of sync.
@@ -625,6 +626,63 @@ export function MarketingHome({
               </div>
             </motion.div>
           ))}
+        </motion.div>
+      </section>
+
+      {/* Career Profile quiz teaser -- the top-of-funnel mechanic (Home
+          redesign: quizzes moved off the authenticated app entirely, see
+          the career_profile_public_shares comment in lib/db.ts). Anyone
+          landing on strivo.ai can take all 5 quizzes and get a shareable
+          Career Profile Card WITHOUT downloading the app first -- the
+          whole point is that this is how most people should first learn
+          what Strivo is, not something they discover only after installing
+          it. Links straight to /quiz (the public, no-login flow), reusing
+          the exact quiz roster/content the app itself used to host. */}
+      <section
+        className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 text-center sm:px-12"
+        style={{ background: "linear-gradient(135deg,#1c0f2e,#0a0a0f 65%)" }}
+      >
+        <div
+          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
+          style={{ width: 700, height: 320, background: "radial-gradient(ellipse at center, rgba(244,183,63,0.16), transparent 70%)" }}
+        />
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative text-xs font-semibold tracking-[0.15em] text-amber-300">
+          FREE · NO ACCOUNT NEEDED
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mx-auto mb-3 mt-2 max-w-lg text-2xl font-bold tracking-tight sm:text-3xl">
+          Discover your Career Profile in 2 minutes
+        </motion.h2>
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mx-auto mb-10 max-w-md text-sm leading-relaxed text-[#8a8a99]">
+          5 quick quizzes about how you work. Get a shareable Career Profile Card at the end — send it to a friend or
+          coworker and compare.
+        </motion.p>
+
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="relative mx-auto flex max-w-2xl flex-wrap justify-center gap-2.5">
+          {CAREER_PROFILE_QUIZ_ORDER.map((quizId) => {
+            const meta = CAREER_PROFILE_QUIZZES[quizId];
+            return (
+              <motion.div
+                key={quizId}
+                variants={fadeUp}
+                className="flex items-center gap-2 rounded-full border border-[#2a2a35] bg-[#13131a] py-2 pl-2.5 pr-4"
+              >
+                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[13px]">{meta.icon}</span>
+                <span className="text-xs font-semibold text-white/80">{meta.title}</span>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mt-10">
+          <Magnetic>
+            <Link
+              href="/quiz"
+              className="inline-block rounded-full px-9 py-4 text-sm font-bold text-white transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+              style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)", boxShadow: "0 8px 24px rgba(244,183,63,0.25)" }}
+            >
+              Take the free quiz →
+            </Link>
+          </Magnetic>
         </motion.div>
       </section>
 

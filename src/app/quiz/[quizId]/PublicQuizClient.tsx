@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, useReducedMotion, AnimatePresence, type Variants } from "framer-motion";
-import { Lock, ChevronRight, Sparkles } from "lucide-react";
+import { ChevronLeft, ChevronRight, Sparkles } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { trackEvent } from "@/lib/trackEvent";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES, type CareerProfileQuizDefinition } from "@/lib/careerProfile";
-import type { CareerProfileProgress } from "@/lib/repo/careerProfile";
+import { getPublicQuizProgress, savePublicQuizResult, type PublicQuizResult } from "@/lib/publicQuizProgress";
 
 const fadeSlide: Variants = {
   hidden: { opacity: 0, x: 16 },
@@ -20,12 +20,12 @@ const reducedMotionVariants: Variants = {
   exit: { opacity: 0, transition: { duration: 0.1 } },
 };
 
-type SubmitResult = {
-  result: { quizId: string; resultKey: string; title: string; emoji: string; description: string; resultLabel: string };
-  progress: CareerProfileProgress;
-};
-
-export function CareerProfileQuizClient({ quiz }: { quiz: CareerProfileQuizDefinition }) {
+// Public, no-login twin of CareerProfileQuizClient.tsx -- same question-flow
+// UI, but posts to the unauthenticated /api/public/career-profile score
+// endpoint and keeps progress in the visitor's own browser (see
+// lib/publicQuizProgress.ts) instead of a per-user DB row, since there's no
+// account here at all.
+export function PublicQuizClient({ quiz }: { quiz: CareerProfileQuizDefinition }) {
   const prefersReducedMotion = useReducedMotion();
   const variants = prefersReducedMotion ? reducedMotionVariants : fadeSlide;
 
@@ -33,14 +33,14 @@ export function CareerProfileQuizClient({ quiz }: { quiz: CareerProfileQuizDefin
   const [answers, setAnswers] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [result, setResult] = useState<SubmitResult | null>(null);
+  const [result, setResult] = useState<PublicQuizResult | null>(null);
 
   const question = quiz.questions[questionIndex];
   const total = quiz.questions.length;
 
   async function chooseOption(optionId: string) {
     if (submitting) return;
-    trackEvent("career_quiz_question_answered", { quizId: quiz.meta.id, questionId: question.id, optionId });
+    trackEvent("career_quiz_question_answered", { quizId: quiz.meta.id, questionId: question.id, optionId, source: "public_quiz" });
 
     const nextAnswers = [...answers, optionId];
     setAnswers(nextAnswers);
@@ -50,23 +50,27 @@ export function CareerProfileQuizClient({ quiz }: { quiz: CareerProfileQuizDefin
       return;
     }
 
-    // Last question -- submit for scoring.
+    // Last question -- submit for scoring (pure/stateless server-side
+    // computation, no DB write -- see the score route's file comment).
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const res = await fetch(`/api/career-profile/quiz/${quiz.meta.id}/submit`, {
+      const res = await fetch(`/api/public/career-profile/${quiz.meta.id}/score`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ answers: nextAnswers }),
       });
       if (!res.ok) throw new Error("submit failed");
-      const data: SubmitResult = await res.json();
-      trackEvent("career_quiz_completed", { quizId: quiz.meta.id, resultKey: data.result.resultKey });
-      trackEvent("career_profile_progress", { completedCount: data.progress.completedCount, totalCount: data.progress.totalCount });
-      if (data.progress.isComplete) trackEvent("career_profile_completed", {});
-      setResult(data);
+      const data: { result: PublicQuizResult } = await res.json();
+      savePublicQuizResult(data.result);
+      trackEvent("career_quiz_completed", { quizId: quiz.meta.id, resultKey: data.result.resultKey, source: "public_quiz" });
+      const progress = getPublicQuizProgress();
+      const completedCount = CAREER_PROFILE_QUIZ_ORDER.filter((id) => progress[id]).length;
+      trackEvent("career_profile_progress", { completedCount, totalCount: CAREER_PROFILE_QUIZ_ORDER.length, source: "public_quiz" });
+      if (completedCount === CAREER_PROFILE_QUIZ_ORDER.length) trackEvent("career_profile_completed", { source: "public_quiz" });
+      setResult(data.result);
     } catch {
-      setSubmitError("Something went wrong saving your result. Please try again.");
+      setSubmitError("Something went wrong scoring your answers. Please try again.");
     } finally {
       setSubmitting(false);
     }
@@ -78,11 +82,6 @@ export function CareerProfileQuizClient({ quiz }: { quiz: CareerProfileQuizDefin
 
   return (
     <div className="min-h-screen" style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}>
-      {/* Fixed backdrop pinned to the viewport, not this div's own box --
-          see the matching comment in CareerProfileHubClient.tsx for why
-          (AppLayout's <main> pb-20 vs BottomNav's real height leaves a
-          strip that isn't covered by either, showing the light
-          --color-bg through as a "white line" on dark pages otherwise). */}
       <div
         className="pointer-events-none fixed inset-0 -z-10"
         style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}
@@ -130,29 +129,22 @@ export function CareerProfileQuizClient({ quiz }: { quiz: CareerProfileQuizDefin
   );
 }
 
-function ResultReveal({ result }: { result: SubmitResult }) {
+function ResultReveal({ result }: { result: PublicQuizResult }) {
   const router = useRouter();
-  const { result: r, progress } = result;
-
-  // "Left to do" -- every quiz not yet completed, in fixed roster order,
-  // shown as its own tappable row (locked ones read "Coming soon" and stay
-  // non-interactive, same convention as the hub/home rows). No single
-  // auto-picked "next" quiz anymore -- the user chooses. Once all 5 are
-  // done there's nothing left to list, and the copy below shifts entirely
-  // to revealing the card -- no "next discovery" language survives that.
-  const remaining = CAREER_PROFILE_QUIZ_ORDER.filter((id) => !progress.completedQuizIds.includes(id));
+  const progress = getPublicQuizProgress();
+  const completedQuizIds = CAREER_PROFILE_QUIZ_ORDER.filter((id) => progress[id]);
+  const completedCount = completedQuizIds.length;
+  const totalCount = CAREER_PROFILE_QUIZ_ORDER.length;
+  const isComplete = completedCount === totalCount;
+  const remaining = CAREER_PROFILE_QUIZ_ORDER.filter((id) => !progress[id]);
 
   function openQuiz(quizId: string) {
-    trackEvent("career_quiz_started", { quizId, source: "result_reveal" });
-    router.push(`/career-profile/${quizId}`);
+    trackEvent("career_quiz_started", { quizId, source: "public_quiz_result_reveal" });
+    router.push(`/quiz/${quizId}`);
   }
 
   return (
     <div className="min-h-screen px-5 pb-10 pt-6" style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}>
-      {/* Fixed backdrop pinned to the viewport -- see the matching comment
-          in CareerProfileHubClient.tsx. Kept outside the motion.div below
-          on purpose: framer-motion's transform on an ancestor would become
-          the containing block for `fixed`, breaking the viewport pin. */}
       <div
         className="pointer-events-none fixed inset-0 -z-10"
         style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}
@@ -160,36 +152,36 @@ function ResultReveal({ result }: { result: SubmitResult }) {
       />
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}>
         <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-amber-200/80">
-          {r.resultLabel} DISCOVERED {r.emoji}
+          {result.resultLabel} DISCOVERED {result.emoji}
         </p>
 
         <div
           className="mt-4 rounded-[22px] p-7 text-center"
           style={{ background: "linear-gradient(135deg,#2a2140,#3a2145)", border: "1px solid rgba(244,183,63,0.25)" }}
         >
-          <div className="text-5xl">{r.emoji}</div>
-          <h1 className="mt-3 text-[24px] font-bold text-white">{r.title}</h1>
-          <p className="mx-auto mt-2.5 max-w-xs text-[14px] leading-relaxed text-white/70">{r.description}</p>
+          <div className="text-5xl">{result.emoji}</div>
+          <h1 className="mt-3 text-[24px] font-bold text-white">{result.title}</h1>
+          <p className="mx-auto mt-2.5 max-w-xs text-[14px] leading-relaxed text-white/70">{result.description}</p>
         </div>
 
         <div className="mt-6 rounded-[18px] p-5" style={{ background: "rgba(255,255,255,0.05)" }}>
           <div className="flex items-center justify-between text-[12px] font-semibold text-white/70">
             <span>Career Profile</span>
             <span>
-              {progress.completedCount} / {progress.totalCount} discovered
+              {completedCount} / {totalCount} discovered
             </span>
           </div>
           <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white/10">
             <div
               className="h-full rounded-full"
-              style={{ width: `${(progress.completedCount / progress.totalCount) * 100}%`, background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
+              style={{ width: `${(completedCount / totalCount) * 100}%`, background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
             />
           </div>
         </div>
 
-        {progress.isComplete ? (
+        {isComplete ? (
           <button
-            onClick={() => router.push("/career-profile/card")}
+            onClick={() => router.push("/quiz/reveal")}
             className="mt-6 flex w-full items-center justify-center gap-1.5 rounded-pill py-3.5 text-sm font-semibold text-white"
             style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
           >
@@ -201,29 +193,28 @@ function ResultReveal({ result }: { result: SubmitResult }) {
             <div className="space-y-2">
               {remaining.map((quizId) => {
                 const meta = CAREER_PROFILE_QUIZZES[quizId];
-                const clickable = meta.implemented;
                 return (
                   <button
                     key={quizId}
-                    onClick={clickable ? () => openQuiz(quizId) : undefined}
-                    disabled={!clickable}
-                    className="flex w-full items-center gap-3 rounded-[14px] p-3 text-left disabled:opacity-50"
+                    onClick={() => openQuiz(quizId)}
+                    className="flex w-full items-center gap-3 rounded-[14px] p-3 text-left"
                     style={{ background: "rgba(255,255,255,0.06)" }}
                   >
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-base">
-                      {clickable ? meta.icon : <Lock size={13} className="text-white/40" />}
-                    </span>
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/10 text-base">{meta.icon}</span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-[13px] font-semibold text-white/85">{meta.title}</span>
-                      {!clickable && <span className="block truncate text-[11px] text-white/45">Coming soon</span>}
                     </span>
-                    {clickable && <ChevronRight size={16} className="shrink-0 text-white/35" />}
+                    <ChevronRight size={16} className="shrink-0 text-white/35" />
                   </button>
                 );
               })}
             </div>
           </div>
         )}
+
+        <button onClick={() => router.push("/quiz")} className="mt-5 flex w-full items-center justify-center gap-1.5 py-2 text-[12px] font-medium text-white/40">
+          <ChevronLeft size={13} /> Back to all discoveries
+        </button>
       </motion.div>
     </div>
   );

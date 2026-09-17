@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { requireUserId } from "@/lib/serverAuth";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import {
@@ -10,25 +9,25 @@ import {
   scoreCareerProfileQuiz,
   type CareerProfileQuizId,
 } from "@/lib/careerProfile";
-import { getCareerProfileProgress, upsertCareerProfileResult } from "@/lib/repo/careerProfile";
 
+// Public, unauthenticated twin of
+// app/api/career-profile/quiz/[quizId]/submit/route.ts -- for the
+// marketing-site /quiz flow (strivo.ai), where a visitor takes all 5 Career
+// Profile quizzes WITHOUT ever signing in. Scoring itself is a pure,
+// deterministic function of the quiz definition + answers (see
+// lib/careerProfile.ts), so it needs no DB write here at all: unlike the
+// in-app submit route, there is no per-user row to upsert. The caller
+// (PublicQuizClient.tsx) holds each quiz's {quizId, resultKey} in
+// localStorage across the 5 quizzes and sends the full set to
+// /api/public/career-profile/share once all 5 are done.
 const bodySchema = z.object({
-  // One option id per question, in the same order as the quiz's own
-  // question list -- validated for length and option-id membership below,
-  // never trusted blindly (this determines the stored result).
   answers: z.array(z.string()).min(1).max(20),
 });
 
-// No trial/subscription gate here on purpose -- Career Profile is meant to
-// work even for a user whose trial has ended (see the Home redesign audit,
-// "risks" section: it's deterministic, costs nothing, and is a reasonable
-// re-engagement lever). Only the feature flag gates it.
 export async function POST(req: Request, { params }: { params: Promise<{ quizId: string }> }) {
-  const limited = rateLimitOrResponse(`career-profile-submit:${requestIp(req)}`, 30, 60 * 1000);
+  const limited = rateLimitOrResponse(`public-career-profile-score:${requestIp(req)}`, 30, 60 * 1000);
   if (limited) return limited;
 
-  const userId = await requireUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!isFeatureEnabled("career_profile")) {
     return NextResponse.json({ error: "Career Profile is temporarily unavailable." }, { status: 503 });
   }
@@ -41,9 +40,6 @@ export async function POST(req: Request, { params }: { params: Promise<{ quizId:
 
   const quiz = getCareerProfileQuizDefinition(quizId);
   if (!quiz) {
-    // Roster entry exists but content isn't shipped yet (see the
-    // `implemented` flag in lib/careerProfile.ts) -- same "hidden, not
-    // broken" posture as a disabled feature flag.
     return NextResponse.json({ error: "This discovery isn't available yet." }, { status: 404 });
   }
 
@@ -62,25 +58,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ quizId:
     return NextResponse.json({ error: `Invalid answer for question ${invalidIndex + 1}` }, { status: 400 });
   }
 
-  const { dimensionScores, resultKey } = scoreCareerProfileQuiz(quiz, answers);
+  const { resultKey } = scoreCareerProfileQuiz(quiz, answers);
   const archetype = getArchetypeByKey(quiz, resultKey);
   if (!archetype) {
-    // Should be unreachable given the dev-time completeness assertion in
-    // lib/careerProfile.ts, but never trust that assertion ran in this
-    // process -- fail loudly rather than return a broken result.
     return NextResponse.json({ error: "Could not compute a result" }, { status: 500 });
   }
-
-  upsertCareerProfileResult({
-    userId,
-    quizId,
-    quizVersion: quiz.meta.version,
-    answers,
-    dimensionScores,
-    resultKey,
-  });
-
-  const progress = getCareerProfileProgress(userId);
 
   return NextResponse.json({
     result: {
@@ -91,6 +73,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ quizId:
       description: archetype.description,
       resultLabel: quiz.meta.resultLabel,
     },
-    progress,
   });
 }

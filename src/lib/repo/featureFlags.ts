@@ -35,7 +35,7 @@ export const FEATURE_FLAGS = [
   {
     key: "career_profile",
     label: "Career Profile",
-    description: "The quiz-based Career Profile experience on Home (Superpower/Character/Red Flag/AI-Era Advantage/Career Mode) and its /career-profile pages. Deterministic quiz scoring only, no AI cost either way. Turning this off hides the Home hero and redirects /career-profile away rather than showing a broken page -- saved quiz results are untouched while it's off.",
+    description: "The quiz-based Career Profile experience (Superpower/Character/Red Flag/AI-Era Advantage/Career Mode) -- now a public, no-login flow at /quiz on the marketing site, not an in-app feature. Deterministic quiz scoring only, no AI cost either way. Turning this off returns 'unavailable' from the public scoring/share APIs and redirects /quiz and the legacy in-app /career-profile pages away rather than showing a broken page -- previously saved quiz results and shares are untouched while it's off.",
   },
 ] as const;
 

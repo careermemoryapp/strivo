@@ -21,12 +21,19 @@ export type CareerWrappedHomePreviewData = {
 // so it reads as a core part of the product rather than another digest.
 // Free-flowing on the light body like every other Home section, though --
 // an earlier version wrapped this in a dark rounded panel, which (paired
-// with CareerProfileHomeHero's matching dark panel above it) read as two
-// floating boxes sitting on an otherwise all-white page. Its own warm
-// amber/pink "Wrapped" gradient still marks the stat bar / CTA button as
-// this feature's accent color (same convention as every other Home teaser
-// -- indigo = recap, violet = growth, emerald = benchmark, rose = check-in
-// -- see TEASER_ACCENTS), just not as a container background anymore.
+// with the old CareerProfileHomeHero's matching dark panel above it, back
+// when Career Profile still had an in-app Home entry -- it's since moved to
+// the public /quiz flow on the marketing site, see the
+// career_profile_public_shares comment in lib/db.ts) read as two floating
+// boxes sitting on an otherwise all-white page.
+//
+// BRAND_GRADIENT (purple -> blue) is the same gradient Home's own "Start
+// recording" button uses -- product feedback was that this section's own
+// amber/pink gradient made Home feel like unrelated accent colors instead
+// of one lively, cohesive page. Stat numbers pick it up too now (gradient
+// text, not a container fill), so this still reads as the "biggest" Home
+// section without going back to a filled panel.
+const BRAND_GRADIENT = "linear-gradient(135deg,#a78bfa,#60a5fa)";
 export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePreviewData }) {
   const router = useRouter();
 
@@ -49,8 +56,8 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
     return (
       <div className="border-t border-[#ece5f5] mt-5 px-5 pt-6 text-center">
         <div
-          className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-amber-500"
-          style={{ boxShadow: "0 6px 16px rgba(251,191,36,0.18)" }}
+          className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full text-white"
+          style={{ background: BRAND_GRADIENT, boxShadow: "0 6px 16px rgba(139,92,246,0.25)" }}
         >
           <Sparkles size={19} />
         </div>
@@ -64,7 +71,7 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
             router.push("/record");
           }}
           className="mt-3.5 rounded-pill px-5 py-2.5 text-xs font-semibold text-white"
-          style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
+          style={{ background: BRAND_GRADIENT }}
         >
           Record a memory
         </button>
@@ -102,7 +109,7 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
 
         <div
           className="mt-4 inline-flex items-center gap-1.5 rounded-pill px-4 py-2 text-xs font-semibold text-white"
-          style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
+          style={{ background: BRAND_GRADIENT }}
         >
           View my Career Wrapped <ChevronRight size={13} />
         </div>
@@ -114,7 +121,9 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
 function Stat({ value, label }: { value: number; label: string }) {
   return (
     <div>
-      <p className="text-2xl font-bold text-ink">{value}</p>
+      <p className="bg-clip-text text-2xl font-extrabold text-transparent" style={{ backgroundImage: BRAND_GRADIENT }}>
+        {value}
+      </p>
       <p className="text-[11px] leading-tight text-ink-faint">{label}</p>
     </div>
   );

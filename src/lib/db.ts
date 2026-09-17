@@ -603,6 +603,27 @@ function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_career_profile_shares_user ON career_profile_shares(user_id, created_at);
+
+    -- Public, unauthenticated Career Profile Card shares -- created when
+    -- someone completes all 5 quizzes on the marketing site's /quiz flow
+    -- WITHOUT ever signing in (Home redesign, phase: quizzes move to
+    -- strivo.ai as a top-of-funnel mechanic, replacing the in-app hub).
+    -- Deliberately a SEPARATE table from career_profile_shares above,
+    -- with NO user_id column at all, rather than relaxing that table's
+    -- user_id NOT NULL REFERENCES users(id) constraint or inserting a
+    -- placeholder "guest" row into users: several background jobs
+    -- (engagement nudges, product-update drip, weekly recap, growth
+    -- narrative, quarterly benchmark, check-ins, underplayed-win) already
+    -- enumerate real rows in users and a fake row there risks silently
+    -- pulling a guest into one of those. Same additive-only migration
+    -- convention as everywhere else in this file -- see ROLLBACK.md.
+    CREATE TABLE IF NOT EXISTS career_profile_public_shares (
+      id TEXT PRIMARY KEY,
+      card_data TEXT NOT NULL,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      revoked INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---
