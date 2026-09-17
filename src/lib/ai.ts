@@ -482,6 +482,76 @@ export async function generateGrowthNarrative(earlyMemories: Memory[], recentMem
   }
 }
 
+export type SuggestedRoleResult = { title: string; industry: string | null };
+
+// "Roles you're ready for" (Home screen) -- names up to 5 roles a user is
+// genuinely ready for right now, grounded ONLY in a sample of their own
+// memories (see shouldGenerateSuggestedRoles/createSuggestedRoles in
+// lib/repo/suggestedRoles.ts, called by the same monthly automation as
+// generateGrowthNarrative above -- see app/api/growth-narrative/run).
+// industry is left null whenever the memories read as industry-agnostic
+// (transferable skills without a specific field named) rather than guessed
+// from the role title alone -- the UI shows that honestly as "Any
+// industry." Returns an empty array (not an error) when nothing in the
+// sample genuinely supports naming a role -- callers should treat that the
+// same as a hard failure (skip storing anything, try again next cycle)
+// rather than caching an empty result.
+export async function generateSuggestedRoles(memories: Memory[]): Promise<SuggestedRoleResult[] | null> {
+  const openai = getClient();
+  if (!openai || memories.length === 0) return null;
+  try {
+    const listing = memories
+      .map((m) => {
+        const competencies = safeParseStringArray(m.competencies);
+        return `- "${m.title}"${competencies.length ? ` [${competencies.join(", ")}]` : ""}: ${m.summary ?? m.transcript.slice(0, 300)}`;
+      })
+      .join("\n");
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.4,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a career coach reviewing someone's personal career memories (from a career-memory app) to name roles they're genuinely ready for RIGHT NOW. " +
+            "You'll be given a list of memories (title, optional competencies, summary). " +
+            'Respond ONLY with JSON: {"roles": [{"title": string, "industry": string or null}]}. ' +
+            "Up to 5 roles, best fit first. Every role must be directly supported by concrete evidence across these memories (skills actually demonstrated, scope of responsibility, kind of work actually done) -- never invent a role that isn't backed by what's actually here, and return fewer than 5 (even zero, as an empty array) rather than padding with a weak fit. " +
+            "industry: only set this to a specific industry or sector (e.g. 'Renewable Energy', 'Technology / SaaS') when the memories themselves clearly point at one -- a company, sector, or domain actually mentioned or strongly implied. If the memories show transferable skills without pointing at a specific field, set industry to null -- do NOT guess an industry just because it's a common pairing for that role title. " +
+            "Never invent facts not present in what you were given.",
+        },
+        { role: "user", content: listing },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.roles)) return null;
+
+    const roles: SuggestedRoleResult[] = [];
+    for (const item of parsed.roles) {
+      if (
+        item &&
+        typeof item === "object" &&
+        typeof (item as { title?: unknown }).title === "string" &&
+        ((item as { industry?: unknown }).industry === null || typeof (item as { industry?: unknown }).industry === "string")
+      ) {
+        const title = (item as { title: string }).title.trim().slice(0, 80);
+        const industryRaw = (item as { industry: string | null }).industry;
+        const industry = typeof industryRaw === "string" ? industryRaw.trim().slice(0, 60) || null : null;
+        if (title) roles.push({ title, industry });
+      }
+      if (roles.length >= 5) break;
+    }
+    return roles;
+  } catch (err) {
+    console.error("generateSuggestedRoles failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
 export type QuarterStats = {
   total: number;
   competencyStories: number;

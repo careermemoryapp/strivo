@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, MessageSquare, Flame,
+  Target, FileText, Award, Users, MoreHorizontal, Briefcase,
 } from "lucide-react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { Avatar } from "@/components/Avatar";
@@ -13,7 +14,7 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import { HOME_SUBTITLE } from "@/lib/config";
+import { HOME_SUBTITLE, QUICK_ACTIONS } from "@/lib/config";
 import { timeOfDayGreeting } from "@/lib/utils";
 import { chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
@@ -53,6 +54,13 @@ type HomeData = {
   // renders nothing at all in that case, same "hidden, not broken" contract
   // as every other feature-flagged surface in this app.
   careerWrapped: CareerWrappedHomePreviewData | null;
+  // "Roles you're ready for" -- up to 5 {title, industry} pairs, industry
+  // null when the memories read as industry-agnostic (see
+  // getLatestSuggestedRolesForUser in page.tsx). Null here means nothing's
+  // been generated for this user yet (new account, not enough history, or
+  // due for the monthly automation to catch up) -- rendered as an honest
+  // "still taking shape" line rather than an empty list.
+  suggestedRoles: { title: string; industry: string | null }[] | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -97,6 +105,22 @@ const DARK = "#26213c";
 // instead of the mismatched amber/pink + purple/blue combination product
 // feedback called out as making the page feel flat and disconnected.
 const BRAND_GRADIENT = "linear-gradient(135deg,#a78bfa,#60a5fa)";
+
+// Light-theme icon treatment for the "chat use cases" grid below, keyed by
+// QUICK_ACTIONS' own `icon` string (lib/config.ts) so the two stay in sync
+// without a second id map. Not the same as ACTION_ICON_DEFS in
+// categoryIcons.tsx -- that map is tuned for the dark-body version of Home
+// this file used to be (translucent tints on near-black), and this Home is
+// light-bodied now (see the DARK comment above), so these are ordinary
+// pale-chip/solid-icon pairs matching Continue's and Tips-for-better-
+// memories' own icon chips elsewhere in the app.
+const QUICK_ACTION_ICON_STYLE: Record<string, { icon: ReactNode; bg: string; text: string }> = {
+  target: { icon: <Target size={16} />, bg: "bg-indigo-50", text: "text-indigo-500" },
+  "file-text": { icon: <FileText size={16} />, bg: "bg-blue-50", text: "text-blue-500" },
+  award: { icon: <Award size={16} />, bg: "bg-[#f8ecd2]", text: "text-[#b3811f]" },
+  users: { icon: <Users size={16} />, bg: "bg-[#f5f3fd]", text: "text-[#7c6ff0]" },
+  more: { icon: <MoreHorizontal size={16} />, bg: "bg-[#f2effa]", text: "text-[#8b5cf6]" },
+};
 
 // initialData is fetched server-side by page.tsx (a Server Component)
 // before anything reaches the browser — see ChatDetailClient.tsx for the
@@ -248,40 +272,139 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           visitors who can't act yet), these are real, functional buttons --
           product feedback was explicit that a logged-in user should be able
           to just tap Record / Create memory / Chat and go, not read a
-          description of what those do. No card/border wrapper -- just the
-          three buttons sitting directly on the light body, per the
-          "free-flowing, no boxy cards" feedback. */}
+          description of what those do.
+          Wrapped in the same soft gradient card (rounded-[18px], lavender
+          border, #efeaf9 -> #f5ecec) as the Record screen's own Voice/Type/
+          Upload card (see (app)/record/page.tsx) -- founder feedback was
+          that they liked that card's look and wanted this section to match
+          it, so this deliberately reverses the earlier "free-flowing, no
+          boxy cards" direction for this one section. */}
       <div className="px-5 pt-5">
         <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">How Strivo.ai works</p>
-        <div className="mt-2 flex items-stretch">
-          <FlowButton
-            icon={<Mic size={17} />}
-            label="1. Record"
-            sublabel="Tap the mic, speak freely"
-            onClick={() => router.push("/record")}
-          />
-          <FlowStepConnector />
-          <FlowButton
-            icon={<Sparkles size={17} />}
-            label="2. Create memory"
-            sublabel="Transcribed & tagged for you"
-            onClick={() => router.push("/record?mode=type")}
-          />
-          <FlowStepConnector />
-          <FlowButton
-            icon={<MessageSquare size={17} />}
-            label="3. Chat"
-            sublabel="Ask for it back, anytime"
-            onClick={() => router.push("/chats")}
-          />
+        <div className="mt-2 rounded-[18px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-5">
+          <div className="flex items-stretch">
+            <FlowButton
+              icon={<Mic size={17} />}
+              label="1. Record"
+              sublabel="Tap the mic, speak freely"
+              onClick={() => router.push("/record")}
+            />
+            <FlowStepConnector />
+            <FlowButton
+              icon={<Sparkles size={17} />}
+              label="2. Create memory"
+              sublabel="Transcribed & tagged for you"
+              onClick={() => router.push("/record?mode=type")}
+            />
+            <FlowStepConnector />
+            <FlowButton
+              icon={<MessageSquare size={17} />}
+              label="3. Chat"
+              sublabel="Ask for it back, anytime"
+              onClick={() => router.push("/chats")}
+            />
+          </div>
         </div>
       </div>
 
-      {/* Career Wrapped -- placed immediately after the header, ahead of
-          every other Home surface (trial banner, check-in, recap, growth,
-          benchmark) per the spec: this is meant to read as a core part of
-          the product, not one more secondary digest teaser. Renders nothing
-          at all when the career_wrapped feature flag is off (see page.tsx). */}
+      {/* Chat use cases -- the same four QUICK_ACTIONS (lib/config.ts) the
+          marketing site's "Use cases" section mirrors, plus "Others", each
+          a real tappable card that starts a chat with that action's own
+          title/category/opening prompt (same startChat() the hero "Ask
+          anything" box already uses). This used to live on Home back when
+          Home's whole body was dark (see the DARK comment above and
+          ACTION_ICON_DEFS in categoryIcons.tsx, which was that version's
+          icon treatment) and was dropped when Home moved to a light body --
+          restoring it here, in the light-card treatment, per founder
+          feedback that it should come back. "Others" spans both columns
+          since it isn't a specific use case like the first four. */}
+      <div className="px-5 pt-6">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Popular ways to use Strivo.ai</p>
+        <div className="mt-2 grid grid-cols-2 gap-2.5">
+          {QUICK_ACTIONS.map((action) => {
+            const style = QUICK_ACTION_ICON_STYLE[action.icon];
+            return (
+              <button
+                key={action.id}
+                onClick={() => startChat(action)}
+                disabled={pendingAction !== null}
+                className={`flex flex-col items-start gap-2 rounded-[14px] border border-[#ece5f5] bg-surface p-3.5 text-left transition-transform active:scale-[0.97] disabled:opacity-50 ${
+                  action.id === "others" ? "col-span-2 flex-row items-center gap-3" : ""
+                }`}
+              >
+                <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] ${style.bg} ${style.text}`}>
+                  {pendingAction === action.id ? <Spinner className="h-4 w-4" /> : style.icon}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[12.5px] font-semibold text-ink">{action.title}</p>
+                  <p className="mt-0.5 text-[11px] leading-snug text-ink-faint">{action.description}</p>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* "Roles you're ready for" -- the home page reflecting the user's own
+          memories back at them with a clear next action, per founder
+          feedback. Up to 5 roles, each with the industry it fits best when
+          the memories point at one, or "Any industry" when they read as
+          industry-agnostic -- never a guessed industry (see
+          generateSuggestedRoles in lib/ai.ts, generated by the same monthly
+          automation as growth narratives -- app/api/growth-narrative/run).
+          data.suggestedRoles is null until that automation has produced a
+          real result for this user (new account, not enough history yet,
+          or just due to catch up) -- shown as an honest "still taking
+          shape" line rather than an empty list or hiding the section
+          entirely, so this area of Home never looks broken or missing. */}
+      <div className="border-t border-[#ece5f5] mt-5 px-5 pt-5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Roles you&apos;re ready for</p>
+        {data.suggestedRoles && data.suggestedRoles.length > 0 ? (
+          <>
+            <p className="mt-1 text-[11px] text-ink-faint">Based on your memories so far</p>
+            <div className="mt-3 space-y-2.5">
+              {data.suggestedRoles.map((role) => (
+                <div key={role.title} className="flex items-center gap-3 rounded-[14px] border border-[#ece5f5] bg-surface p-3.5">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#f2effa] text-[#8b5cf6]">
+                    <Briefcase size={16} />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[12.5px] font-semibold text-ink">{role.title}</p>
+                    <p className="text-[11px] text-ink-faint">{role.industry ?? "Any industry"}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={() =>
+                  startChat({
+                    id: "roles",
+                    chatTitle: "Roles I'm ready for",
+                    category: "Others",
+                    prompt: "Based on my memories, what roles am I ready for right now?",
+                  })
+                }
+                disabled={pendingAction !== null}
+                className="inline-flex items-center gap-1.5 rounded-pill px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                style={{ background: BRAND_GRADIENT }}
+              >
+                {pendingAction === "roles" ? <Spinner className="h-3.5 w-3.5" /> : <>Explore these roles <ChevronRight size={13} /></>}
+              </button>
+            </div>
+          </>
+        ) : (
+          <p className="mt-1.5 max-w-[280px] text-[11px] text-ink-faint">
+            Keep recording memories and Strivo.ai will start suggesting roles you&apos;re genuinely ready for, based on what you&apos;ve actually done.
+          </p>
+        )}
+      </div>
+
+      {/* Career Wrapped -- placed ahead of the secondary Home surfaces below
+          it (trial banner, check-in, recap, growth, benchmark) per the
+          spec: this is meant to read as a core part of the product, not
+          one more secondary digest teaser. Renders nothing at all when the
+          career_wrapped feature flag is off (see page.tsx). */}
       {data.careerWrapped && <CareerWrappedHomePreview data={data.careerWrapped} />}
 
       {error && (

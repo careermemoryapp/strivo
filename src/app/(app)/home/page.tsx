@@ -6,6 +6,7 @@ import { listChats } from "@/lib/repo/chats";
 import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
 import { getRecentGrowthNarrative } from "@/lib/repo/growthNarratives";
 import { getRecentQuarterlyBenchmark } from "@/lib/repo/quarterlyBenchmarks";
+import { getLatestSuggestedRolesForUser } from "@/lib/repo/suggestedRoles";
 import { getActiveCheckinForUser } from "@/lib/repo/pendingCheckins";
 import { computeStreak } from "@/lib/utils";
 import { isFeatureEnabled } from "@/lib/repo/featureFlags";
@@ -69,6 +70,16 @@ export default async function HomePage() {
   // is what flips a row to 'active' in the first place).
   const activeCheckin = getActiveCheckinForUser(userId);
 
+  // "Roles you're ready for" -- like careerWrapped below, this is a plain
+  // read of whatever the latest generation produced (see
+  // getLatestSuggestedRolesForUser's own comment for why there's no
+  // visibility window here the way recap/growth/benchmark get). Unlike
+  // careerWrapped, the underlying generation IS an AI call, so it can't be
+  // computed synchronously here -- it's produced ahead of time by the same
+  // monthly automation as growth narratives (see
+  // app/api/growth-narrative/run) and this just reads the latest result.
+  const suggestedRoles = getLatestSuggestedRolesForUser(userId);
+
   // Career Wrapped Home preview (spec section 1) -- always the user's whole
   // career (ALL_TIME_PERIOD_KEY), same default the full /career-wrapped
   // experience opens to -- see that page's comment for why the year filter
@@ -111,6 +122,11 @@ export default async function HomePage() {
         // Just the question -- tapping the teaser goes to /check-in/[id]
         // for the actual answer flow.
         checkin: activeCheckin ? { id: activeCheckin.id, question: activeCheckin.question } : null,
+        // null means "nothing generated for this user yet" (new account,
+        // not enough history, or the monthly automation hasn't run since
+        // they crossed the threshold) -- HomeClient shows an honest "still
+        // taking shape" line in that case rather than an empty list.
+        suggestedRoles: suggestedRoles ? suggestedRoles.roles : null,
         // See the comment above -- null entirely when the feature flag is
         // off, which is what tells HomeClient to render nothing here.
         careerWrapped: careerWrapped

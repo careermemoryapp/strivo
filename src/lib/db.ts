@@ -333,6 +333,28 @@ function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_growth_narratives_user ON growth_narratives(user_id, created_at);
 
+    -- "Roles you're ready for" (Home screen) -- up to 5 {title, industry}
+    -- pairs an AI call names as genuinely supported by a sample of the
+    -- user's own memories (see generateSuggestedRoles in lib/ai.ts).
+    -- industry is stored as NULL, not a guessed string, whenever the
+    -- memories themselves don't point at one specific field -- the UI shows
+    -- that honestly as "Any industry" rather than inventing one. Generated
+    -- by the SAME monthly automation as growth_narratives above (see
+    -- app/api/growth-narrative/run) -- deliberately reusing that existing
+    -- cron + secret instead of standing up a second one, since the two
+    -- features already run on the same "enough history, due again" cadence
+    -- (see shouldGenerateSuggestedRoles in lib/repo/suggestedRoles.ts).
+    -- roles_json is a JSON array (not normalized rows) since it's always
+    -- read and replaced as one unit, never queried per-role.
+    CREATE TABLE IF NOT EXISTS suggested_roles (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      roles_json TEXT NOT NULL,
+      memory_count_at_generation INTEGER NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_suggested_roles_user ON suggested_roles(user_id, created_at);
+
     -- "You vs. You" -- a calendar-quarter benchmark, distinct from
     -- growth_narratives above: that one looks for a narrative PATTERN across
     -- a user's whole history and stays silent if it can't find one; this one
