@@ -1,4 +1,5 @@
 import { getDb, newId, nowIso } from "@/lib/db";
+import type { ResumeCareerStats } from "@/lib/ai";
 
 export type User = {
   id: string;
@@ -51,6 +52,18 @@ export type User = {
   // own comment in lib/db.ts's migration and isDueForResumeReminder in
   // lib/resumeReminder.ts. Null means never nudged yet.
   resume_reminder_sent_at: string | null;
+  // Aggregate, counts-only read of the resume above (see the migration
+  // comment on these columns in lib/db.ts, and analyzeResumeCareerStats in
+  // lib/ai.ts) -- shown as a small supplementary line on the Home stats
+  // card, never merged into the memory-derived numbers and never its own
+  // Memory row. All null until a resume is uploaded; resume_stats_computed_at
+  // is set even when analysis fails, to tell "no resume" apart from
+  // "resume on file, stats unavailable."
+  resume_stats_wins: number | null;
+  resume_stats_leadership: number | null;
+  resume_stats_problems: number | null;
+  resume_stats_stakeholder: number | null;
+  resume_stats_computed_at: string | null;
   // Stamped every time this user signs out (see events.signOut in
   // lib/auth.ts). Not "are they currently logged out" -- it's just the
   // timestamp of their most recent sign-out, checked against each session
@@ -456,7 +469,33 @@ export function setResume(id: string, text: string, filename: string, uploadedAt
 
 export function clearResume(id: string) {
   const db = getDb();
-  db.prepare(`UPDATE users SET resume_text = NULL, resume_filename = NULL, resume_uploaded_at = NULL WHERE id = ?`).run(id);
+  db.prepare(
+    `UPDATE users SET resume_text = NULL, resume_filename = NULL, resume_uploaded_at = NULL,
+     resume_stats_wins = NULL, resume_stats_leadership = NULL, resume_stats_problems = NULL,
+     resume_stats_stakeholder = NULL, resume_stats_computed_at = NULL WHERE id = ?`
+  ).run(id);
+}
+
+// See resume_stats_* columns' migration comment in lib/db.ts -- the
+// counts-only, never-a-Memory read of a resume's achievements shown as a
+// supplementary line on the Home stats card. Called once, synchronously,
+// right after a resume is saved (see POST /api/profile/resume) with the
+// result of analyzeResumeCareerStats (lib/ai.ts); a null `stats` (AI
+// unavailable, or the call failed) still stamps resume_stats_computed_at so
+// callers can tell "analysis failed" apart from "not computed yet."
+export function setResumeStats(id: string, stats: ResumeCareerStats | null, computedAtIso: string) {
+  const db = getDb();
+  db.prepare(
+    `UPDATE users SET resume_stats_wins = ?, resume_stats_leadership = ?, resume_stats_problems = ?,
+     resume_stats_stakeholder = ?, resume_stats_computed_at = ? WHERE id = ?`
+  ).run(
+    stats?.wins ?? null,
+    stats?.leadershipMoments ?? null,
+    stats?.problemsSolved ?? null,
+    stats?.seniorStakeholderInteractions ?? null,
+    computedAtIso,
+    id
+  );
 }
 
 export function setResumeReminderSentAt(id: string, iso: string) {

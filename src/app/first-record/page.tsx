@@ -200,9 +200,9 @@ export default function FirstRecordPage() {
             <>
               <h1 className="mt-4 text-[19px] font-bold text-ink">Got it</h1>
               <p className="mt-1 text-[13px] text-ink-soft max-w-xs">
-                {savedResumeFilename} is saved. Strivo will quietly use it to make chat answers and resume lines
-                sharper -- it won&apos;t show up as a memory of its own. You can replace or remove it anytime in
-                Settings.
+                {savedResumeFilename} is saved. Strivo will quietly use it to make chat answers sharper and count
+                its achievements toward your career stats -- it won&apos;t show up as a memory of its own. You can
+                replace or remove it anytime in Settings.
               </p>
             </>
           ) : (

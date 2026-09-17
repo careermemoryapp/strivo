@@ -10,7 +10,7 @@ import {
   countMemoriesWithMetric,
   type Memory,
 } from "@/lib/repo/memories";
-import { generateMemoryMetadata, embedText, splitDocumentIntoStories, type MemoryMetadata, type DocumentStorySegment } from "@/lib/ai";
+import { generateMemoryMetadata, embedText, type MemoryMetadata } from "@/lib/ai";
 import { searchMemoriesHybrid } from "@/lib/retrieval";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired, getUserById } from "@/lib/repo/users";
@@ -63,37 +63,24 @@ const MEMORY_COUNT_MILESTONES = [10, 25, 50, 100, 250, 500];
 // something upcoming from turning into a pile of nags that all land at once.
 const MAX_OPEN_CHECKINS = 3;
 
-// Below this many characters, a file upload essentially never turns out to
-// be a genuine multi-story collection (a one-page job description, a
-// certificate, a short cover letter) -- skip the extra splitDocumentIntoStories
-// AI call entirely for those, rather than spending latency/cost checking
-// something that was never going to split. Long, story-rich documents (the
-// 35-page career-history case this was built for) clear this easily.
-const MIN_CHARS_FOR_SPLIT_CHECK = 3000;
-
-// Everything that has to happen once a transcript (either the whole
-// upload, or one story split out of it) has its AI metadata + embedding
-// ready: persist the row, work out any one-time milestones, and fire the
-// rare Career Wrapped signal notification. Factored out so the single-
-// memory path and the multi-story split path (see splitDocumentIntoStories
-// above, wired up in POST below) share EXACTLY the same logic instead of
-// two copies that could quietly drift apart -- milestones and check-in caps
-// in particular depend on reading fresh DB state, which only works right if
-// every created memory (whether one or twenty) goes through this same
-// sequential path.
+// Everything that has to happen once a transcript has its AI metadata +
+// embedding ready: persist the row, work out any one-time milestones, and
+// fire the rare Career Wrapped signal notification. Factored out of POST
+// below mostly for readability -- this endpoint always creates exactly ONE
+// memory per request (see the comment on POST for why a multi-story
+// document is handled as N separate requests to this same endpoint from
+// the client, rather than looping through all of them here).
 async function persistOneMemory(params: {
   userId: string;
   transcript: string;
   // Used for the initial insert (before metadata exists) and as the final
-  // fallback if metadata generation fails. For the single-transcript path
-  // this is the user-provided title or fallbackTitle(transcript); for a
-  // split story it's that story's own short working title from
-  // splitDocumentIntoStories.
+  // fallback if metadata generation fails.
   initialTitle: string;
-  // An explicit user-typed title, if any -- only ever set on the single-
-  // transcript path (there's no per-story title input for a split
-  // document). Wins over the AI's own metadata.title when present, same as
-  // this route always behaved before the split path existed.
+  // An explicit title to use instead of the AI's own metadata.title, if
+  // any -- set either from a real user-typed title, or (for one story out
+  // of a split document -- see POST /api/memories/split) that story's own
+  // short working title, which the client sends as `title` on its per-story
+  // POST to this endpoint. Wins over metadata.title when present.
   userProvidedTitle?: string;
   source: "voice" | "text" | "file";
   metadata: MemoryMetadata | null;
@@ -234,13 +221,7 @@ async function persistOneMemory(params: {
   return { memory: final, milestones };
 }
 
-// The AI generation half of creating one memory -- metadata + embedding,
-// both pure network calls with no DB side effects, so this is safe to run
-// concurrently across every story in a split batch (see Promise.all in
-// POST below) instead of the ~2x-N sequential round trips that would
-// otherwise add up to a real risk of the request timing out on a genuinely
-// story-rich document. persistOneMemory above is what actually has to run
-// in order, one at a time.
+// The AI generation half of creating one memory -- metadata + embedding.
 async function generateMetadataAndEmbedding(
   transcript: string,
   title: string,
@@ -271,11 +252,15 @@ export async function POST(req: Request) {
 
   // Every memory triggers two OpenAI calls (metadata generation + embedding)
   // — cap per-user spend from a runaway client/script, same reasoning as
-  // the transcribe and chat-message endpoints. A split document spends more
-  // than one "memory" of budget in a single request (one call per story
-  // plus the split call itself), which is intentional -- it's still one
-  // deliberate user action, and the story cap (30, see
-  // splitDocumentIntoStories in lib/ai.ts) bounds how far that can go.
+  // the transcribe and chat-message endpoints. This endpoint always creates
+  // exactly ONE memory per request. A document that splits into several
+  // stories (see POST /api/memories/split) is saved as N separate calls to
+  // this same endpoint from the client, one per story, instead of looping
+  // through all of them inside a single request -- a single request doing
+  // 20-30 sequential AI-call pairs was a real, observed cause of the
+  // reverse proxy timing out and handing the client an HTML error page
+  // mid-upload (2026-09-17), even though the document had, in fact,
+  // finished saving server-side by the time that happened.
   const limited = rateLimitOrResponse(`memory-create:${userId}`, 60, 60 * 60 * 1000);
   if (limited) return limited;
 
@@ -301,62 +286,6 @@ export async function POST(req: Request) {
   const existingProjects = listProjects(userId);
   const existingProjectNames = existingProjects.map((p) => p.name);
 
-  // Long file uploads only -- see MIN_CHARS_FOR_SPLIT_CHECK's comment.
-  // Voice/type stay single-memory unconditionally: those already carry the
-  // app's "one thought at a time" framing (see the Tips row on Record), so
-  // there's no reason to spend an extra AI call checking something that's
-  // essentially never going to be a bundled document.
-  let storySegments: DocumentStorySegment[] | null = null;
-  if (source === "file" && transcript.length >= MIN_CHARS_FOR_SPLIT_CHECK) {
-    storySegments = await splitDocumentIntoStories(transcript);
-  }
-
-  if (storySegments && storySegments.length >= 2) {
-    // Multi-story path: this one uploaded document is actually a collection
-    // of separate stories (the 35-page career-history case) -- each one
-    // becomes its own real memory, with its own competencies/category/etc.,
-    // instead of a single blended memory that badly under-counts what's
-    // actually in the document.
-    const generated = await Promise.all(
-      storySegments.map((story) => generateMetadataAndEmbedding(story.content, story.title, firstName, existingProjectNames))
-    );
-
-    const memories: Memory[] = [];
-    const milestones: string[] = [];
-    let anyMetadataGenerated = false;
-
-    // Sequential on purpose (unlike the Promise.all above) -- milestones,
-    // the check-in cap, and the total-count checkpoint all depend on
-    // reading fresh DB state after each prior story is fully persisted;
-    // see persistOneMemory's own comments for why each of those needs that.
-    for (let i = 0; i < storySegments.length; i++) {
-      const story = storySegments[i];
-      const { metadata, embedding } = generated[i];
-      if (metadata) anyMetadataGenerated = true;
-      const result = await persistOneMemory({
-        userId,
-        transcript: story.content,
-        initialTitle: story.title,
-        source: "file",
-        metadata,
-        embedding,
-      });
-      memories.push(result.memory);
-      milestones.push(...result.milestones);
-    }
-
-    return NextResponse.json({
-      memories,
-      aiMetadataGenerated: anyMetadataGenerated,
-      milestones,
-      splitFromDocument: true,
-    });
-  }
-
-  // Single-memory path -- unchanged behavior for voice, typed text, short
-  // file uploads, and any file upload the split step above decided (or
-  // failed to decide, on an AI error) wasn't really a multi-story
-  // collection.
   const title = parsed.data.title?.trim() || fallbackTitle(transcript);
   const { metadata, embedding } = await generateMetadataAndEmbedding(transcript, title, firstName, existingProjectNames);
 

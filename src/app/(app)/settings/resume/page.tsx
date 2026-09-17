@@ -27,8 +27,8 @@ const RESUME_BENEFITS = [
   },
   {
     icon: FileText,
-    title: "Stronger resume lines",
-    description: "New resume lines build on what's already there instead of starting blank.",
+    title: "Counted in your stats",
+    description: "Achievements in your resume show up as a bonus line on your Home career stats.",
   },
   {
     icon: Target,
@@ -42,8 +42,11 @@ const RESUME_BENEFITS = [
 // (extract via /api/memories/extract, then save via /api/profile/resume) is
 // used from both places. Stored as background context on the user row (see
 // resume_text's comment in repo/users.ts), not as a Memory -- it feeds chat
-// answers and future memory generation without cluttering the Memories list
-// with one giant resume-dump entry.
+// answers and a lightweight, counts-only stats read (see
+// analyzeResumeCareerStats in lib/ai.ts, shown as a supplementary line on
+// the Home stats card) without cluttering the Memories list with one giant
+// resume-dump entry or double-counting achievements a user separately
+// records in full.
 //
 // Styled to match /first-record and /record's capture cards (gradient panel,
 // glow-shadowed icon circle, gradient pill buttons) rather than a flat
@@ -218,7 +221,7 @@ export default function ResumeSettingsPage() {
                     <MessageCircle size={11} /> Chat answers
                   </span>
                   <span className="flex items-center gap-1 rounded-pill bg-surface/70 px-2.5 py-1 text-[10.5px] font-semibold text-[#6d5fa8]">
-                    <Sparkles size={11} /> Resume lines
+                    <Sparkles size={11} /> Career stats
                   </span>
                 </div>
 
@@ -257,7 +260,7 @@ export default function ResumeSettingsPage() {
                 </div>
                 <p className="mt-4 text-base font-semibold text-[#3c3650]">No resume on file yet</p>
                 <p className="mt-1 text-xs text-[#8a82a8] max-w-xs">
-                  Upload a PDF and Strivo will quietly use it as background context in chats and memories.
+                  Upload a PDF and Strivo will quietly use it as background context in chats, and count its achievements toward your career stats.
                 </p>
 
                 {uploadError && (

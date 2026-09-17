@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
-import { getUserById, setResume, clearResume } from "@/lib/repo/users";
+import { getUserById, setResume, clearResume, setResumeStats } from "@/lib/repo/users";
+import { analyzeResumeCareerStats } from "@/lib/ai";
 import { rateLimitOrResponse } from "@/lib/rateLimit";
 import { nowIso } from "@/lib/db";
 
 // Stores the resume text a user already extracted client-side via the
 // existing /api/memories/extract endpoint (same PDF/docx/etc. parser Record
 // already uses for file-upload memories -- no need for a second extraction
-// pipeline here). This route only persists { text, filename } onto the user
-// row as background context (see resume_text's comment in repo/users.ts) --
-// it never touches the memories table.
+// pipeline here). This route persists { text, filename } onto the user row
+// as background context (see resume_text's comment in repo/users.ts) --
+// it never touches the memories table -- and also runs one lightweight,
+// counts-only stats pass over it (see analyzeResumeCareerStats in lib/ai.ts
+// and resume_stats_* in lib/repo/users.ts) shown as a supplementary line on
+// the Home stats card.
 //
 // Used from two places: the "Upload Resume (PDF)" option on /first-record
 // (onboarding, one-time), and settings/resume (anytime, upload/replace/
@@ -52,6 +56,16 @@ export async function POST(req: Request) {
   const text = parsed.data.text.length > MAX_CHARS ? `${parsed.data.text.slice(0, MAX_CHARS)}…` : parsed.data.text;
   const uploadedAt = nowIso();
   setResume(userId, text, parsed.data.filename, uploadedAt);
+
+  // One bounded AI call (counts only, see analyzeResumeCareerStats' own
+  // comment in lib/ai.ts) -- stamped even on failure/no-client so the Home
+  // card can tell "no resume" apart from "resume on file, stats
+  // unavailable." Never blocks the response on anything more than this
+  // single call -- there's no per-story loop here the way document uploads
+  // have, so no timeout risk to design around.
+  const stats = await analyzeResumeCareerStats(text);
+  setResumeStats(userId, stats, nowIso());
+
   return NextResponse.json({ hasResume: true, filename: parsed.data.filename, uploadedAt });
 }
 

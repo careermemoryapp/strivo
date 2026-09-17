@@ -15,6 +15,28 @@ export type CareerWrappedHomePreviewData = {
   strongestMuscle: string | null;
 };
 
+export type ResumeStatsData = { wins: number; leadership: number; problemsSolved: number; seniorStakeholder: number };
+
+// Turns the resume-only counts into one short, skimmable sentence, e.g.
+// "Your resume also shows 3 wins and 2 leadership moments — record them to
+// make them count." Skips any category that's zero rather than listing
+// "0 problems solved" -- see analyzeResumeCareerStats in lib/ai.ts for how
+// these are actually counted. Returns null if every category is zero
+// (page.tsx already filters this case out server-side, but this stays
+// defensive rather than assuming that).
+function formatResumeStatsLine(stats: ResumeStatsData): string | null {
+  const parts: string[] = [];
+  if (stats.wins > 0) parts.push(`${stats.wins} win${stats.wins === 1 ? "" : "s"}`);
+  if (stats.leadership > 0) parts.push(`${stats.leadership} leadership moment${stats.leadership === 1 ? "" : "s"}`);
+  if (stats.problemsSolved > 0) parts.push(`${stats.problemsSolved} problem${stats.problemsSolved === 1 ? "" : "s"} solved`);
+  if (stats.seniorStakeholder > 0) {
+    parts.push(`${stats.seniorStakeholder} senior-stakeholder interaction${stats.seniorStakeholder === 1 ? "" : "s"}`);
+  }
+  if (parts.length === 0) return null;
+  const joined = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+  return `Your resume also shows ${joined} — record them to make them count.`;
+}
+
 // The "very first thing" the spec asks for, right after Home's header --
 // deliberately richer (a stat grid, not just an icon+title+subtitle row)
 // than the recap/growth/benchmark teaser rows below it (see HomeClient.tsx)
@@ -34,7 +56,13 @@ export type CareerWrappedHomePreviewData = {
 // text, not a container fill), so this still reads as the "biggest" Home
 // section without going back to a filled panel.
 const BRAND_GRADIENT = "linear-gradient(135deg,#a78bfa,#60a5fa)";
-export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePreviewData }) {
+export function CareerWrappedHomePreview({
+  data,
+  resumeStats,
+}: {
+  data: CareerWrappedHomePreviewData;
+  resumeStats?: ResumeStatsData | null;
+}) {
   const router = useRouter();
 
   // Fired once per Home render this card actually shows -- see spec section
@@ -95,6 +123,15 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
           <Stat value={data.problemsSolvedCount} label="Problems solved" />
           <Stat value={data.seniorStakeholderCount} label="Senior-stakeholder interactions" />
         </div>
+
+        {/* Resume-only counts -- deliberately separate from the numbers
+            above, never added into them (see formatResumeStatsLine's own
+            comment for why: a resume is usually already a summary of things
+            a user may separately record in full, and merging the two risks
+            double-counting the same achievement). */}
+        {resumeStats && formatResumeStatsLine(resumeStats) && (
+          <p className="mt-3 text-[11.5px] text-ink-faint">{formatResumeStatsLine(resumeStats)}</p>
+        )}
 
         {data.tier === "full" && data.strongestMuscle && (
           <p className="mt-3.5 text-[11.5px] text-ink-faint">

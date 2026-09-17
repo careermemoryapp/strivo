@@ -139,6 +139,25 @@ export default async function HomePage() {
               strongestMuscle: careerWrapped.strongest_muscle,
             }
           : null,
+        // Supplementary "also seen in your resume" line under the Career
+        // Wrapped stats above (see analyzeResumeCareerStats in lib/ai.ts and
+        // the resume_stats_* migration comment in lib/db.ts) -- deliberately
+        // separate from careerWrapped above, never added into its numbers,
+        // since a resume is usually already a summary of things a user may
+        // separately record in full and merging the two would risk
+        // double-counting. Null when there's no resume on file, analysis
+        // hasn't completed, or it found nothing worth surfacing -- HomeClient
+        // only renders the line when there's a real, non-zero count.
+        resumeStats:
+          user?.resume_stats_computed_at &&
+          (user.resume_stats_wins || user.resume_stats_leadership || user.resume_stats_problems || user.resume_stats_stakeholder)
+            ? {
+                wins: user.resume_stats_wins ?? 0,
+                leadership: user.resume_stats_leadership ?? 0,
+                problemsSolved: user.resume_stats_problems ?? 0,
+                seniorStakeholder: user.resume_stats_stakeholder ?? 0,
+              }
+            : null,
       }}
     />
   );

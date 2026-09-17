@@ -60,7 +60,12 @@ function migrate(db: DatabaseSync) {
       resume_text TEXT,
       resume_filename TEXT,
       resume_uploaded_at TEXT,
-      resume_reminder_sent_at TEXT
+      resume_reminder_sent_at TEXT,
+      resume_stats_wins INTEGER,
+      resume_stats_leadership INTEGER,
+      resume_stats_problems INTEGER,
+      resume_stats_stakeholder INTEGER,
+      resume_stats_computed_at TEXT
     );
 
     CREATE TABLE IF NOT EXISTS memories (
@@ -1292,6 +1297,42 @@ function migrate(db: DatabaseSync) {
   // other column on this table -- see its own comment above.
   if (!notificationPrefColumns.includes("career_wrapped_signal")) {
     db.exec(`ALTER TABLE notification_prefs ADD COLUMN career_wrapped_signal INTEGER NOT NULL DEFAULT 1;`);
+  }
+
+  // Aggregate, COUNTS-ONLY read of a user's uploaded resume (see
+  // analyzeResumeCareerStats in lib/ai.ts) -- how many wins/leadership
+  // moments/problems solved/senior-stakeholder interactions the resume
+  // appears to describe, using the same classification bar Career Wrapped
+  // uses for a real recorded memory (see lib/careerWrapped.ts). Shown as a
+  // small supplementary "also seen in your resume" line on the Home stats
+  // card (see resumeStats in app/(app)/home/page.tsx) -- deliberately NEVER
+  // merged into the primary memory-derived numbers and never turned into
+  // actual Memory rows, since a resume is usually already a summary of
+  // things a user may separately record in full -- doing that would risk
+  // double-counting the same achievement twice. Computed once, synchronously,
+  // right when a resume is saved (see POST /api/profile/resume) -- a single
+  // bounded AI call, not the kind of unbounded per-story work that caused
+  // the 2026-09-17 upload timeout, so no background job needed. All null
+  // until a resume is uploaded; cleared together with the other resume_*
+  // columns on removal (see clearResume in lib/repo/users.ts).
+  // resume_stats_computed_at is null if analysis failed (e.g. no OpenAI
+  // client available) even though resume_text is set -- distinguishes "no
+  // resume" from "resume on file, stats not available" so the Home card
+  // never shows a false zero.
+  if (!userColumns.includes("resume_stats_wins")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_stats_wins INTEGER;`);
+  }
+  if (!userColumns.includes("resume_stats_leadership")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_stats_leadership INTEGER;`);
+  }
+  if (!userColumns.includes("resume_stats_problems")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_stats_problems INTEGER;`);
+  }
+  if (!userColumns.includes("resume_stats_stakeholder")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_stats_stakeholder INTEGER;`);
+  }
+  if (!userColumns.includes("resume_stats_computed_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN resume_stats_computed_at TEXT;`);
   }
 }
 

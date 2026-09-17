@@ -18,7 +18,7 @@ import { HOME_SUBTITLE, QUICK_ACTIONS } from "@/lib/config";
 import { timeOfDayGreeting } from "@/lib/utils";
 import { chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
-import { CareerWrappedHomePreview, type CareerWrappedHomePreviewData } from "@/components/CareerWrappedHomePreview";
+import { CareerWrappedHomePreview, type CareerWrappedHomePreviewData, type ResumeStatsData } from "@/components/CareerWrappedHomePreview";
 
 type HomeData = {
   user: { id: string; firstName: string; lastName: string; email: string } | null;
@@ -54,6 +54,12 @@ type HomeData = {
   // renders nothing at all in that case, same "hidden, not broken" contract
   // as every other feature-flagged surface in this app.
   careerWrapped: CareerWrappedHomePreviewData | null;
+  // Supplementary "also seen in your resume" counts (see
+  // analyzeResumeCareerStats in lib/ai.ts) -- shown as one small line under
+  // the careerWrapped stats above, never merged into that data. Null when
+  // there's no resume on file, analysis hasn't completed, or it found
+  // nothing worth surfacing.
+  resumeStats: ResumeStatsData | null;
   // "Roles you're ready for" -- up to 5 {title, industry} pairs, industry
   // null when the memories read as industry-agnostic (see
   // getLatestSuggestedRolesForUser in page.tsx). Null here means nothing's
@@ -405,7 +411,7 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           spec: this is meant to read as a core part of the product, not
           one more secondary digest teaser. Renders nothing at all when the
           career_wrapped feature flag is off (see page.tsx). */}
-      {data.careerWrapped && <CareerWrappedHomePreview data={data.careerWrapped} />}
+      {data.careerWrapped && <CareerWrappedHomePreview data={data.careerWrapped} resumeStats={data.resumeStats} />}
 
       {error && (
         <div className="px-5 pt-4">

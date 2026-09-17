@@ -562,14 +562,17 @@ export type DocumentStorySegment = { title: string; content: string };
 // whole document became exactly ONE memory with one blended title/summary/
 // competency set, which badly under-counts what's actually in it (Career
 // Wrapped stats, muscle scores, etc. all read one memory's worth of signal
-// instead of fifteen). Called by POST /api/memories only for long file
-// uploads (see MIN_CHARS_FOR_SPLIT_CHECK there) -- short uploads (a single
-// job description, a certificate) skip this call entirely to avoid the
-// extra latency/cost for documents that were never going to split anyway.
-// Returns [] (not an error) both when the document genuinely reads as ONE
-// piece and when it technically found only one story -- callers should
-// treat both the same as "don't split, use the normal single-memory path"
-// rather than adding batch-UI complexity for a single-item batch.
+// instead of fifteen). Called by POST /api/memories/split only for long
+// file uploads (see MIN_CHARS_FOR_SPLIT_CHECK there) -- short uploads (a
+// single job description, a certificate) skip this call entirely to avoid
+// the extra latency/cost for documents that were never going to split
+// anyway. That endpoint is deliberately its own small request -- see its
+// comment for why the story-saving loop lives on the client instead of
+// inside this same request. Returns [] (not an error) both when the
+// document genuinely reads as ONE piece and when it technically found only
+// one story -- callers should treat both the same as "don't split, use the
+// normal single-memory path" rather than adding batch-UI complexity for a
+// single-item batch.
 export async function splitDocumentIntoStories(text: string): Promise<DocumentStorySegment[] | null> {
   const openai = getClient();
   if (!openai || !text.trim()) return null;
@@ -620,6 +623,72 @@ export async function splitDocumentIntoStories(text: string): Promise<DocumentSt
     return stories.length >= 2 ? stories : [];
   } catch (err) {
     console.error("splitDocumentIntoStories failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
+export type ResumeCareerStats = {
+  wins: number;
+  leadershipMoments: number;
+  problemsSolved: number;
+  seniorStakeholderInteractions: number;
+};
+
+// A lightweight, COUNTS-ONLY read of a user's uploaded resume (see
+// resume_text in lib/repo/users.ts) -- deliberately NOT the same pipeline as
+// splitDocumentIntoStories/generateMemoryMetadata above, which create real,
+// individually-tagged Memory rows. A resume is usually already a summary of
+// things a user may ALSO separately record as full memories by voice/type/
+// upload, so turning it into its own set of memories would risk
+// double-counting the same achievement twice on the Career Wrapped stats
+// card. This instead returns just aggregate counts, shown as a small
+// supplementary "also seen in your resume" line on the Home stats card (see
+// resumeStats in app/(app)/home/page.tsx and setResumeStats in
+// lib/repo/users.ts) -- informational only, never merged into the primary
+// memory-derived numbers. Uses the same classification bar as a real
+// memory's competencies/mentions_senior_stakeholder (generateMemoryMetadata
+// above) so the two numbers mean the same thing, even though they're never
+// combined. Called once, synchronously, right when a resume is saved (see
+// POST /api/profile/resume) -- a single bounded call, not the kind of
+// unbounded per-story work that caused the 2026-09-17 upload timeout (see
+// the comment on POST /api/memories), so no background job is needed here.
+export async function analyzeResumeCareerStats(resumeText: string): Promise<ResumeCareerStats | null> {
+  const openai = getClient();
+  if (!openai || !resumeText.trim()) return null;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.2,
+      max_tokens: 300,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You read a resume and count how many genuinely distinct achievements it describes in each of these categories, using the same bar a career-memory app uses to classify a single recorded story -- don't inflate counts by treating routine job duties, skills lists, or section headers as achievements. " +
+            'Respond ONLY with JSON: {"wins": number, "leadershipMoments": number, "problemsSolved": number, "seniorStakeholderInteractions": number}. ' +
+            "wins: a real accomplishment with a concrete outcome or measurable impact -- a result, a percentage, a number, a clear before/after. " +
+            "leadershipMoments: genuinely led, managed, mentored, or directed other people -- not just 'worked with a team' or 'collaborated cross-functionally'. " +
+            "problemsSolved: resolved one specific, difficult problem, conflict, or crisis -- not routine day-to-day responsibilities. " +
+            "seniorStakeholderInteractions: presented to, negotiated with, or was reviewed by someone at VP/executive/C-suite level, or a client's own leadership -- not a regular manager or teammate. " +
+            "One bullet point can count toward more than one category. Count conservatively -- when genuinely unsure whether something qualifies, don't count it. Never invent an achievement that isn't actually described in the resume text.",
+        },
+        { role: "user", content: resumeText },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    const toCount = (v: unknown): number => (typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.round(v) : 0);
+    return {
+      wins: toCount(parsed.wins),
+      leadershipMoments: toCount(parsed.leadershipMoments),
+      problemsSolved: toCount(parsed.problemsSolved),
+      seniorStakeholderInteractions: toCount(parsed.seniorStakeholderInteractions),
+    };
+  } catch (err) {
+    console.error("analyzeResumeCareerStats failed:", err);
     Sentry.captureException(err);
     return null;
   }

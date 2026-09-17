@@ -48,6 +48,13 @@ const AI_GENERATED_SUBTEXT = [
 const ONE_MORE_THING_LABELS = ["One more thing —", "Quick follow-up —", "Curious about one thing —"];
 
 const MAX_RECORD_SECONDS = 2 * 60;
+// Mirrors MIN_CHARS_FOR_SPLIT_CHECK in app/api/memories/split/route.ts --
+// short-circuits the split-detection request client-side for anything that
+// was never going to be a genuine multi-story document (voice/typed notes,
+// short file uploads), rather than always making the round trip and having
+// the server immediately return an empty story list. The server enforces
+// this same floor independently either way.
+const MIN_CHARS_FOR_SPLIT_CHECK = 3000;
 // IANA media types, for FilePicker's `types` option -- replaces the old
 // extension-based accept="..." string now that file picking goes through
 // @capawesome/capacitor-file-picker instead of a raw <input type="file">.
@@ -149,13 +156,23 @@ function RecordPageInner() {
   const [assignedProjectName, setAssignedProjectName] = useState<string | null>(null);
 
   // Set instead of savedMemoryId when a long uploaded document turned out
-  // to be a collection of multiple stories (see splitFromDocument in
-  // app/api/memories/route.ts) -- each one is now its own real memory, so
-  // the success screen below shows a list instead of the single-memory
-  // fields (praise/resume line/reflective question/project assigner) that
-  // only ever describe ONE memory. Empty means "not a split" -- the normal
+  // to be a collection of multiple stories (see POST /api/memories/split
+  // and createMemory below) -- each one is now its own real memory, so the
+  // success screen below shows a list instead of the single-memory fields
+  // (praise/resume line/reflective question/project assigner) that only
+  // ever describe ONE memory. Empty means "not a split" -- the normal
   // single-memory success screen renders instead.
   const [splitMemories, setSplitMemories] = useState<{ id: string; title: string; competencies: string[] }[]>([]);
+  // How many of the stories a split document found couldn't be saved (each
+  // story is now its own separate request -- see the comment on
+  // createMemory below -- so one story failing doesn't lose the others).
+  // 0 for the normal case; shown as a small note on the batch success
+  // screen only when it's actually non-zero.
+  const [splitSaveFailedCount, setSplitSaveFailedCount] = useState(0);
+  // "Saving 3 of 18..." progress while a split document's stories are being
+  // saved one request at a time -- null outside of that (the plain
+  // single-memory save has no meaningful sub-progress to show).
+  const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
@@ -303,6 +320,8 @@ function RecordPageInner() {
     setAssignedProjectId(null);
     setAssignedProjectName(null);
     setSplitMemories([]);
+    setSplitSaveFailedCount(0);
+    setBatchProgress(null);
   }
 
   async function submitReflection() {
@@ -331,13 +350,106 @@ function RecordPageInner() {
       setSaveError("Add some content before creating a memory.");
       return;
     }
+    const trimmed = content.trim();
     setSaving(true);
     setSaveError(null);
+    setBatchProgress(null);
     try {
+      // Long file uploads only -- see MIN_CHARS_FOR_SPLIT_CHECK's comment.
+      // Voice/type stay single-memory unconditionally: those already carry
+      // the app's "one thought at a time" framing (see the Tips row above),
+      // so there's no reason to spend an extra AI call checking something
+      // that's essentially never going to be a bundled document.
+      let storySegments: { title: string; content: string }[] = [];
+      if (source === "file" && trimmed.length >= MIN_CHARS_FOR_SPLIT_CHECK) {
+        try {
+          const splitRes = await fetch("/api/memories/split", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ transcript: trimmed }),
+          });
+          if (splitRes.ok) {
+            const splitData = await splitRes.json();
+            if (Array.isArray(splitData.stories)) storySegments = splitData.stories;
+          }
+          // A non-ok response here (rate limit, transient error, etc.) just
+          // means "couldn't check -- treat it as one normal document,"
+          // never something that should block the save below.
+        } catch {
+          // Same reasoning -- split-detection is best-effort.
+        }
+      }
+
+      if (storySegments.length >= 2) {
+        // This document is a genuine collection of separate stories (the
+        // 35-page career-history case). Save each one as its OWN short
+        // request instead of one giant request doing 20-30 sequential AI
+        // calls -- see the comment on POST /api/memories/split for why
+        // that used to risk a proxy timeout on a genuinely story-rich
+        // document, even though the save itself had actually finished
+        // server-side by the time the client gave up on it. One story
+        // failing here doesn't lose the others -- each is independent.
+        const savedMemories: { id: string; title: string; competencies: string | null }[] = [];
+        const allMilestones: string[] = [];
+        let anyMetadataGenerated = false;
+        let failedCount = 0;
+
+        for (let i = 0; i < storySegments.length; i++) {
+          setBatchProgress({ current: i + 1, total: storySegments.length });
+          const story = storySegments[i];
+          try {
+            const res = await fetch("/api/memories", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ transcript: story.content, title: story.title, source: "file" }),
+            });
+            const data = await res.json();
+            if (!res.ok) throw new Error(data.error ?? "Failed to save");
+            savedMemories.push(data.memory);
+            if (Array.isArray(data.milestones)) allMilestones.push(...data.milestones);
+            if (data.aiMetadataGenerated) anyMetadataGenerated = true;
+          } catch {
+            failedCount++;
+          }
+        }
+
+        setBatchProgress(null);
+
+        if (savedMemories.length === 0) {
+          throw new Error("Couldn't save any of the stories in that document");
+        }
+
+        setSplitSaveFailedCount(failedCount);
+        setSavedMilestones(allMilestones);
+        setAiGenerated(anyMetadataGenerated);
+        // A long uploaded document turned out to be a collection of
+        // several distinct stories -- each one is now its own real memory.
+        // There's no single praise/competency/resume-line/reflective-
+        // question set to show (each story has its own, on its own
+        // memory), so this takes the batch success branch below instead of
+        // the single-memory fields.
+        setSplitMemories(
+          savedMemories.map((m) => ({
+            id: m.id,
+            title: m.title,
+            competencies: safeJsonParse<string[]>(m.competencies, []),
+          }))
+        );
+        setStage("success");
+        if (allMilestones.length > 0) {
+          setTimeout(() => setShowPraisePopup(true), 450);
+        }
+        return;
+      }
+
+      // Single-memory path -- unchanged behavior for voice, typed text,
+      // short file uploads, and any file upload the split check above
+      // decided (or couldn't determine) wasn't really a multi-story
+      // collection.
       const res = await fetch("/api/memories", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ transcript: content.trim(), source }),
+        body: JSON.stringify({ transcript: trimmed, source }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
@@ -345,28 +457,6 @@ function RecordPageInner() {
       const milestones: string[] = Array.isArray(data.milestones) ? data.milestones : [];
       setSavedMilestones(milestones);
       setAiGenerated(!!data.aiMetadataGenerated);
-
-      if (Array.isArray(data.memories)) {
-        // A long uploaded document turned out to be a collection of
-        // several distinct stories (see splitFromDocument in
-        // app/api/memories/route.ts) -- each one is now its own real
-        // memory. There's no single praise/competency/resume-line/
-        // reflective-question set to show (each story has its own, on its
-        // own memory), so this takes the batch success branch below
-        // instead of the single-memory fields.
-        setSplitMemories(
-          (data.memories as { id: string; title: string; competencies: string | null }[]).map((m) => ({
-            id: m.id,
-            title: m.title,
-            competencies: safeJsonParse<string[]>(m.competencies, []),
-          }))
-        );
-        setStage("success");
-        if (milestones.length > 0) {
-          setTimeout(() => setShowPraisePopup(true), 450);
-        }
-        return;
-      }
 
       setSavedMemoryId(data.memory.id);
       const competencies = safeJsonParse<string[]>(data.memory.competencies, []);
@@ -393,6 +483,7 @@ function RecordPageInner() {
       );
     } finally {
       setSaving(false);
+      setBatchProgress(null);
     }
   }
 
@@ -491,7 +582,7 @@ function RecordPageInner() {
   );
 
   // Multi-story split success screen -- a long uploaded document (see
-  // splitFromDocument in app/api/memories/route.ts) turned out to be a
+  // POST /api/memories/split and createMemory above) turned out to be a
   // collection of several distinct stories, each now its own real memory.
   // Deliberately a simpler screen than the single-memory one below (no
   // per-story praise popup, resume line, reflective question, or project
@@ -513,6 +604,14 @@ function RecordPageInner() {
               ? "That document had several separate stories, so Strivo.ai saved each one as its own memory, tagged on its own."
               : "We saved each story as its own memory. AI tagging didn't complete, but your words are safe — you can still view and search them."}
           </p>
+
+          {splitSaveFailedCount > 0 && (
+            <p className="mt-2 text-xs text-amber-600 max-w-xs">
+              {splitSaveFailedCount === 1
+                ? "One story in the document couldn't be saved — you can try uploading it again."
+                : `${splitSaveFailedCount} stories in the document couldn't be saved — you can try uploading it again.`}
+            </p>
+          )}
 
           <div className="mt-6 w-full space-y-2.5 text-left">
             {splitMemories.map((m) => (
@@ -897,7 +996,7 @@ function RecordPageInner() {
             style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
           >
             {saving && <Spinner className="border-white/40 border-t-white h-4 w-4" />}
-            Create Memory
+            {batchProgress ? `Saving story ${batchProgress.current} of ${batchProgress.total}…` : "Create Memory"}
           </button>
         </div>
       </div>
