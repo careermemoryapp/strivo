@@ -16,12 +16,17 @@ export type CareerWrappedHomePreviewData = {
 };
 
 // The "very first thing" the spec asks for, right after Home's header --
-// deliberately a bigger, richer card than the recap/growth/benchmark teaser
-// rows below it (see HomeClient.tsx) rather than one more entry in that
-// list, so it reads as a core part of the product rather than another
-// digest. Its own warm amber/pink "Wrapped" gradient keeps it visually
-// distinct from every other accent color already in use on Home (indigo =
-// recap, violet = growth, emerald = benchmark, rose = check-in).
+// deliberately richer (a stat grid, not just an icon+title+subtitle row)
+// than the recap/growth/benchmark teaser rows below it (see HomeClient.tsx)
+// so it reads as a core part of the product rather than another digest.
+// Free-flowing on the light body like every other Home section, though --
+// an earlier version wrapped this in a dark rounded panel, which (paired
+// with CareerProfileHomeHero's matching dark panel above it) read as two
+// floating boxes sitting on an otherwise all-white page. Its own warm
+// amber/pink "Wrapped" gradient still marks the stat bar / CTA button as
+// this feature's accent color (same convention as every other Home teaser
+// -- indigo = recap, violet = growth, emerald = benchmark, rose = check-in
+// -- see TEASER_ACCENTS), just not as a container background anymore.
 export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePreviewData }) {
   const router = useRouter();
 
@@ -42,31 +47,27 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
 
   if (data.tier === "empty") {
     return (
-      <div className="px-5 pt-4">
+      <div className="border-t border-[#ece5f5] mt-5 px-5 pt-6 text-center">
         <div
-          className="rounded-[18px] p-5 text-center"
-          style={{ background: "linear-gradient(135deg,#2a2140,#3a2145)" }}
+          className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-amber-500"
+          style={{ boxShadow: "0 6px 16px rgba(251,191,36,0.18)" }}
         >
-          <div
-            className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-white/10 text-amber-200"
-          >
-            <Sparkles size={19} />
-          </div>
-          <p className="text-sm font-semibold text-white">Your Career Wrapped is taking shape.</p>
-          <p className="mx-auto mt-1 max-w-[260px] text-[11.5px] text-white/60">
-            Add a few career memories and Strivo.ai will start discovering patterns in your career.
-          </p>
-          <button
-            onClick={() => {
-              trackEvent("career_wrapped_add_memory_clicked", { source: "home_preview_empty" });
-              router.push("/record");
-            }}
-            className="mt-3.5 rounded-pill px-5 py-2.5 text-xs font-semibold text-white"
-            style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
-          >
-            Record a memory
-          </button>
+          <Sparkles size={19} />
         </div>
+        <p className="text-sm font-semibold text-[#3c3650]">Your Career Wrapped is taking shape.</p>
+        <p className="mx-auto mt-1 max-w-[260px] text-[11.5px] text-ink-faint">
+          Add a few career memories and Strivo.ai will start discovering patterns in your career.
+        </p>
+        <button
+          onClick={() => {
+            trackEvent("career_wrapped_add_memory_clicked", { source: "home_preview_empty" });
+            router.push("/record");
+          }}
+          className="mt-3.5 rounded-pill px-5 py-2.5 text-xs font-semibold text-white"
+          style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
+        >
+          Record a memory
+        </button>
       </div>
     );
   }
@@ -74,17 +75,11 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
   const showLockedMuscle = data.tier === "basic" || data.tier === "patterns";
 
   return (
-    <div className="px-5 pt-4">
-      <button
-        onClick={openCareerWrapped}
-        className="w-full rounded-[18px] p-5 text-left"
-        style={{ background: "linear-gradient(135deg,#2a2140,#3a2145)" }}
-      >
+    <div className="border-t border-[#ece5f5] mt-5 px-5 pt-5">
+      <button onClick={openCareerWrapped} className="w-full text-left">
         <div className="flex items-center justify-between">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-amber-200/80">
-            Your Career
-          </p>
-          <ChevronRight size={16} className="shrink-0 text-white/40" />
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Your Career</p>
+          <ChevronRight size={16} className="shrink-0 text-[#cec7dd]" />
         </div>
 
         <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
@@ -95,12 +90,12 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
         </div>
 
         {data.tier === "full" && data.strongestMuscle && (
-          <p className="mt-3.5 text-[11.5px] text-white/60">
-            Strongest career muscle: <span className="font-semibold text-white/90">{data.strongestMuscle}</span>
+          <p className="mt-3.5 text-[11.5px] text-ink-faint">
+            Strongest career muscle: <span className="font-semibold text-ink">{data.strongestMuscle}</span>
           </p>
         )}
         {showLockedMuscle && (
-          <p className="mt-3.5 flex items-center gap-1.5 text-[11.5px] text-white/45">
+          <p className="mt-3.5 flex items-center gap-1.5 text-[11.5px] text-ink-faint">
             <Lock size={11} /> Strongest career muscle — add more memories to discover
           </p>
         )}
@@ -119,8 +114,8 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
 function Stat({ value, label }: { value: number; label: string }) {
   return (
     <div>
-      <p className="text-2xl font-bold text-white">{value}</p>
-      <p className="text-[11px] leading-tight text-white/55">{label}</p>
+      <p className="text-2xl font-bold text-ink">{value}</p>
+      <p className="text-[11px] leading-tight text-ink-faint">{label}</p>
     </div>
   );
 }

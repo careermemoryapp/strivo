@@ -9,9 +9,15 @@ import type { CareerProfileProgress } from "@/lib/repo/careerProfile";
 // The Career Profile "front door" on Home -- deliberately placed ahead of
 // CareerWrappedHomePreview (see HomeClient.tsx) so a brand-new, zero-data
 // user sees something fun and immediately personal before anything that
-// depends on real memory evidence. Same card-shape convention as
-// CareerWrappedHomePreview.tsx (px-5 wrapper, rounded-[18px] dark panel) so
-// the two read as siblings.
+// depends on real memory evidence. Free-flowing on the light body, same
+// border-t-hairline-plus-spacing convention as every other Home section
+// (see HomeClient.tsx's own comment on DARK) -- an earlier version wrapped
+// this in a dark rounded panel, which read as a floating card sitting on
+// top of an otherwise all-white page ("two parts in between that are
+// blue"). The amber/pink gradient stays on the progress bar and CTA
+// button only -- that's this feature's own accent color, same convention
+// every other Home teaser already uses (see TEASER_ACCENTS), not a
+// container background.
 //
 // DELIBERATELY CONDENSED (product feedback): this used to list all 5 quiz
 // rows inline, which made Home feel long. Home's job now is just to say
@@ -55,33 +61,31 @@ export function CareerProfileHomeHero({ progress }: { progress: CareerProfilePro
   const ctaLabel = isZero ? "Start discovering" : progress.isComplete ? "Reveal my Career Card" : "Continue discovering";
 
   return (
-    <div className="px-5 pt-4">
-      <div className="w-full rounded-[18px] p-5" style={{ background: "linear-gradient(135deg,#2a2140,#3a2145)" }}>
-        <button onClick={() => router.push("/career-profile")} className="flex w-full items-center justify-between text-left">
-          <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-amber-200/80">
-            <Sparkles size={12} /> Career Profile
-          </p>
-          <ChevronRight size={16} className="shrink-0 text-white/40" />
-        </button>
+    <div className="border-t border-[#ece5f5] mt-5 px-5 pt-5">
+      <button onClick={() => router.push("/career-profile")} className="flex w-full items-center justify-between text-left">
+        <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+          <Sparkles size={12} className="text-amber-500" /> Career Profile
+        </p>
+        <ChevronRight size={16} className="shrink-0 text-[#cec7dd]" />
+      </button>
 
-        <p className="mt-2.5 text-[15px] font-bold leading-snug text-white">{headline}</p>
-        <p className="mt-1 text-[11.5px] text-white/60">{subtitle}</p>
+      <p className="mt-2.5 text-[15px] font-bold leading-snug text-ink">{headline}</p>
+      <p className="mt-1 text-[11.5px] text-ink-faint">{subtitle}</p>
 
-        <div className="mt-3.5 h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full"
-            style={{ width: `${(progress.completedCount / progress.totalCount) * 100}%`, background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
-          />
-        </div>
-
-        <button
-          onClick={handleCta}
-          className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-pill py-2.5 text-xs font-semibold text-white"
-          style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
-        >
-          {ctaLabel} <ChevronRight size={13} />
-        </button>
+      <div className="mt-3.5 h-1.5 w-full overflow-hidden rounded-full bg-[#f0ecf9]">
+        <div
+          className="h-full rounded-full"
+          style={{ width: `${(progress.completedCount / progress.totalCount) * 100}%`, background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
+        />
       </div>
+
+      <button
+        onClick={handleCta}
+        className="mt-4 flex w-full items-center justify-center gap-1.5 rounded-pill py-2.5 text-xs font-semibold text-white"
+        style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)" }}
+      >
+        {ctaLabel} <ChevronRight size={13} />
+      </button>
     </div>
   );
 }
