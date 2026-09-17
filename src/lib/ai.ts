@@ -617,6 +617,13 @@ export type DocumentStorySegment = { title: string; content: string };
 // one story -- callers should treat both the same as "don't split, use the
 // normal single-memory path" rather than adding batch-UI complexity for a
 // single-item batch.
+//
+// The split boundary is the PROJECT/achievement, not the employer (founder
+// feedback: a resume with four companies shouldn't become exactly four
+// stories) -- see the system prompt below for the actual instruction. One
+// job can genuinely contain several distinct projects that each deserve
+// their own story, so the story count is expected to run higher than the
+// number of roles/companies on the resume, not match it.
 export async function splitDocumentIntoStories(text: string): Promise<DocumentStorySegment[] | null> {
   const openai = getClient();
   if (!openai || !text.trim()) return null;
@@ -637,7 +644,8 @@ export async function splitDocumentIntoStories(text: string): Promise<DocumentSt
             "You read an uploaded document (resume, career journal, self-review, portfolio, etc.) for a career-memory app and decide whether it's really ONE continuous piece, or a COLLECTION of multiple distinct stories/experiences/achievements bundled into one file. " +
             'Respond ONLY with JSON: {"isCollection": boolean, "stories": [{"title": string, "content": string}]}. ' +
             "isCollection: true only when the document genuinely contains multiple SEPARATE experiences that each deserve to be their own memory (e.g. several different projects, roles, or achievements) -- not just one narrative told across several paragraphs, and not a resume's routine section headers (Skills, Education, contact info) that aren't stories at all. " +
-            "If isCollection is true, split it into up to 30 stories, each capturing ONE distinct experience. For each: title is a short (<=8 word) working title; content is that story's own full detail, preserving every concrete specific already in the document (numbers, names, outcomes, dates) rather than summarizing them away -- this text gets analyzed further downstream -- but you don't need to reproduce filler wording verbatim. Skip anything that isn't a real story (a bare skills list, contact info, an empty section header). " +
+            "The unit of a story is a distinct PROJECT, initiative, or achievement -- NEVER default to one story per employer or job title. A single role at one company very often contains several separate projects or accomplishments (e.g. 'led the platform migration', 'negotiated the vendor contract', 'built the onboarding funnel' could all be one job at one company), and each one that has enough real detail to stand on its own should become its OWN story rather than being merged into a single 'my time at Company X' blob -- so a four-company resume can easily produce ten or more stories, not four. At the same time, don't invent a split where a role's bullet points describe only one continuous piece of work -- only split what the document actually distinguishes as separate efforts. Company and job-title names are context to carry into each story's content (and title if it helps), never the boundary that decides where one story ends and the next begins. " +
+            "If isCollection is true, split it into up to 30 stories, each capturing ONE distinct experience. For each: title is a short (<=8 word) working title (name the project/achievement, not just the employer); content is that story's own full detail, preserving every concrete specific already in the document (numbers, names, outcomes, dates) rather than summarizing them away -- this text gets analyzed further downstream -- but you don't need to reproduce filler wording verbatim. Skip anything that isn't a real story (a bare skills list, contact info, an empty section header). " +
             "If the document begins with a line like 'Document note from the user: ...', treat that as context about the whole document, never as a story itself. " +
             "If isCollection is false, return an empty stories array -- the caller treats the whole document as one memory in that case. " +
             "Never invent a story, detail, or number that isn't actually in the document.",

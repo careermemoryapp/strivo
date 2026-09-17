@@ -239,6 +239,15 @@ function ResumeStatsUploadCta({
 // same reasoning for why it's a link rather than an automatic conversion as
 // ResumeStatsUploadCta (see its comment) -- only the copy differs, since
 // there are no real counts yet to cite.
+// Bold, centered and a size up from every other line on this card
+// (deliberately, unlike ResumeStatsUploadCta's quieter treatment just above)
+// -- founder feedback was that a first-time visitor staring at an otherwise
+// empty "taking shape" card needs to instantly see the one thing to do next
+// rather than hunt for a small subtle link, since this IS the primary
+// action for that visitor (the ready-made resume, not the blank-slate
+// "Record a memory" button, is the fast path). Still plain text + chevron,
+// not a filled pill, so it doesn't visually compete with "Record a memory"
+// above it for which one is the button.
 function ResumeUploadStarterCta({
   router,
   className,
@@ -252,10 +261,10 @@ function ResumeUploadStarterCta({
         trackEvent("resume_upload_starter_clicked", { source: "home_preview_empty" });
         router.push("/record?mode=upload");
       }}
-      className={`inline-flex items-center gap-1.5 text-left text-[11.5px] text-[#6d5fa8] ${className ?? ""}`}
+      className={`mx-auto flex max-w-[280px] items-center justify-center gap-1.5 text-center text-sm font-bold text-[#6d5fa8] ${className ?? ""}`}
     >
       <span>Or start by uploading your resume — we&apos;ll turn it into stories for you.</span>
-      <ChevronRight size={13} className="shrink-0" />
+      <ChevronRight size={14} className="shrink-0" />
     </button>
   );
 }
