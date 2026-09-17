@@ -107,11 +107,13 @@ export function CareerWrappedHomePreview({ data }: { data: CareerWrappedHomePrev
           </p>
         )}
 
-        <div
-          className="mt-4 inline-flex items-center gap-1.5 rounded-pill px-4 py-2 text-xs font-semibold text-white"
-          style={{ background: BRAND_GRADIENT }}
-        >
-          View my Career Wrapped <ChevronRight size={13} />
+        <div className="mt-4 flex justify-center">
+          <div
+            className="inline-flex items-center gap-1.5 rounded-pill px-4 py-2 text-xs font-semibold text-white"
+            style={{ background: BRAND_GRADIENT }}
+          >
+            View my Career Wrapped <ChevronRight size={13} />
+          </div>
         </div>
       </button>
     </div>

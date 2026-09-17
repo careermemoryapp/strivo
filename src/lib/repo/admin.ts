@@ -41,6 +41,21 @@ export type AdminMetrics = {
   // last 7 days — a rough stickiness/retention proxy until there's real
   // session tracking.
   recordedLast7dRate: number;
+  // Career Profile Cards generated on the public, no-login quiz
+  // (strivo.ai/quiz) — the only server-side signal of quiz engagement that
+  // exists today. The public scoring endpoint
+  // (api/public/career-profile/[quizId]/score) is a pure function with NO
+  // db write, and a visitor's progress across the 5 quizzes lives only in
+  // their own browser's localStorage — so there's no way to count quiz
+  // *attempts* or partial completions yet, only people who finished all 5
+  // and got as far as generating a shareable card
+  // (career_profile_public_shares). If per-quiz or funnel/drop-off
+  // tracking is ever wanted, that needs a new db write added to the score
+  // route itself, not just a new read here.
+  totalCareerProfileCards: number;
+  careerProfileCardsToday: number;
+  careerProfileCardsThisWeek: number;
+  dailyCareerProfileCards: { date: string; count: number }[];
 };
 
 function isoDaysAgo(days: number): string {
@@ -123,7 +138,7 @@ function activeUsersSince(iso: string): number {
 // bucketing in JS (rather than a SQL GROUP BY on a computed column) is the
 // same tradeoff activeUsersTrend below already makes -- cheap at this data
 // scale, and simpler than teaching SQLite an IST-aware date expression.
-function dailyCounts(table: "users" | "memories", days = 30): { date: string; count: number }[] {
+function dailyCounts(table: "users" | "memories" | "career_profile_public_shares", days = 30): { date: string; count: number }[] {
   const db = getDb();
   const rows = db
     .prepare(`SELECT created_at FROM ${table} WHERE created_at >= ?`)
@@ -244,6 +259,16 @@ export function computeAdminMetrics(): AdminMetrics {
   );
   const recordedLast7dRate = totalUsers > 0 ? recordedLast7d / totalUsers : 0;
 
+  const totalCareerProfileCards = count(`SELECT COUNT(*) as c FROM career_profile_public_shares`);
+  const careerProfileCardsToday = count(
+    `SELECT COUNT(*) as c FROM career_profile_public_shares WHERE created_at >= ?`,
+    istMidnightUtcDaysAgo(0)
+  );
+  const careerProfileCardsThisWeek = count(
+    `SELECT COUNT(*) as c FROM career_profile_public_shares WHERE created_at >= ?`,
+    istMidnightUtcDaysAgo(6)
+  );
+
   return {
     totalUsers,
     newUsersToday,
@@ -268,6 +293,10 @@ export function computeAdminMetrics(): AdminMetrics {
     topCategories,
     zeroMemoryUsers,
     recordedLast7dRate,
+    totalCareerProfileCards,
+    careerProfileCardsToday,
+    careerProfileCardsThisWeek,
+    dailyCareerProfileCards: dailyCounts("career_profile_public_shares"),
   };
 }
 

@@ -77,7 +77,11 @@ export function PublicQuizHubClient() {
         style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}
         aria-hidden="true"
       />
-      <DarkHeader wordmark right={<span className="text-[11px] font-semibold text-white/45">{APP_NAME}.ai</span>} />
+      <DarkHeader
+        wordmark
+        wordmarkHref="/"
+        right={<span className="text-[11px] font-semibold text-white/45">{APP_NAME}.ai</span>}
+      />
 
       <motion.div initial="hidden" animate="show" variants={stagger} className="px-5 pt-5 space-y-5">
         <motion.div variants={variants}>

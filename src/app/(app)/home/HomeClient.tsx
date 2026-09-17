@@ -2,6 +2,7 @@
 
 import { useState, useCallback, FormEvent, ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   ChevronRight, Sparkles, ArrowUp, Mic, Clock, CalendarDays, TrendingUp, Scale, MessageCircleQuestion, MessageSquare, Flame,
 } from "lucide-react";
@@ -259,12 +260,14 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
             sublabel="Tap the mic, speak freely"
             onClick={() => router.push("/record")}
           />
+          <FlowStepConnector />
           <FlowButton
             icon={<Sparkles size={17} />}
             label="2. Create memory"
             sublabel="Transcribed & tagged for you"
             onClick={() => router.push("/record?mode=type")}
           />
+          <FlowStepConnector />
           <FlowButton
             icon={<MessageSquare size={17} />}
             label="3. Chat"
@@ -447,6 +450,41 @@ function FlowButton({ icon, label, sublabel, onClick }: { icon: ReactNode; label
       <p className="text-[11px] font-semibold leading-tight text-ink">{label}</p>
       <p className="text-[9.5px] leading-tight text-ink-faint">{sublabel}</p>
     </button>
+  );
+}
+
+// The gap between two FlowButtons -- a short animated line with dots
+// traveling left-to-right, same idea (and same purple->blue dot colors,
+// see BRAND_GRADIENT above) as the marketing site's own FlowConnector
+// between its "right when you record" / "builds automatically" cards
+// (MarketingHome.tsx), just narrower for this compact three-in-a-row
+// layout. Reads as Record -> Create memory -> Chat actually flowing into
+// each other rather than three unrelated buttons sitting side by side.
+// flex-shrink-0 so it takes a small fixed width and never eats into the
+// buttons' own flex-1 space; mt-[30px] lines it up with the icon
+// circles' vertical center (py-3 top padding + half the h-9 circle).
+function FlowStepConnector() {
+  const dots = [0, 0.45, 0.9];
+  return (
+    <div className="mt-[30px] flex w-4 flex-shrink-0 self-start items-center justify-center" aria-hidden="true">
+      <div
+        className="relative h-[2px] w-full overflow-hidden rounded-full"
+        style={{ background: "linear-gradient(90deg, rgba(167,139,250,0.35), rgba(96,165,250,0.35))" }}
+      >
+        {dots.map((delay, i) => (
+          <motion.span
+            key={i}
+            className="absolute top-1/2 h-1 w-1 -translate-y-1/2 rounded-full"
+            style={{
+              background: i % 2 === 0 ? "#a78bfa" : "#60a5fa",
+              boxShadow: `0 0 4px ${i % 2 === 0 ? "#a78bfa" : "#60a5fa"}`,
+            }}
+            animate={{ left: ["0%", "100%"] }}
+            transition={{ duration: 1.3, repeat: Infinity, ease: "linear", delay }}
+          />
+        ))}
+      </div>
+    </div>
   );
 }
 

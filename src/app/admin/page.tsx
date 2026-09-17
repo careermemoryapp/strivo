@@ -1396,6 +1396,30 @@ export default function AdminDashboardPage() {
             </section>
 
             <section className="mt-8">
+              <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+                Career Profile quiz (strivo.ai/quiz)
+              </p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <StatCard
+                  label="Cards generated"
+                  value={String(metrics.totalCareerProfileCards)}
+                  hint="All-time, public + in-app"
+                />
+                <StatCard label="Generated today" value={String(metrics.careerProfileCardsToday)} />
+                <StatCard label="Generated this week" value={String(metrics.careerProfileCardsThisWeek)} />
+              </div>
+              <p className="mt-2 text-[11px] text-ink-faint">
+                Counts people who finished all 5 quizzes and generated a shareable card. The quiz itself doesn&apos;t
+                record who starts or partway completes it yet — that would need a separate tracking change.
+              </p>
+              <div className="mt-3">
+                <ChartCard title="Career Profile Cards generated — last 30 days">
+                  <TrendLineChart data={metrics.dailyCareerProfileCards} color="#f59e0b" />
+                </ChartCard>
+              </div>
+            </section>
+
+            <section className="mt-8">
               <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Retention</p>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <StatCard

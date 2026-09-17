@@ -2,6 +2,7 @@
 
 import { ReactNode } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { ChevronLeft } from "lucide-react";
 import { LogoMark } from "@/components/Logo";
 
@@ -15,6 +16,7 @@ export function DarkHeader({
   back,
   logoMark,
   wordmark,
+  wordmarkHref,
   avatarRight,
   right,
   inlineTitle,
@@ -28,6 +30,13 @@ export function DarkHeader({
   logoMark?: boolean;
   /** Full "Strivo" logo + wordmark (root screens, or standalone on detail screens). */
   wordmark?: boolean;
+  /** When set, the wordmark becomes a link to this path (e.g. "/" on a
+   *  public marketing page, so it behaves like every other site's logo).
+   *  Left undefined on the in-app root screens (Home/Memories/Chats/Record)
+   *  where it's purely decorative -- those already live one tap from Home
+   *  via the bottom nav, so a second "go home" affordance isn't needed
+   *  there and could be surprising next to `back` on a detail screen. */
+  wordmarkHref?: string;
   /** Right-aligned slot, typically an Avatar button (root screens). */
   avatarRight?: ReactNode;
   /** Right-aligned slot for anything else (e.g. a menu button on detail screens). */
@@ -77,12 +86,18 @@ export function DarkHeader({
               <LogoMark size={17} />
             </div>
           )}
-          {wordmark && (
-            <div className="flex items-center gap-2">
-              <LogoMark size={30} />
-              <span className="text-[16px] font-bold tracking-tight text-white">Strivo</span>
-            </div>
-          )}
+          {wordmark &&
+            (wordmarkHref ? (
+              <Link href={wordmarkHref} className="flex items-center gap-2">
+                <LogoMark size={30} />
+                <span className="text-[16px] font-bold tracking-tight text-white">Strivo</span>
+              </Link>
+            ) : (
+              <div className="flex items-center gap-2">
+                <LogoMark size={30} />
+                <span className="text-[16px] font-bold tracking-tight text-white">Strivo</span>
+              </div>
+            ))}
           {(inlineTitle || inlineSubtitle) && (
             <div className="min-w-0">
               {inlineTitle && <h1 className="truncate text-[15px] font-bold text-white">{inlineTitle}</h1>}
