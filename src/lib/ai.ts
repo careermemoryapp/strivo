@@ -516,10 +516,34 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
   const openai = getClient();
   if (!openai || memories.length === 0) return null;
   try {
+    // IMPORTANT: includes a raw transcript excerpt alongside the summary,
+    // not just the summary alone. m.summary is "third-person-neutral,
+    // 1-2 sentences" (see generateMemoryMetadata's own prompt) -- built to
+    // be a compact recap of what the person DID, not a guarantee that it
+    // preserves which employer/client/sector the story was about. A story
+    // that names "the gigafactory client" or "Capgemini's automotive
+    // practice" in the person's own words can easily summarize down to
+    // "led a plant expansion project" with the industry dropped, since
+    // that's still a perfectly good, factual summary of the ACTION. Before
+    // this fix, this function only ever saw that summary (the transcript
+    // fallback below only fired for the rare memory with no summary at
+    // all) -- so even a person who consistently names their industry when
+    // recording had that signal silently stripped out one step upstream,
+    // and every role came back "industry": null regardless of prompt
+    // wording (founder-reported: memories DO name the industry, the model
+    // just never saw it). Excerpting the actual transcript here, not just
+    // relying on the summary, is the fix -- see the system prompt below
+    // for how it's used.
     const listing = memories
       .map((m) => {
         const competencies = safeParseStringArray(m.competencies);
-        return `- "${m.title}"${competencies.length ? ` [${competencies.join(", ")}]` : ""}: ${m.summary ?? m.transcript.slice(0, 300)}`;
+        const transcriptExcerpt =
+          m.transcript.length > 400 ? `${m.transcript.slice(0, 400)}…` : m.transcript;
+        return (
+          `- "${m.title}"${competencies.length ? ` [${competencies.join(", ")}]` : ""}\n` +
+          `  Summary: ${m.summary ?? "(none)"}\n` +
+          `  In their own words: ${transcriptExcerpt}`
+        );
       })
       .join("\n");
     const completion = await openai.chat.completions.create({
@@ -531,7 +555,8 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
           role: "system",
           content:
             "You are a career coach reviewing someone's personal career memories (from a career-memory app) to name roles they're genuinely ready for RIGHT NOW. " +
-            "You'll be given a list of memories (title, optional competencies, summary). " +
+            "You'll be given a list of memories, each with a title, optional competencies, a short third-person summary, AND an excerpt of the person's OWN WORDS (their original transcript). " +
+            "The summary is a compact recap of what they DID and can leave out which employer, client, or sector the story was about even when the person's own words clearly named it -- so for industry specifically, always check the 'In their own words' excerpt, not just the summary. " +
             'Respond ONLY with JSON: {"roles": [{"title": string, "industry": string or null, "reasoning": string}]}. ' +
             "Up to 5 roles, best fit first. Every role must be directly supported by concrete evidence across these memories (skills actually demonstrated, scope of responsibility, kind of work actually done) -- never invent a role that isn't backed by what's actually here, and return fewer than 5 (even zero, as an empty array) rather than padding with a weak fit. " +
             "industry: only set this to a specific industry or sector (e.g. 'Automotive', 'Renewable Energy', 'Technology / SaaS') when the memories themselves clearly point at one -- a company, sector, or domain actually mentioned or strongly implied. If the memories show transferable skills without pointing at a specific field, set industry to null -- do NOT guess an industry just because it's a common pairing for that role title. " +
