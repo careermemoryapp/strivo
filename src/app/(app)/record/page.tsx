@@ -148,14 +148,38 @@ function RecordPageInner() {
   const [assignedProjectId, setAssignedProjectId] = useState<string | null>(null);
   const [assignedProjectName, setAssignedProjectName] = useState<string | null>(null);
 
+  // Set instead of savedMemoryId when a long uploaded document turned out
+  // to be a collection of multiple stories (see splitFromDocument in
+  // app/api/memories/route.ts) -- each one is now its own real memory, so
+  // the success screen below shows a list instead of the single-memory
+  // fields (praise/resume line/reflective question/project assigner) that
+  // only ever describe ONE memory. Empty means "not a split" -- the normal
+  // single-memory success screen renders instead.
+  const [splitMemories, setSplitMemories] = useState<{ id: string; title: string; competencies: string[] }[]>([]);
+
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
 
   const [extracting, setExtracting] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadedFileName, setUploadedFileName] = useState<string | null>(null);
+  // Optional context the user can add about what the uploaded document
+  // actually is (e.g. "my career history before my MBA") -- folded into
+  // the saved transcript as a short prefix (see `content` below) rather
+  // than a separate field, so it flows through the exact same AI pipeline
+  // (title/summary/tags, and the multi-story split for long documents --
+  // see splitDocumentIntoStories in lib/ai.ts) as everything else, with no
+  // new plumbing needed. Purely optional -- never blocks Create Memory.
+  const [uploadNote, setUploadNote] = useState("");
 
-  const content = mode === "voice" ? speech.fullText : mode === "type" ? typedText : uploadText;
+  const content =
+    mode === "voice"
+      ? speech.fullText
+      : mode === "type"
+        ? typedText
+        : uploadNote.trim()
+          ? `Document note from the user: ${uploadNote.trim()}\n\n${uploadText}`
+          : uploadText;
   const source: Source = mode === "voice" ? "voice" : mode === "type" ? "text" : "file";
 
   // 2-minute cap on a single recording stretch — auto-stops and locks the
@@ -202,6 +226,7 @@ function RecordPageInner() {
     setExtracting(true);
     setUploadError(null);
     setUploadText("");
+    setUploadNote("");
     try {
       // See lib/nativePlatform.ts -- has to mark this resume as expected or
       // Providers.tsx's reload-on-resume wipes this in-flight pick before
@@ -256,6 +281,7 @@ function RecordPageInner() {
     speech.reset();
     setTypedText("");
     setUploadText("");
+    setUploadNote("");
     setSaveError(null);
     setUploadError(null);
     setUploadedFileName(null);
@@ -276,6 +302,7 @@ function RecordPageInner() {
     setSavedProjectSuggestion(null);
     setAssignedProjectId(null);
     setAssignedProjectName(null);
+    setSplitMemories([]);
   }
 
   async function submitReflection() {
@@ -314,14 +341,38 @@ function RecordPageInner() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to save");
-      setSavedMemoryId(data.memory.id);
+
+      const milestones: string[] = Array.isArray(data.milestones) ? data.milestones : [];
+      setSavedMilestones(milestones);
       setAiGenerated(!!data.aiMetadataGenerated);
+
+      if (Array.isArray(data.memories)) {
+        // A long uploaded document turned out to be a collection of
+        // several distinct stories (see splitFromDocument in
+        // app/api/memories/route.ts) -- each one is now its own real
+        // memory. There's no single praise/competency/resume-line/
+        // reflective-question set to show (each story has its own, on its
+        // own memory), so this takes the batch success branch below
+        // instead of the single-memory fields.
+        setSplitMemories(
+          (data.memories as { id: string; title: string; competencies: string | null }[]).map((m) => ({
+            id: m.id,
+            title: m.title,
+            competencies: safeJsonParse<string[]>(m.competencies, []),
+          }))
+        );
+        setStage("success");
+        if (milestones.length > 0) {
+          setTimeout(() => setShowPraisePopup(true), 450);
+        }
+        return;
+      }
+
+      setSavedMemoryId(data.memory.id);
       const competencies = safeJsonParse<string[]>(data.memory.competencies, []);
       setSavedCompetencies(competencies);
       setSavedPraise(data.memory.praise ?? null);
       setSavedResumeLine(data.memory.resume_line ?? null);
-      const milestones: string[] = Array.isArray(data.milestones) ? data.milestones : [];
-      setSavedMilestones(milestones);
       setSavedReflectiveQuestion(data.memory.reflective_question ?? null);
       setSavedProjectSuggestion(data.projectSuggestion ?? null);
       setStage("success");
@@ -343,6 +394,163 @@ function RecordPageInner() {
     } finally {
       setSaving(false);
     }
+  }
+
+  // Shared between the single-memory and the multi-story split success
+  // screens below -- the milestone popup only ever depends on
+  // savedMilestones/savedPraise/savedCompetencies/savedResumeLine, none of
+  // which are specific to which success screen is showing. Factored out
+  // once rather than duplicated so the two screens can't quietly drift
+  // apart on this shared piece.
+  const praisePopup = showPraisePopup && (savedPraise || savedMilestones.length > 0) && (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-5 pb-5 sm:items-center sm:pb-0"
+      onClick={() => setShowPraisePopup(false)}
+    >
+      <div
+        className="w-full max-w-sm rounded-[22px] bg-surface p-6 text-center"
+        style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.28)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className={cn(
+            "mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full",
+            savedPraise ? "bg-amber-50 text-amber-500" : "bg-indigo-50 text-indigo-500"
+          )}
+          style={{ boxShadow: savedPraise ? "0 8px 20px rgba(245,158,11,0.2)" : "0 8px 20px rgba(99,102,241,0.2)" }}
+        >
+          {savedPraise ? <SparklesIcon size={26} /> : <Award size={26} />}
+        </div>
+
+        {/* Milestones -- small, earned, one-time badges. Shown above
+            the competency/praise section (if any) since a milestone
+            is the rarer, more special event of the two. */}
+        {savedMilestones.length > 0 && (
+          <div className="flex flex-col items-center gap-1.5">
+            {savedMilestones.map((m) => (
+              <span
+                key={m}
+                className="flex items-center gap-1.5 rounded-pill bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600"
+              >
+                <Award size={13} /> {m}
+              </span>
+            ))}
+          </div>
+        )}
+
+        {savedPraise && (
+          <>
+            {savedCompetencies.length > 0 && (
+              <div className={cn("flex flex-wrap justify-center gap-1.5", savedMilestones.length > 0 && "mt-3")}>
+                {savedCompetencies.map((c) => (
+                  <span key={c} className="rounded-pill bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
+                    {c}
+                  </span>
+                ))}
+              </div>
+            )}
+            <p className="mt-3 text-[15px] leading-relaxed text-ink">{savedPraise}</p>
+          </>
+        )}
+
+        {/* Immediately usable, not just a compliment -- a real resume
+            bullet pulled from this specific story, with any numbers
+            in the transcript worked in. Always English (see
+            resumeLine in generateMemoryMetadata, lib/ai.ts) even when
+            the memory itself was recorded in Hindi, since that's the
+            resume convention here. */}
+        {savedResumeLine && (
+          <div className="mt-4 rounded-[12px] border border-[#ece5f5] bg-[#f9f8fc] p-3 text-left">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-[#a29ab9]">
+              Resume-ready line
+            </p>
+            <p className="mt-1 text-sm text-ink leading-snug">{savedResumeLine}</p>
+            <button
+              onClick={copyResumeLine}
+              className="mt-2 flex items-center gap-1 text-xs font-semibold text-[#8b5cf6]"
+            >
+              {resumeLineCopied ? <ClipboardCheck size={13} /> : <Copy size={13} />}
+              {resumeLineCopied ? "Copied" : "Copy"}
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={() => setShowPraisePopup(false)}
+          className="mt-5 w-full rounded-pill py-3 text-sm font-semibold text-white"
+          style={{
+            background: savedPraise
+              ? "linear-gradient(135deg,#fbbf24,#f97316)"
+              : "linear-gradient(135deg,#818cf8,#6366f1)",
+          }}
+        >
+          Got it
+        </button>
+      </div>
+    </div>
+  );
+
+  // Multi-story split success screen -- a long uploaded document (see
+  // splitFromDocument in app/api/memories/route.ts) turned out to be a
+  // collection of several distinct stories, each now its own real memory.
+  // Deliberately a simpler screen than the single-memory one below (no
+  // per-story praise popup, resume line, reflective question, or project
+  // assigner -- each of those already lives on that story's own memory
+  // detail page): the point here is confirming the split happened and
+  // giving a fast way into each story, not repeating the full single-
+  // memory ceremony N times in a row.
+  if (stage === "success" && splitMemories.length > 1) {
+    return (
+      <div className="pb-6">
+        <DarkHeader inlineTitle="Memories Saved" />
+        <div className="px-5 pt-8 flex flex-col items-center text-center">
+          <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-50 text-green-600">
+            <Check size={30} />
+          </div>
+          <h2 className="text-lg font-semibold text-ink">Saved — split into {splitMemories.length} stories</h2>
+          <p className="mt-1 text-sm text-ink-soft max-w-xs">
+            {aiGenerated
+              ? "That document had several separate stories, so Strivo.ai saved each one as its own memory, tagged on its own."
+              : "We saved each story as its own memory. AI tagging didn't complete, but your words are safe — you can still view and search them."}
+          </p>
+
+          <div className="mt-6 w-full space-y-2.5 text-left">
+            {splitMemories.map((m) => (
+              <button
+                key={m.id}
+                onClick={() => router.push(`/memories/${m.id}`)}
+                className="flex w-full items-center gap-3 rounded-[14px] border border-[#ece5f5] bg-surface p-3.5 text-left"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-[13px] font-semibold text-ink">{m.title}</p>
+                  {m.competencies.length > 0 && (
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      {m.competencies.map((c) => (
+                        <span key={c} className="rounded-pill bg-[#f2effa] px-2 py-0.5 text-[10px] font-semibold text-[#8b5cf6]">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <ArrowRight size={15} className="shrink-0 text-[#cec7dd]" />
+              </button>
+            ))}
+          </div>
+
+          <div className="mt-8 w-full space-y-3">
+            <Button variant="secondary" className="w-full" onClick={startOver}>
+              <RotateCcw size={16} /> Capture Another
+            </Button>
+            <Button variant="ghost" className="w-full" onClick={() => router.push("/home")}>
+              <HomeIcon size={16} /> Go Home
+            </Button>
+          </div>
+        </div>
+
+        {praisePopup}
+      </div>
+    );
   }
 
   if (stage === "success") {
@@ -456,102 +664,7 @@ function RecordPageInner() {
           </div>
         </div>
 
-        {/* The actual point of competency detection: most people telling a
-            normal, casual story have no reason to know it happens to be a
-            strong interview example -- so tell them, in the moment, with an
-            actual reaction rather than a permanent inline box they might
-            skim past. Auto-opens (see the setTimeout in createMemory) for
-            EITHER competency praise or a milestone (see savedMilestones) --
-            a milestone like "10th memory recorded" can land on a memory
-            with no competency praise attached at all, so this can't be
-            gated on savedPraise alone. */}
-        {showPraisePopup && (savedPraise || savedMilestones.length > 0) && (
-          <div
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 px-5 pb-5 sm:items-center sm:pb-0"
-            onClick={() => setShowPraisePopup(false)}
-          >
-            <div
-              className="w-full max-w-sm rounded-[22px] bg-surface p-6 text-center"
-              style={{ boxShadow: "0 20px 60px rgba(0,0,0,0.28)" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div
-                className={cn(
-                  "mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-full",
-                  savedPraise ? "bg-amber-50 text-amber-500" : "bg-indigo-50 text-indigo-500"
-                )}
-                style={{ boxShadow: savedPraise ? "0 8px 20px rgba(245,158,11,0.2)" : "0 8px 20px rgba(99,102,241,0.2)" }}
-              >
-                {savedPraise ? <SparklesIcon size={26} /> : <Award size={26} />}
-              </div>
-
-              {/* Milestones -- small, earned, one-time badges. Shown above
-                  the competency/praise section (if any) since a milestone
-                  is the rarer, more special event of the two. */}
-              {savedMilestones.length > 0 && (
-                <div className="flex flex-col items-center gap-1.5">
-                  {savedMilestones.map((m) => (
-                    <span
-                      key={m}
-                      className="flex items-center gap-1.5 rounded-pill bg-indigo-50 px-3 py-1.5 text-xs font-semibold text-indigo-600"
-                    >
-                      <Award size={13} /> {m}
-                    </span>
-                  ))}
-                </div>
-              )}
-
-              {savedPraise && (
-                <>
-                  {savedCompetencies.length > 0 && (
-                    <div className={cn("flex flex-wrap justify-center gap-1.5", savedMilestones.length > 0 && "mt-3")}>
-                      {savedCompetencies.map((c) => (
-                        <span key={c} className="rounded-pill bg-amber-50 px-2.5 py-1 text-[11px] font-semibold text-amber-700">
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  )}
-                  <p className="mt-3 text-[15px] leading-relaxed text-ink">{savedPraise}</p>
-                </>
-              )}
-
-              {/* Immediately usable, not just a compliment -- a real resume
-                  bullet pulled from this specific story, with any numbers
-                  in the transcript worked in. Always English (see
-                  resumeLine in generateMemoryMetadata, lib/ai.ts) even when
-                  the memory itself was recorded in Hindi, since that's the
-                  resume convention here. */}
-              {savedResumeLine && (
-                <div className="mt-4 rounded-[12px] border border-[#ece5f5] bg-[#f9f8fc] p-3 text-left">
-                  <p className="text-[10px] font-semibold uppercase tracking-wide text-[#a29ab9]">
-                    Resume-ready line
-                  </p>
-                  <p className="mt-1 text-sm text-ink leading-snug">{savedResumeLine}</p>
-                  <button
-                    onClick={copyResumeLine}
-                    className="mt-2 flex items-center gap-1 text-xs font-semibold text-[#8b5cf6]"
-                  >
-                    {resumeLineCopied ? <ClipboardCheck size={13} /> : <Copy size={13} />}
-                    {resumeLineCopied ? "Copied" : "Copy"}
-                  </button>
-                </div>
-              )}
-
-              <button
-                onClick={() => setShowPraisePopup(false)}
-                className="mt-5 w-full rounded-pill py-3 text-sm font-semibold text-white"
-                style={{
-                  background: savedPraise
-                    ? "linear-gradient(135deg,#fbbf24,#f97316)"
-                    : "linear-gradient(135deg,#818cf8,#6366f1)",
-                }}
-              >
-                Got it
-              </button>
-            </div>
-          </div>
-        )}
+        {praisePopup}
       </div>
     );
   }
@@ -740,6 +853,27 @@ function RecordPageInner() {
                 <div className="w-full mt-4 rounded-[13px] border border-[#ece5f5] bg-surface px-3.5 py-2.5 text-left">
                   <p className="text-xs font-medium text-ink truncate">{uploadedFileName}</p>
                   <p className="text-[11px] text-[#8a82a8] mt-0.5">Text extracted — ready to create the memory below.</p>
+                </div>
+              )}
+
+              {/* Optional context about the document -- purely a courtesy
+                  to the AI (and to future-you reading the transcript back),
+                  never required. Only shown once there's actually a file to
+                  attach it to. */}
+              {uploadedFileName && uploadText && !uploadError && (
+                <div className="w-full mt-3 text-left">
+                  <label className="text-[11px] font-medium text-[#8a82a8]" htmlFor="upload-note">
+                    Add a note about this document <span className="text-[#c2bcd4]">(optional)</span>
+                  </label>
+                  <textarea
+                    id="upload-note"
+                    value={uploadNote}
+                    onChange={(e) => setUploadNote(e.target.value)}
+                    rows={2}
+                    maxLength={300}
+                    placeholder="e.g. This is my career history before my MBA — includes reviews and project stories."
+                    className="mt-1.5 w-full resize-none rounded-[10px] border border-[#ece5f5] bg-surface p-2.5 text-sm text-ink outline-none focus:border-[#a78bfa] focus:ring-2 focus:ring-[#a78bfa]/20"
+                  />
                 </div>
               )}
 

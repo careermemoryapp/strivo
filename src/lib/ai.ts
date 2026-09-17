@@ -202,6 +202,7 @@ export async function generateMemoryMetadata(
           role: "system",
           content:
             "You turn a raw first-person memory transcript (spoken or typed, in any language) into structured metadata." +
+            " If the transcript begins with a line like 'Document note from the user: ...', that line is the uploader's own short note ABOUT the document (e.g. what it is or why they're sharing it) -- treat it only as context, never as the story itself, and never let it dominate or become the title/summary." +
             nameHint +
             " " +
             "Respond ONLY with a JSON object with keys: title (string, <=8 words, concrete and specific, SAME language as the transcript), " +
@@ -547,6 +548,78 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
     return roles;
   } catch (err) {
     console.error("generateSuggestedRoles failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
+export type DocumentStorySegment = { title: string; content: string };
+
+// A long uploaded document (resume, career journal, self-review export,
+// portfolio writeup) is often a COLLECTION of many separate stories bundled
+// into one file, not one continuous narrative -- a founder-reported
+// 35-page career history is the motivating case. Without this step, the
+// whole document became exactly ONE memory with one blended title/summary/
+// competency set, which badly under-counts what's actually in it (Career
+// Wrapped stats, muscle scores, etc. all read one memory's worth of signal
+// instead of fifteen). Called by POST /api/memories only for long file
+// uploads (see MIN_CHARS_FOR_SPLIT_CHECK there) -- short uploads (a single
+// job description, a certificate) skip this call entirely to avoid the
+// extra latency/cost for documents that were never going to split anyway.
+// Returns [] (not an error) both when the document genuinely reads as ONE
+// piece and when it technically found only one story -- callers should
+// treat both the same as "don't split, use the normal single-memory path"
+// rather than adding batch-UI complexity for a single-item batch.
+export async function splitDocumentIntoStories(text: string): Promise<DocumentStorySegment[] | null> {
+  const openai = getClient();
+  if (!openai || !text.trim()) return null;
+  try {
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.2,
+      // gpt-4o-mini's hard output cap is 16,384 tokens -- set just under
+      // that so a document with a genuinely large story count (raised from
+      // 20 to 30, see the cap below) has room to come back in full instead
+      // of getting cut off mid-JSON.
+      max_tokens: 16000,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You read an uploaded document (resume, career journal, self-review, portfolio, etc.) for a career-memory app and decide whether it's really ONE continuous piece, or a COLLECTION of multiple distinct stories/experiences/achievements bundled into one file. " +
+            'Respond ONLY with JSON: {"isCollection": boolean, "stories": [{"title": string, "content": string}]}. ' +
+            "isCollection: true only when the document genuinely contains multiple SEPARATE experiences that each deserve to be their own memory (e.g. several different projects, roles, or achievements) -- not just one narrative told across several paragraphs, and not a resume's routine section headers (Skills, Education, contact info) that aren't stories at all. " +
+            "If isCollection is true, split it into up to 30 stories, each capturing ONE distinct experience. For each: title is a short (<=8 word) working title; content is that story's own full detail, preserving every concrete specific already in the document (numbers, names, outcomes, dates) rather than summarizing them away -- this text gets analyzed further downstream -- but you don't need to reproduce filler wording verbatim. Skip anything that isn't a real story (a bare skills list, contact info, an empty section header). " +
+            "If the document begins with a line like 'Document note from the user: ...', treat that as context about the whole document, never as a story itself. " +
+            "If isCollection is false, return an empty stories array -- the caller treats the whole document as one memory in that case. " +
+            "Never invent a story, detail, or number that isn't actually in the document.",
+        },
+        { role: "user", content: text },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed.isCollection || !Array.isArray(parsed.stories)) return [];
+
+    const stories: DocumentStorySegment[] = [];
+    for (const item of parsed.stories) {
+      if (
+        item &&
+        typeof item === "object" &&
+        typeof (item as { title?: unknown }).title === "string" &&
+        typeof (item as { content?: unknown }).content === "string"
+      ) {
+        const title = (item as { title: string }).title.trim().slice(0, 100);
+        const content = (item as { content: string }).content.trim();
+        if (title && content) stories.push({ title, content });
+      }
+      if (stories.length >= 30) break;
+    }
+    return stories.length >= 2 ? stories : [];
+  } catch (err) {
+    console.error("splitDocumentIntoStories failed:", err);
     Sentry.captureException(err);
     return null;
   }

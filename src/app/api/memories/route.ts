@@ -8,8 +8,9 @@ import {
   countMemories,
   countMemoriesByCompetency,
   countMemoriesWithMetric,
+  type Memory,
 } from "@/lib/repo/memories";
-import { generateMemoryMetadata, embedText } from "@/lib/ai";
+import { generateMemoryMetadata, embedText, splitDocumentIntoStories, type MemoryMetadata, type DocumentStorySegment } from "@/lib/ai";
 import { searchMemoriesHybrid } from "@/lib/retrieval";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired, getUserById } from "@/lib/repo/users";
@@ -62,74 +63,57 @@ const MEMORY_COUNT_MILESTONES = [10, 25, 50, 100, 250, 500];
 // something upcoming from turning into a pile of nags that all land at once.
 const MAX_OPEN_CHECKINS = 3;
 
-export async function POST(req: Request) {
-  const userId = await requireUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+// Below this many characters, a file upload essentially never turns out to
+// be a genuine multi-story collection (a one-page job description, a
+// certificate, a short cover letter) -- skip the extra splitDocumentIntoStories
+// AI call entirely for those, rather than spending latency/cost checking
+// something that was never going to split. Long, story-rich documents (the
+// 35-page career-history case this was built for) clear this easily.
+const MIN_CHARS_FOR_SPLIT_CHECK = 3000;
 
-  // Backstop for the (app)/layout.tsx page-level redirect, which only
-  // fires on a fresh navigation -- a tab already open when the trial ended
-  // could otherwise keep creating memories via client-side fetch forever.
-  if (isTrialExpired(userId)) {
-    return NextResponse.json({ error: "Your free trial has ended. Please upgrade to continue." }, { status: 402 });
-  }
-
-  // Every memory triggers two OpenAI calls (metadata generation + embedding)
-  // — cap per-user spend from a runaway client/script, same reasoning as
-  // the transcribe and chat-message endpoints.
-  const limited = rateLimitOrResponse(`memory-create:${userId}`, 60, 60 * 60 * 1000);
-  if (limited) return limited;
-
-  // Defense-in-depth on top of the per-user limit above: someone could
-  // otherwise dodge it by creating several accounts from the same
-  // network. Generous enough that a normal shared connection (a family,
-  // a small office) never gets near it in real usage.
-  const limitedByIp = rateLimitOrResponse(`memory-create-ip:${requestIp(req)}`, 300, 60 * 60 * 1000);
-  if (limitedByIp) return limitedByIp;
-
-  const body = await req.json().catch(() => null);
-  const parsed = createSchema.safeParse(body);
-  if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
-  }
-
-  const { transcript, source } = parsed.data;
-  const title = parsed.data.title?.trim() || fallbackTitle(transcript);
+// Everything that has to happen once a transcript (either the whole
+// upload, or one story split out of it) has its AI metadata + embedding
+// ready: persist the row, work out any one-time milestones, and fire the
+// rare Career Wrapped signal notification. Factored out so the single-
+// memory path and the multi-story split path (see splitDocumentIntoStories
+// above, wired up in POST below) share EXACTLY the same logic instead of
+// two copies that could quietly drift apart -- milestones and check-in caps
+// in particular depend on reading fresh DB state, which only works right if
+// every created memory (whether one or twenty) goes through this same
+// sequential path.
+async function persistOneMemory(params: {
+  userId: string;
+  transcript: string;
+  // Used for the initial insert (before metadata exists) and as the final
+  // fallback if metadata generation fails. For the single-transcript path
+  // this is the user-provided title or fallbackTitle(transcript); for a
+  // split story it's that story's own short working title from
+  // splitDocumentIntoStories.
+  initialTitle: string;
+  // An explicit user-typed title, if any -- only ever set on the single-
+  // transcript path (there's no per-story title input for a split
+  // document). Wins over the AI's own metadata.title when present, same as
+  // this route always behaved before the split path existed.
+  userProvidedTitle?: string;
+  source: "voice" | "text" | "file";
+  metadata: MemoryMetadata | null;
+  embedding: number[] | null;
+}): Promise<{ memory: Memory; milestones: string[] }> {
+  const { userId, transcript, initialTitle, userProvidedTitle, source, metadata, embedding } = params;
 
   // Save the raw memory FIRST. Everything below is best-effort enrichment —
   // if any of it fails, the user's transcript is already safely persisted.
-  const memory = createMemory({ userId, title, transcript, source });
+  const memory = createMemory({ userId, title: initialTitle, transcript, source });
 
   // One-time milestone callouts (see app/(app)/record/page.tsx's
   // savedMilestones popup) -- small, earned moments rather than a
   // repetitive streak counter. Each check below reads the user's PRIOR
-  // memories only: this new row was already inserted by createMemory above
-  // but doesn't have competencies/has_metric written yet (that happens in
+  // memories only: this new row was already inserted above but doesn't
+  // have competencies/has_metric written yet (that happens in
   // updateMemoryMetadata further down), so countMemoriesByCompetency and
   // countMemoriesWithMetric right now still reflect everything OTHER than
   // this memory -- exactly what "is this the first" needs to check against.
   const milestones: string[] = [];
-
-  // Best-effort: lets praise/reflectiveQuestion address the user by name
-  // occasionally (see the nameHint comment in generateMemoryMetadata) --
-  // a lookup miss here just means those fields fall back to no name.
-  const firstName = getUserById(userId)?.first_name ?? null;
-  const existingProjects = listProjects(userId);
-  const metadata = await generateMemoryMetadata(transcript, firstName, new Date(), existingProjects.map((p) => p.name));
-
-  // Resolved here, once, into an actual project id the client can act on
-  // directly -- see suggestedExistingProjectName/suggestedNewProjectName on
-  // generateMemoryMetadata's return value (lib/ai.ts). Never applied to the
-  // memory automatically (project_id stays null until the user explicitly
-  // confirms via PATCH /api/memories/[id]/project -- see ProjectAssigner.tsx).
-  const projectSuggestion = metadata
-    ? {
-        existingId: metadata.suggestedExistingProjectName
-          ? (existingProjects.find((p) => p.name === metadata.suggestedExistingProjectName)?.id ?? null)
-          : null,
-        existingName: metadata.suggestedExistingProjectName,
-        newName: metadata.suggestedNewProjectName,
-      }
-    : { existingId: null, existingName: null, newName: null };
 
   if (metadata) {
     const priorCompetencyCounts = countMemoriesByCompetency(userId);
@@ -145,7 +129,7 @@ export async function POST(req: Request) {
     }
 
     updateMemoryMetadata(userId, memory.id, {
-      title: parsed.data.title?.trim() || metadata.title,
+      title: userProvidedTitle?.trim() || metadata.title,
       summary: metadata.summary,
       key_points: JSON.stringify(metadata.keyPoints),
       category: metadata.category,
@@ -195,7 +179,9 @@ export async function POST(req: Request) {
     // actually surfaces this later. Only fires on the small share of
     // memories that mention a specific upcoming event, and only if the user
     // isn't already sitting on several unresolved ones (see
-    // MAX_OPEN_CHECKINS above).
+    // MAX_OPEN_CHECKINS above). Re-reading countOpenCheckins fresh here
+    // means this cap is enforced correctly across a whole batch of split
+    // stories too, not just per document.
     if (metadata.futureCheckin && countOpenCheckins(userId) < MAX_OPEN_CHECKINS) {
       createPendingCheckin({
         userId,
@@ -228,15 +214,40 @@ export async function POST(req: Request) {
   }
 
   // Total-count milestone -- independent of whether AI metadata succeeded,
-  // and independent of the loop above, since it's about the raw count, not
-  // competencies. countMemories() already includes the row createMemory
-  // just inserted, so checking against the checkpoint list directly tells
-  // us whether THIS memory is the one that hit it.
+  // and independent of the competency loop above, since it's about the raw
+  // count, not competencies. countMemories() already includes the row
+  // createMemory just inserted, so checking against the checkpoint list
+  // directly tells us whether THIS memory is the one that hit it -- and
+  // since every memory in a split batch is persisted sequentially through
+  // this same function, a batch that crosses a checkpoint mid-way still
+  // fires it exactly once, on the right story.
   const totalCount = countMemories(userId);
   if (MEMORY_COUNT_MILESTONES.includes(totalCount)) {
     milestones.push(`${totalCount}th memory recorded`);
   }
 
+  if (embedding) {
+    updateMemoryMetadata(userId, memory.id, { embedding: JSON.stringify(embedding) });
+  }
+
+  const final = getMemoryById(userId, memory.id)!;
+  return { memory: final, milestones };
+}
+
+// The AI generation half of creating one memory -- metadata + embedding,
+// both pure network calls with no DB side effects, so this is safe to run
+// concurrently across every story in a split batch (see Promise.all in
+// POST below) instead of the ~2x-N sequential round trips that would
+// otherwise add up to a real risk of the request timing out on a genuinely
+// story-rich document. persistOneMemory above is what actually has to run
+// in order, one at a time.
+async function generateMetadataAndEmbedding(
+  transcript: string,
+  title: string,
+  firstName: string | null,
+  existingProjectNames: string[]
+): Promise<{ metadata: MemoryMetadata | null; embedding: number[] | null }> {
+  const metadata = await generateMemoryMetadata(transcript, firstName, new Date(), existingProjectNames);
   // Embedding input includes metadata.searchText (an English gloss of the
   // transcript, generated above) alongside the original title/transcript —
   // this is what lets a Hindi memory still surface for an English question
@@ -244,10 +255,135 @@ export async function POST(req: Request) {
   // embedding model's native cross-lingual alignment. Falls back to just
   // title+transcript if metadata generation failed.
   const embedding = await embedText(`${title}\n${transcript}${metadata ? `\n${metadata.searchText}` : ""}`);
-  if (embedding) {
-    updateMemoryMetadata(userId, memory.id, { embedding: JSON.stringify(embedding) });
+  return { metadata, embedding };
+}
+
+export async function POST(req: Request) {
+  const userId = await requireUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  // Backstop for the (app)/layout.tsx page-level redirect, which only
+  // fires on a fresh navigation -- a tab already open when the trial ended
+  // could otherwise keep creating memories via client-side fetch forever.
+  if (isTrialExpired(userId)) {
+    return NextResponse.json({ error: "Your free trial has ended. Please upgrade to continue." }, { status: 402 });
   }
 
-  const final = getMemoryById(userId, memory.id);
+  // Every memory triggers two OpenAI calls (metadata generation + embedding)
+  // — cap per-user spend from a runaway client/script, same reasoning as
+  // the transcribe and chat-message endpoints. A split document spends more
+  // than one "memory" of budget in a single request (one call per story
+  // plus the split call itself), which is intentional -- it's still one
+  // deliberate user action, and the story cap (30, see
+  // splitDocumentIntoStories in lib/ai.ts) bounds how far that can go.
+  const limited = rateLimitOrResponse(`memory-create:${userId}`, 60, 60 * 60 * 1000);
+  if (limited) return limited;
+
+  // Defense-in-depth on top of the per-user limit above: someone could
+  // otherwise dodge it by creating several accounts from the same
+  // network. Generous enough that a normal shared connection (a family,
+  // a small office) never gets near it in real usage.
+  const limitedByIp = rateLimitOrResponse(`memory-create-ip:${requestIp(req)}`, 300, 60 * 60 * 1000);
+  if (limitedByIp) return limitedByIp;
+
+  const body = await req.json().catch(() => null);
+  const parsed = createSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid input" }, { status: 400 });
+  }
+
+  const { transcript, source } = parsed.data;
+
+  // Best-effort: lets praise/reflectiveQuestion address the user by name
+  // occasionally (see the nameHint comment in generateMemoryMetadata) --
+  // a lookup miss here just means those fields fall back to no name.
+  const firstName = getUserById(userId)?.first_name ?? null;
+  const existingProjects = listProjects(userId);
+  const existingProjectNames = existingProjects.map((p) => p.name);
+
+  // Long file uploads only -- see MIN_CHARS_FOR_SPLIT_CHECK's comment.
+  // Voice/type stay single-memory unconditionally: those already carry the
+  // app's "one thought at a time" framing (see the Tips row on Record), so
+  // there's no reason to spend an extra AI call checking something that's
+  // essentially never going to be a bundled document.
+  let storySegments: DocumentStorySegment[] | null = null;
+  if (source === "file" && transcript.length >= MIN_CHARS_FOR_SPLIT_CHECK) {
+    storySegments = await splitDocumentIntoStories(transcript);
+  }
+
+  if (storySegments && storySegments.length >= 2) {
+    // Multi-story path: this one uploaded document is actually a collection
+    // of separate stories (the 35-page career-history case) -- each one
+    // becomes its own real memory, with its own competencies/category/etc.,
+    // instead of a single blended memory that badly under-counts what's
+    // actually in the document.
+    const generated = await Promise.all(
+      storySegments.map((story) => generateMetadataAndEmbedding(story.content, story.title, firstName, existingProjectNames))
+    );
+
+    const memories: Memory[] = [];
+    const milestones: string[] = [];
+    let anyMetadataGenerated = false;
+
+    // Sequential on purpose (unlike the Promise.all above) -- milestones,
+    // the check-in cap, and the total-count checkpoint all depend on
+    // reading fresh DB state after each prior story is fully persisted;
+    // see persistOneMemory's own comments for why each of those needs that.
+    for (let i = 0; i < storySegments.length; i++) {
+      const story = storySegments[i];
+      const { metadata, embedding } = generated[i];
+      if (metadata) anyMetadataGenerated = true;
+      const result = await persistOneMemory({
+        userId,
+        transcript: story.content,
+        initialTitle: story.title,
+        source: "file",
+        metadata,
+        embedding,
+      });
+      memories.push(result.memory);
+      milestones.push(...result.milestones);
+    }
+
+    return NextResponse.json({
+      memories,
+      aiMetadataGenerated: anyMetadataGenerated,
+      milestones,
+      splitFromDocument: true,
+    });
+  }
+
+  // Single-memory path -- unchanged behavior for voice, typed text, short
+  // file uploads, and any file upload the split step above decided (or
+  // failed to decide, on an AI error) wasn't really a multi-story
+  // collection.
+  const title = parsed.data.title?.trim() || fallbackTitle(transcript);
+  const { metadata, embedding } = await generateMetadataAndEmbedding(transcript, title, firstName, existingProjectNames);
+
+  // Resolved here, once, into an actual project id the client can act on
+  // directly -- see suggestedExistingProjectName/suggestedNewProjectName on
+  // generateMemoryMetadata's return value (lib/ai.ts). Never applied to the
+  // memory automatically (project_id stays null until the user explicitly
+  // confirms via PATCH /api/memories/[id]/project -- see ProjectAssigner.tsx).
+  const projectSuggestion = metadata
+    ? {
+        existingId: metadata.suggestedExistingProjectName
+          ? (existingProjects.find((p) => p.name === metadata.suggestedExistingProjectName)?.id ?? null)
+          : null,
+        existingName: metadata.suggestedExistingProjectName,
+        newName: metadata.suggestedNewProjectName,
+      }
+    : { existingId: null, existingName: null, newName: null };
+
+  const { memory: final, milestones } = await persistOneMemory({
+    userId,
+    transcript,
+    initialTitle: title,
+    userProvidedTitle: parsed.data.title,
+    source,
+    metadata,
+    embedding,
+  });
+
   return NextResponse.json({ memory: final, aiMetadataGenerated: !!metadata, milestones, projectSuggestion });
 }

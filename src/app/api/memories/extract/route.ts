@@ -9,8 +9,23 @@ import { isTrialExpired } from "@/lib/repo/users";
 // APIs, so this route can't run on the edge runtime.
 export const runtime = "nodejs";
 
-const MAX_BYTES = 2 * 1024 * 1024; // 2MB cap
-const MAX_CHARS = 20000; // cap how much extracted text we feed the AI/embeddings
+// File-size cap stays at 2MB -- a real multi-decade career document (a
+// founder-reported 35-page career history) is still only ~500KB as plain
+// text/docx, so file size was never the actual constraint; see MAX_CHARS
+// below for the real fix.
+const MAX_BYTES = 2 * 1024 * 1024;
+// Cap how much extracted text we feed the AI/embeddings. Was 20,000 --
+// silently truncating a long document to roughly its first ~6 pages with no
+// error shown, which is exactly the bug a founder-reported 35-page career
+// history hit (confirmed: a dense page of resume/journal text runs
+// ~3,000-3,500 characters, and 20,000 / ~3,300 lands right at "about 6
+// pages"). Raised generously (1,000,000 characters, comfortably north of
+// 35-40 dense pages) so a real multi-decade career document -- the whole
+// reason this feature exists -- never gets quietly cut off, even after the
+// splitDocumentIntoStories call in lib/ai.ts (called on exactly this kind of
+// long upload -- see MIN_CHARS_FOR_SPLIT_CHECK in app/api/memories/route.ts)
+// adds its own prompt overhead on top.
+const MAX_CHARS = 1000000;
 
 const ENTITY_MAP: Record<string, string> = {
   "&amp;": "&",
