@@ -50,6 +50,14 @@ export function MemoryDetailClient({
     setDeleting(true);
     try {
       await fetch(`/api/memories/${memoryId}`, { method: "DELETE" });
+      // refresh() before the push so /memories' Router Cache entry is
+      // updated to reflect the delete -- otherwise a later browser-back
+      // navigation onto /memories can restore Next's last cached render of
+      // it (from before this delete), showing the deleted memory again.
+      // staleTimes doesn't govern that back/forward restoration (see
+      // node_modules/next/dist/docs/.../staleTimes.md), so this is the only
+      // thing that keeps it honest.
+      router.refresh();
       router.push("/memories");
     } finally {
       // Only reached if the DELETE failed and navigation didn't happen --

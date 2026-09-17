@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { formatDistanceToNowStrict } from "date-fns";
 import { MoreVertical, Trash2 } from "lucide-react";
@@ -14,6 +15,7 @@ export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: str
   // comment above MEMORY_CATEGORIES in categoryIcons.tsx for why the old
   // per-category gradient/glow/wash (a different hue per category) got
   // removed. Only the icon still varies by category.
+  const router = useRouter();
   const { icon: Icon } = chatCategoryDef(chat.category);
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -34,7 +36,19 @@ export function ChatCard({ chat, onDeleted }: { chat: Chat; onDeleted?: (id: str
       // refresh (a single fresh server render, no race possible). A plain
       // local array filter has no network round-trip, so there's nothing to
       // race.
-      if (res.ok) onDeleted?.(chat.id);
+      //
+      // router.refresh() here fixes a different reappearing bug: the
+      // browser back button restores this route's Router Cache entry
+      // (Next's last render of this Server Component) no matter how stale
+      // it is -- staleTimes explicitly doesn't govern back/forward
+      // restoration (see node_modules/next/dist/docs/.../staleTimes.md) --
+      // so without this, a deleted chat looked gone here but "came back"
+      // the moment you navigated away and back. This keeps that cached
+      // snapshot current; it doesn't affect the local filter above.
+      if (res.ok) {
+        onDeleted?.(chat.id);
+        router.refresh();
+      }
     } finally {
       setDeleting(false);
       setConfirmOpen(false);

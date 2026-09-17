@@ -144,6 +144,14 @@ export function ChatDetailClient({
     setDeletingChat(true);
     try {
       await fetch(`/api/chats/${chatId}`, { method: "DELETE" });
+      // refresh() before the push so /chats' Router Cache entry is updated
+      // to reflect the delete -- otherwise a later browser-back navigation
+      // onto /chats can restore Next's last cached render of it (from
+      // before this delete), showing the deleted chat again. staleTimes
+      // doesn't govern that back/forward restoration (see
+      // node_modules/next/dist/docs/.../staleTimes.md), so this is the only
+      // thing that keeps it honest.
+      router.refresh();
       router.push("/chats");
     } finally {
       // Only matters if the DELETE itself failed and we're still on this

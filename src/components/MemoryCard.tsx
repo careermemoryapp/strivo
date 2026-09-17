@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { format } from "date-fns";
 import { MoreVertical, Trash2, Copy, Folder } from "lucide-react";
@@ -30,6 +31,7 @@ export function MemoryCard({
   // comment above MEMORY_CATEGORIES in categoryIcons.tsx for why the old
   // per-category gradient/glow/wash (a different hue per category) got
   // removed. Only the icon still varies by category.
+  const router = useRouter();
   const { icon: Icon } = memoryCategoryDef(memory.category);
   const tags = safeJsonParse<string[]>(memory.tags, []);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -61,7 +63,23 @@ export function MemoryCard({
       // full-list GET (and every reason not to -- concurrent deletes racing
       // those GETs is what caused deleted items to keep reappearing until a
       // manual page refresh).
-      if (res.ok) onDeleted?.(memory.id);
+      //
+      // router.refresh() alongside that local removal is a SEPARATE fix for
+      // a separate reappearing-after-delete bug: Next's client Router Cache
+      // keeps whatever this page's Server Component last rendered, and
+      // browser/back-button navigation back onto this route restores that
+      // cached snapshot regardless of how stale it is (staleTimes explicitly
+      // doesn't govern back/forward restoration -- see
+      // node_modules/next/dist/docs/.../staleTimes.md). Without this, the
+      // list looks right here and then "un-deletes" itself the moment you
+      // navigate away and back. refresh() re-renders this route's Server
+      // Component now, so that cache entry is correct by the time anyone
+      // navigates back onto it -- it doesn't touch the onDeleted state
+      // update above, just keeps the cache honest for next time.
+      if (res.ok) {
+        onDeleted?.(memory.id);
+        router.refresh();
+      }
     } finally {
       setBusy(false);
       setConfirmOpen(false);
