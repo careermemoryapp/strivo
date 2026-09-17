@@ -68,6 +68,27 @@ body {
   background-color: #0a0a0f !important;
 }
 
+/* Belt-and-suspenders for the two above (#cp-root / #cw-root): body has an
+   explicit background (--color-bg, LIGHT) a few lines up, and per the CSS
+   spec that color propagates to paint the entire scrollable canvas -- not
+   just body's own box. If the page's real content height and the wrapper
+   div's rendered box height ever disagree by even a little (a subpixel
+   rounding difference at some zoom/DPI combo, a late layout shift once the
+   native-share button's visibility resolves after hydration, etc.), that
+   gap shows the PROPAGATED canvas color, which is light, no matter how
+   correctly the div itself is styled -- a div's background can never be
+   "more correct" than the canvas it sits on top of. Repainting html/body
+   themselves whenever either wrapper is present removes that gap at the
+   source: the propagated color is dark too, so there's nothing for a
+   height mismatch to expose. :has() is supported in every evergreen
+   browser at this point. */
+html:has(#cp-root),
+body:has(#cp-root),
+html:has(#cw-root),
+body:has(#cw-root) {
+  background-color: #0a0a0f !important;
+}
+
 /* Blog article body — injected as raw HTML (dangerouslySetInnerHTML) from
    blog_posts.content_html, so it has no Tailwind classes of its own. These
    rules give it readable typography against the dark blog theme. */
