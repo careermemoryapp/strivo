@@ -162,6 +162,11 @@ export const CAREER_WRAPPED_EVENTS = [
   // accounts, which links to Record's Upload tab rather than converting the
   // resume automatically (see that component's own comment for why).
   "resume_stats_upload_clicked",
+  // Fired from ResumeUploadStarterCta in CareerWrappedHomePreview.tsx --
+  // ResumeStatsUploadCta's generic sibling, shown on the empty "taking
+  // shape" state to accounts that haven't uploaded a resume yet at all (see
+  // that component's own comment).
+  "resume_upload_starter_clicked",
 ] as const;
 
 // Career Profile (the quiz-based Home experience, kept deliberately separate

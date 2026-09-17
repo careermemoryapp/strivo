@@ -120,12 +120,20 @@ export function CareerWrappedHomePreview({
         >
           Record a memory
         </button>
-        {/* A brand-new account with a resume already on file (see
-            settings/resume) is exactly who this is for -- a real, ready-
-            made starting point instead of a blank page. See
-            ResumeStatsUploadCta's own comment for why this is a link to
-            Record's Upload tab rather than an automatic conversion. */}
-        {resumeStats && <ResumeStatsUploadCta stats={resumeStats} router={router} className="mt-3" />}
+        {/* Two different nudges toward the same destination, depending on
+            whether this account already has a resume on file (see
+            settings/resume): with resumeStats, we can point at the actual
+            counts a resume upload already found (ResumeStatsUploadCta).
+            Without it -- most brand-new accounts, who haven't uploaded a
+            resume at all yet -- ResumeUploadStarterCta makes the same offer
+            in general terms, since "upload your resume, get stories" is
+            exactly the fast starting point a first-time visitor to this
+            empty state needs instead of a blank page. */}
+        {resumeStats ? (
+          <ResumeStatsUploadCta stats={resumeStats} router={router} className="mt-3" />
+        ) : (
+          <ResumeUploadStarterCta router={router} className="mt-3" />
+        )}
       </div>
     );
   }
@@ -214,6 +222,39 @@ function ResumeStatsUploadCta({
       <span>
         Your resume also shows {fragment}. Upload it as a story to make them count.
       </span>
+      <ChevronRight size={13} className="shrink-0" />
+    </button>
+  );
+}
+
+// The generic sibling of ResumeStatsUploadCta above, for the far more common
+// case at this spot: a brand-new account that hasn't uploaded a resume at
+// all yet (resumeStats is null whenever there's no resume on file, analysis
+// hasn't finished, or it found nothing -- see its comment on the Home page
+// server component). Rather than staying silent until a resume happens to
+// already be on file, this makes the offer itself -- upload a resume and
+// Strivo turns it straight into stories, which is exactly the fast, ready-
+// made starting point someone seeing an empty "taking shape" card for the
+// first time can use instead of starting from nothing. Same destination and
+// same reasoning for why it's a link rather than an automatic conversion as
+// ResumeStatsUploadCta (see its comment) -- only the copy differs, since
+// there are no real counts yet to cite.
+function ResumeUploadStarterCta({
+  router,
+  className,
+}: {
+  router: ReturnType<typeof useRouter>;
+  className?: string;
+}) {
+  return (
+    <button
+      onClick={() => {
+        trackEvent("resume_upload_starter_clicked", { source: "home_preview_empty" });
+        router.push("/record?mode=upload");
+      }}
+      className={`inline-flex items-center gap-1.5 text-left text-[11.5px] text-[#6d5fa8] ${className ?? ""}`}
+    >
+      <span>Or start by uploading your resume — we&apos;ll turn it into stories for you.</span>
       <ChevronRight size={13} className="shrink-0" />
     </button>
   );
