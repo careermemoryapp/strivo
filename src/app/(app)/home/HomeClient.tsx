@@ -95,7 +95,7 @@ type StartChatArgs = {
   // "roles_explainer" tells the server to render the opening AI reply
   // deterministically from the already-computed suggested-roles list
   // instead of asking a fresh open-ended question -- see the matching
-  // "Explore these roles" button below and sendRolesExplainerMessage in
+  // "See why you're a fit" button below and sendRolesExplainerMessage in
   // lib/chatService.ts for why.
   kind?: "roles_explainer";
 };
@@ -402,7 +402,7 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
                 className="inline-flex items-center gap-1.5 rounded-pill px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
                 style={{ background: BRAND_GRADIENT }}
               >
-                {pendingAction === "roles" ? <Spinner className="h-3.5 w-3.5" /> : <>Explore these roles <ChevronRight size={13} /></>}
+                {pendingAction === "roles" ? <Spinner className="h-3.5 w-3.5" /> : <>See why you&apos;re a fit <ChevronRight size={13} /></>}
               </button>
             </div>
           </>

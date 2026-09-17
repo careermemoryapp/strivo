@@ -21,7 +21,7 @@ const createSchema = z.object({
   title: z.string().trim().min(1).max(120),
   category: z.string().trim().min(1).max(60),
   initialMessage: z.string().trim().max(4000).optional(),
-  // "roles_explainer" -- Home's "Explore these roles" button. Renders the
+  // "roles_explainer" -- Home's "See why you're a fit" button. Renders the
   // opening reply deterministically from the user's already-computed
   // suggested-roles list instead of an open-ended AI call -- see
   // sendRolesExplainerMessage in lib/chatService.ts.

@@ -52,10 +52,17 @@ function formatResumeStatsLine(stats: ResumeStatsData): string | null {
 // BRAND_GRADIENT (purple -> blue) is the same gradient Home's own "Start
 // recording" button uses -- product feedback was that this section's own
 // amber/pink gradient made Home feel like unrelated accent colors instead
-// of one lively, cohesive page. Stat numbers pick it up too now (gradient
-// text, not a container fill), so this still reads as the "biggest" Home
-// section without going back to a filled panel.
+// of one lively, cohesive page. Used here as a solid fill (icon circle,
+// buttons), which is why it stays light/vibrant -- it always sits under
+// white text or a white icon, so contrast isn't a concern there.
 const BRAND_GRADIENT = "linear-gradient(135deg,#a78bfa,#60a5fa)";
+// Stat numbers (below) use gradient TEXT rather than a filled container, so
+// they sit directly on the page's white background -- BRAND_GRADIENT's own
+// light stops read as washed out/hard to read there (founder feedback: "the
+// numbers... are very light"). Same purple -> blue direction, kept
+// consistent with the rest of the page, but darker stops so the numbers
+// stay legible at a glance instead of just decorative.
+const STAT_GRADIENT = "linear-gradient(135deg,#7c3aed,#2563eb)";
 export function CareerWrappedHomePreview({
   data,
   resumeStats,
@@ -160,7 +167,7 @@ export function CareerWrappedHomePreview({
 function Stat({ value, label }: { value: number; label: string }) {
   return (
     <div>
-      <p className="bg-clip-text text-2xl font-extrabold text-transparent" style={{ backgroundImage: BRAND_GRADIENT }}>
+      <p className="bg-clip-text text-2xl font-extrabold text-transparent" style={{ backgroundImage: STAT_GRADIENT }}>
         {value}
       </p>
       <p className="text-[11px] leading-tight text-ink-faint">{label}</p>

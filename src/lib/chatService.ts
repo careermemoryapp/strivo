@@ -178,7 +178,7 @@ export async function sendUserMessageAndGetReply(
 }
 
 // Deterministic alternative to sendUserMessageAndGetReply, used only for the
-// "Explore these roles" button on Home (see the "roles_explainer" kind in
+// "See why you're a fit" button on Home (see the "roles_explainer" kind in
 // app/api/chats/route.ts). Tapping that button used to just send the open
 // question "what roles am I ready for right now?" through the normal AI
 // chat pipeline above -- which re-derives roles from scratch via retrieval

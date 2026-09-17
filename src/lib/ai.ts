@@ -493,13 +493,21 @@ export type SuggestedRoleResult = { title: string; industry: string | null; reas
 // industry is left null whenever the memories read as industry-agnostic
 // (transferable skills without a specific field named) rather than guessed
 // from the role title alone -- the UI shows that honestly as "Any
-// industry." reasoning is the 1-2 sentence "why this role" explanation shown
-// (verbatim, no further AI call) when the user taps "Explore these roles" on
-// Home -- see sendRolesExplainerMessage in lib/chatService.ts. It's stored
-// alongside the role now specifically so that explanation can be rendered
-// deterministically instead of asking a fresh open-ended chat question each
-// time, which is what previously produced a different-looking (sometimes a
-// direct answer, sometimes a request for more detail) response on every tap.
+// industry." Otherwise, when the memories point at one dominant industry
+// (the common case -- e.g. someone with a long run in automotive), 2-3 of
+// the roles are required to be a next step within THAT industry specifically
+// -- see the prompt below -- so the suggestions read as genuinely
+// understanding the person's actual specialization rather than generic
+// transferable-skill pivots (founder feedback: seeing all 5 roles labeled
+// "Any industry" when they'd spent 12 years in one industry read as Strivo
+// not understanding them). reasoning is the 1-2 sentence "why this role"
+// explanation shown (verbatim, no further AI call) when the user taps the
+// "See why you're a fit" button on Home -- see sendRolesExplainerMessage in
+// lib/chatService.ts. It's stored alongside the role now specifically so
+// that explanation can be rendered deterministically instead of asking a
+// fresh open-ended chat question each time, which is what previously
+// produced a different-looking (sometimes a direct answer, sometimes a
+// request for more detail) response on every tap.
 // Returns an empty array (not an error) when nothing in the sample genuinely
 // supports naming a role -- callers should treat that the same as a hard
 // failure (skip storing anything, try again next cycle) rather than caching
@@ -526,9 +534,9 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
             "You'll be given a list of memories (title, optional competencies, summary). " +
             'Respond ONLY with JSON: {"roles": [{"title": string, "industry": string or null, "reasoning": string}]}. ' +
             "Up to 5 roles, best fit first. Every role must be directly supported by concrete evidence across these memories (skills actually demonstrated, scope of responsibility, kind of work actually done) -- never invent a role that isn't backed by what's actually here, and return fewer than 5 (even zero, as an empty array) rather than padding with a weak fit. " +
-            "industry: only set this to a specific industry or sector (e.g. 'Renewable Energy', 'Technology / SaaS') when the memories themselves clearly point at one -- a company, sector, or domain actually mentioned or strongly implied. If the memories show transferable skills without pointing at a specific field, set industry to null -- do NOT guess an industry just because it's a common pairing for that role title. " +
+            "industry: only set this to a specific industry or sector (e.g. 'Automotive', 'Renewable Energy', 'Technology / SaaS') when the memories themselves clearly point at one -- a company, sector, or domain actually mentioned or strongly implied. If the memories show transferable skills without pointing at a specific field, set industry to null -- do NOT guess an industry just because it's a common pairing for that role title. " +
             "reasoning: 1-2 sentences, written directly to the person ('you...'), citing the SPECIFIC memory or evidence that supports this role -- e.g. what they actually did, led, or solved. This is shown to them verbatim as the explanation for why this role is on their list, so it must be concrete and checkable against their own memories, never generic career-coach filler. " +
-            "At least 2 of the roles (when 2 or more are returned at all) must be a natural next step within the industry, sector, function, or employer the person's OWN memories already show them working in -- a believable, evidenced progression from what they're currently doing, not a lateral pivot. This is what shows them the suggestions actually understand their current path. Only use the remaining slots for adjacent or different fields, and only when the evidence genuinely supports it. " +
+            "Look across ALL the memories first and identify the ONE industry/sector that shows up most (a company, domain, or sector actually named or strongly implied across several memories, e.g. someone with years of automotive-sector work). If a clear dominant industry exists, 2 to 3 of the roles (out of up to 5) MUST be roles within THAT SAME industry -- a believable, evidenced next step from what they're already doing there, not a lateral pivot into something unrelated -- and industry for each of those roles MUST be set to that actual industry name, never null and never 'Any industry'. This is what shows the person the suggestions genuinely understand the industry and function they specialize in, instead of reading as generic. Only spend the remaining slots on adjacent or different fields, and only when the evidence genuinely supports it. If the memories genuinely show no dominant industry (truly cross-industry or industry-agnostic work), it's fine for industry to be null on some or all roles -- but check carefully first, since most people's memories do point at one. " +
             "Never invent facts not present in what you were given.",
         },
         { role: "user", content: listing },
