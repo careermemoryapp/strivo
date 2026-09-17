@@ -545,10 +545,10 @@ export function MarketingHome({
     <div id="marketing-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
       {/* Nav */}
       <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
-        <div className="flex items-center gap-2.5">
+        <Link href="/" className="flex items-center gap-2.5">
           <LogoMark size={28} />
           <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
-        </div>
+        </Link>
         <div className="flex items-center gap-6">
           <Link href="/blog" className="text-xs font-medium text-[#888] hover:text-white">
             Blog

@@ -82,7 +82,11 @@ export function CareerProfileCardPublicClient({ shareId, cardData, imageUrl }: {
   const canNativeShare = isNativeApp() || (typeof navigator !== "undefined" && typeof navigator.share === "function");
 
   return (
-    <div className="flex min-h-screen flex-col items-center bg-[#0a0a0f] px-5 py-10 text-white">
+    <div
+      id="cp-root"
+      className="flex min-h-screen flex-col items-center bg-[#0a0a0f] px-5 py-10 text-white"
+      style={{ background: "#0a0a0f" }}
+    >
       <div className="w-full max-w-sm">
         {/* Matches CAREER_PROFILE_CARD_SIZE (1080 x 1700) -- keeps the
             placeholder box the right shape while the PNG loads instead of

@@ -19,7 +19,11 @@ type CardData = {
 // this way can be correlated back to this specific share at signup time.
 export function CareerCardPublicClient({ shareId, cardData, imageUrl }: { shareId: string; cardData: CardData; imageUrl: string }) {
   return (
-    <div className="flex min-h-screen flex-col items-center bg-[#0a0a0f] px-5 py-10 text-white">
+    <div
+      id="cw-root"
+      className="flex min-h-screen flex-col items-center bg-[#0a0a0f] px-5 py-10 text-white"
+      style={{ background: "#0a0a0f" }}
+    >
       <div className="w-full max-w-sm">
         <img
           src={imageUrl}
