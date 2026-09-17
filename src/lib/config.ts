@@ -157,6 +157,11 @@ export const CAREER_WRAPPED_EVENTS = [
   "career_card_shared_whatsapp",
   "career_card_downloaded",
   "career_wrapped_add_memory_clicked",
+  // Fired from ResumeStatsUploadCta in CareerWrappedHomePreview.tsx -- the
+  // "your resume also shows X -- upload it as a story" nudge shown to newer
+  // accounts, which links to Record's Upload tab rather than converting the
+  // resume automatically (see that component's own comment for why).
+  "resume_stats_upload_clicked",
 ] as const;
 
 // Career Profile (the quiz-based Home experience, kept deliberately separate

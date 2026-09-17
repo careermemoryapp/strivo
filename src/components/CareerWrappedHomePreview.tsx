@@ -17,14 +17,14 @@ export type CareerWrappedHomePreviewData = {
 
 export type ResumeStatsData = { wins: number; leadership: number; problemsSolved: number; seniorStakeholder: number };
 
-// Turns the resume-only counts into one short, skimmable sentence, e.g.
-// "Your resume also shows 3 wins and 2 leadership moments — record them to
-// make them count." Skips any category that's zero rather than listing
-// "0 problems solved" -- see analyzeResumeCareerStats in lib/ai.ts for how
+// Turns the resume-only counts into one short, skimmable fragment, e.g.
+// "3 wins and 2 leadership moments" -- the CTA button below wraps this into
+// the full sentence. Skips any category that's zero rather than listing "0
+// problems solved" -- see analyzeResumeCareerStats in lib/ai.ts for how
 // these are actually counted. Returns null if every category is zero
 // (page.tsx already filters this case out server-side, but this stays
 // defensive rather than assuming that).
-function formatResumeStatsLine(stats: ResumeStatsData): string | null {
+function formatResumeStatsFragment(stats: ResumeStatsData): string | null {
   const parts: string[] = [];
   if (stats.wins > 0) parts.push(`${stats.wins} win${stats.wins === 1 ? "" : "s"}`);
   if (stats.leadership > 0) parts.push(`${stats.leadership} leadership moment${stats.leadership === 1 ? "" : "s"}`);
@@ -33,8 +33,18 @@ function formatResumeStatsLine(stats: ResumeStatsData): string | null {
     parts.push(`${stats.seniorStakeholder} senior-stakeholder interaction${stats.seniorStakeholder === 1 ? "" : "s"}`);
   }
   if (parts.length === 0) return null;
-  const joined = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
-  return `Your resume also shows ${joined} — record them to make them count.`;
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
+// Only shown while the person is still new (see the two render sites below)
+// -- once they've built up real recorded history (tier "patterns" or
+// "full", CAREER_WRAPPED_THRESHOLDS.minForPatterns+ memories), this nudge
+// has done its job and gets dropped entirely rather than lingering as a
+// permanent fixture. Reuses the tier Home already computes instead of a new
+// threshold/prop, since "new user, not enough real history yet" is exactly
+// what "empty"/"basic" already mean here.
+function isNewUserTier(tier: CareerWrappedDataTier): boolean {
+  return tier === "empty" || tier === "basic";
 }
 
 // The "very first thing" the spec asks for, right after Home's header --
@@ -110,6 +120,12 @@ export function CareerWrappedHomePreview({
         >
           Record a memory
         </button>
+        {/* A brand-new account with a resume already on file (see
+            settings/resume) is exactly who this is for -- a real, ready-
+            made starting point instead of a blank page. See
+            ResumeStatsUploadCta's own comment for why this is a link to
+            Record's Upload tab rather than an automatic conversion. */}
+        {resumeStats && <ResumeStatsUploadCta stats={resumeStats} router={router} className="mt-3" />}
       </div>
     );
   }
@@ -131,15 +147,6 @@ export function CareerWrappedHomePreview({
           <Stat value={data.seniorStakeholderCount} label="Senior-stakeholder interactions" />
         </div>
 
-        {/* Resume-only counts -- deliberately separate from the numbers
-            above, never added into them (see formatResumeStatsLine's own
-            comment for why: a resume is usually already a summary of things
-            a user may separately record in full, and merging the two risks
-            double-counting the same achievement). */}
-        {resumeStats && formatResumeStatsLine(resumeStats) && (
-          <p className="mt-3 text-[11.5px] text-ink-faint">{formatResumeStatsLine(resumeStats)}</p>
-        )}
-
         {data.tier === "full" && data.strongestMuscle && (
           <p className="mt-3.5 text-[11.5px] text-ink-faint">
             Strongest career muscle: <span className="font-semibold text-ink">{data.strongestMuscle}</span>
@@ -160,7 +167,55 @@ export function CareerWrappedHomePreview({
           </div>
         </div>
       </button>
+
+      {/* Own button, deliberately OUTSIDE the big "open Career Wrapped"
+          button above (nesting an interactive element inside another isn't
+          valid HTML and the two need different destinations) -- only while
+          still a new-ish account (isNewUserTier), so this fades out once
+          someone has built up enough real recorded history that "here's a
+          starting point" no longer applies. See ResumeStatsUploadCta's own
+          comment for what tapping it actually does. */}
+      {resumeStats && isNewUserTier(data.tier) && <ResumeStatsUploadCta stats={resumeStats} router={router} className="mt-3" />}
     </div>
+  );
+}
+
+// Deliberately a LINK to Record's own Upload tab (?mode=upload -- the same
+// tab that already handles a big document by splitting it into several
+// stories, see MIN_CHARS_FOR_SPLIT_CHECK in record/page.tsx), not an
+// automatic background conversion of the resume already on file. Two
+// reasons: (1) it keeps the founder's own no-duplication call intact (see
+// analyzeResumeCareerStats' comment in lib/ai.ts) -- nothing becomes a
+// memory unless the person deliberately chooses to upload it as one, same
+// as any other document upload; (2) it reuses the exact upload+split flow
+// that already exists rather than a second resume-specific pipeline. Only
+// shown for a newer account (isNewUserTier) -- see its own comment for why
+// -- so this reads as "here's a fast way to get started" rather than a
+// permanent nag once someone already has real history.
+function ResumeStatsUploadCta({
+  stats,
+  router,
+  className,
+}: {
+  stats: ResumeStatsData;
+  router: ReturnType<typeof useRouter>;
+  className?: string;
+}) {
+  const fragment = formatResumeStatsFragment(stats);
+  if (!fragment) return null;
+  return (
+    <button
+      onClick={() => {
+        trackEvent("resume_stats_upload_clicked", { source: "home_preview" });
+        router.push("/record?mode=upload");
+      }}
+      className={`inline-flex items-center gap-1.5 text-left text-[11.5px] text-[#6d5fa8] ${className ?? ""}`}
+    >
+      <span>
+        Your resume also shows {fragment}. Upload it as a story to make them count.
+      </span>
+      <ChevronRight size={13} className="shrink-0" />
+    </button>
   );
 }
 
