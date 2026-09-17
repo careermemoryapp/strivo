@@ -27,12 +27,18 @@ const splitSchema = z.object({
 // mid-upload, even though the document had, in fact, finished saving
 // server-side (confirmed 2026-09-17 -- a 35-story upload came back with
 // "Unexpected token '<' ... is not valid JSON" on the client while every
-// story had actually been written to the DB). Splitting the flow in two --
-// this endpoint just detects and returns the story list, and the client
-// then calls the existing, already-fast single-memory POST /api/memories
-// once per story (see createMemory in app/(app)/record/page.tsx) -- means
-// no single request ever does more than one memory's worth of AI work, so
-// there's nothing left for a proxy timeout to catch mid-flight.
+// story had actually been written to the DB).
+//
+// This endpoint just detects and returns the story list -- it still only
+// does the one split-detection AI call. What used to happen next (the
+// client looping through POST /api/memories once per story) turned out to
+// have its OWN failure mode: that loop silently stopped, with no error,
+// whenever the browser/WebView backgrounded long enough to suspend its JS
+// (founder-reported 2026-09-17: 14 stories detected, only 4 actually
+// saved). So the client now hands this endpoint's story list straight to
+// POST /api/memories/batch instead of looping itself -- see that route and
+// lib/storyBatchProcessor.ts for how the actual saving happens server-side
+// from here on, independent of whether the client stays around.
 export async function POST(req: Request) {
   const userId = await requireUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

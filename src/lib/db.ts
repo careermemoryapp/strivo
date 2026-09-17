@@ -651,6 +651,61 @@ function migrate(db: DatabaseSync) {
       revoked INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     );
+
+    -- Server-driven processing for a long uploaded document that splits
+    -- into several separate stories (see splitDocumentIntoStories in
+    -- lib/ai.ts). Exists to fix a founder-reported bug (2026-09-17): the
+    -- client used to drive the per-story save loop itself (one POST
+    -- /api/memories request per story, one after another), which silently
+    -- stopped partway through -- no error, nothing telling the user
+    -- anything was missing -- whenever the phone's browser/WebView
+    -- backgrounded long enough to suspend that page's JS (14 stories
+    -- detected, only 4 actually saved, by the time they switched back to
+    -- the app). POST /api/memories/batch (see that route) now writes ALL
+    -- of a batch's rows here INSTANTLY (no AI calls, so no timeout risk)
+    -- and returns right away; the actual per-story AI work happens in
+    -- processStoryBatch (lib/storyBatchProcessor.ts), kicked off detached
+    -- from that request/response so it keeps running whether or not the
+    -- client is still around. The client only ever POLLS GET
+    -- /api/memories/batch/[id] for progress -- safe to stop (backgrounding)
+    -- and safe to resume (foregrounding) at any point, since polling reads
+    -- state, it doesn't drive the work.
+    CREATE TABLE IF NOT EXISTS story_batches (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'processing', -- 'processing' | 'completed'
+      total INTEGER NOT NULL,
+      -- Lease: when some server process last started/confirmed actively
+      -- working this batch -- see claimStoryBatch in
+      -- lib/repo/storyBatches.ts. Lets a status poll self-heal a batch
+      -- that got orphaned mid-processing (a pm2 reload during a deploy,
+      -- say) by re-claiming and resuming it, without two processes
+      -- working the same batch at once in the normal case.
+      claimed_at TEXT,
+      created_at TEXT NOT NULL,
+      completed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_story_batches_user ON story_batches(user_id, created_at);
+
+    CREATE TABLE IF NOT EXISTS story_batch_items (
+      id TEXT PRIMARY KEY,
+      batch_id TEXT NOT NULL REFERENCES story_batches(id) ON DELETE CASCADE,
+      ordinal INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      content TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending', -- 'pending' | 'done' | 'failed'
+      memory_id TEXT REFERENCES memories(id) ON DELETE SET NULL,
+      -- JSON string array, same milestone strings persistOneMemory returns
+      -- (lib/memoryCreation.ts) -- the old per-story client loop got these
+      -- straight back in each POST /api/memories response and aggregated
+      -- them for the batch success screen's praise popup; stored here
+      -- instead now that a story's save happens server-side without the
+      -- client ever seeing that individual response (see
+      -- processStoryBatch in lib/storyBatchProcessor.ts). NULL until done.
+      milestones TEXT,
+      error TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_story_batch_items_batch ON story_batch_items(batch_id, ordinal);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

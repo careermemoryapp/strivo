@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { FilePicker } from "@capawesome/capacitor-file-picker";
 import { Capacitor } from "@capacitor/core";
 import {
@@ -55,6 +55,22 @@ const MAX_RECORD_SECONDS = 2 * 60;
 // the server immediately return an empty story list. The server enforces
 // this same floor independently either way.
 const MIN_CHARS_FOR_SPLIT_CHECK = 3000;
+// How often to poll GET /api/memories/batch/[id] while a split document's
+// stories are being saved server-side -- see pollStoryBatch below and the
+// story_batches comment in lib/db.ts for why this is a poll instead of the
+// client driving the save loop itself.
+const BATCH_POLL_INTERVAL_MS = 1500;
+// Give up and surface an error after this many consecutive failed polls
+// (~1 minute) -- almost never hit in practice (a batch is safe server-side
+// regardless of polling), this just stops a permanently-unreachable server
+// from polling forever while the app is open and foregrounded.
+const MAX_BATCH_POLL_FAILURES = 40;
+// localStorage key holding the most recent still-processing batch's id/
+// total, if any -- read on mount so reopening this page after the app was
+// backgrounded (or fully reloaded) resumes showing progress instead of
+// looking like nothing happened. Only a display convenience: the batch
+// itself keeps completing server-side with or without this.
+const PENDING_BATCH_STORAGE_KEY = "strivo_pending_story_batch";
 // IANA media types, for FilePicker's `types` option -- replaces the old
 // extension-based accept="..." string now that file picking goes through
 // @capawesome/capacitor-file-picker instead of a raw <input type="file">.
@@ -169,10 +185,17 @@ function RecordPageInner() {
   // 0 for the normal case; shown as a small note on the batch success
   // screen only when it's actually non-zero.
   const [splitSaveFailedCount, setSplitSaveFailedCount] = useState(0);
-  // "Saving 3 of 18..." progress while a split document's stories are being
-  // saved one request at a time -- null outside of that (the plain
-  // single-memory save has no meaningful sub-progress to show).
+  // "Saving 3 of 18..." progress while a split document's stories are
+  // being saved server-side and this page is polling for status (see
+  // pollStoryBatch below) -- null outside of that (the plain single-memory
+  // save has no meaningful sub-progress to show).
   const [batchProgress, setBatchProgress] = useState<{ current: number; total: number } | null>(null);
+  // Bumped every time a new poll loop starts (a fresh batch, or resuming
+  // one found in localStorage on mount) -- each pollStoryBatch call
+  // captures its own value and checks it before ever touching state, so an
+  // old poll that's still winding down after startOver() or a second batch
+  // can't clobber state a newer one already set.
+  const pollTokenRef = useRef(0);
 
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [hitLimit, setHitLimit] = useState(false);
@@ -322,7 +345,156 @@ function RecordPageInner() {
     setSplitMemories([]);
     setSplitSaveFailedCount(0);
     setBatchProgress(null);
+    // Abandon any poll still winding down from a previous batch, and stop
+    // tracking it for mount-time resume -- the batch itself keeps
+    // completing server-side regardless; this only stops THIS page from
+    // showing its progress.
+    pollTokenRef.current++;
+    clearPendingBatch();
   }
+
+  function savePendingBatch(batchId: string, total: number) {
+    try {
+      localStorage.setItem(PENDING_BATCH_STORAGE_KEY, JSON.stringify({ batchId, total }));
+    } catch {
+      // localStorage can be unavailable (private browsing, some WebViews)
+      // -- the batch still completes server-side either way; this only
+      // affects whether a reload can resume SHOWING its progress.
+    }
+  }
+
+  function clearPendingBatch() {
+    try {
+      localStorage.removeItem(PENDING_BATCH_STORAGE_KEY);
+    } catch {
+      // Same as above -- best-effort only.
+    }
+  }
+
+  // Polls GET /api/memories/batch/[id] until the batch finishes, updating
+  // batchProgress as it goes and building the split-success screen once it
+  // does. This is the actual fix for the founder-reported bug: saving a
+  // split document's stories now happens on the SERVER (see
+  // lib/storyBatchProcessor.ts), kicked off once by POST
+  // /api/memories/batch and running independently of this page from then
+  // on -- this function is just a READ loop watching its progress. If the
+  // phone backgrounds and this polling stops, nothing is lost: the batch
+  // keeps completing server-side regardless, and calling this again later
+  // (see the mount effect below) picks up wherever it actually is, not
+  // wherever the client last saw it.
+  async function pollStoryBatch(batchId: string, total: number) {
+    const token = ++pollTokenRef.current;
+    setSaving(true);
+    setBatchProgress({ current: 0, total });
+
+    let consecutiveFailures = 0;
+    for (;;) {
+      if (pollTokenRef.current !== token) return; // superseded by startOver() or a newer batch
+
+      let res: Response | null = null;
+      try {
+        res = await fetch(`/api/memories/batch/${batchId}`);
+      } catch {
+        res = null;
+      }
+      if (pollTokenRef.current !== token) return;
+
+      if (!res || !res.ok) {
+        // A batch that genuinely no longer exists, or a session that's no
+        // longer valid -- stop polling for it rather than retrying
+        // forever. Any other failure (5xx, a transient network blip right
+        // after coming back from background) is worth retrying: the batch
+        // is safe server-side regardless of whether this particular poll
+        // succeeds.
+        if (res && (res.status === 404 || res.status === 401)) {
+          clearPendingBatch();
+          setSaving(false);
+          setBatchProgress(null);
+          return;
+        }
+        consecutiveFailures++;
+        if (consecutiveFailures >= MAX_BATCH_POLL_FAILURES) {
+          clearPendingBatch();
+          setSaving(false);
+          setBatchProgress(null);
+          setSaveError(
+            "Lost connection while saving your document's stories. Some may already be saved -- check Memories, or try uploading again."
+          );
+          return;
+        }
+        await new Promise((r) => setTimeout(r, BATCH_POLL_INTERVAL_MS));
+        continue;
+      }
+      consecutiveFailures = 0;
+
+      const data = await res.json();
+      setBatchProgress({ current: (data.completedCount ?? 0) + (data.failedCount ?? 0), total: data.total ?? total });
+
+      if (data.status === "completed") {
+        clearPendingBatch();
+        setSaving(false);
+        setBatchProgress(null);
+
+        type BatchItem = { title: string; status: string; memoryId: string | null; competencies: string[] };
+        const doneItems = ((data.items ?? []) as BatchItem[]).filter((i) => i.status === "done" && i.memoryId);
+        if (doneItems.length === 0) {
+          setSaveError("Couldn't save any of the stories in that document");
+          return;
+        }
+        setSplitSaveFailedCount(typeof data.failedCount === "number" ? data.failedCount : 0);
+        const milestones: string[] = Array.isArray(data.milestones) ? data.milestones : [];
+        setSavedMilestones(milestones);
+        setAiGenerated(true);
+        setSplitMemories(
+          doneItems.map((i) => ({ id: i.memoryId as string, title: i.title, competencies: i.competencies }))
+        );
+        setStage("success");
+        if (milestones.length > 0) {
+          setTimeout(() => setShowPraisePopup(true), 450);
+        }
+        return;
+      }
+
+      await new Promise((r) => setTimeout(r, BATCH_POLL_INTERVAL_MS));
+    }
+  }
+
+  // Picks a still-processing batch back up if this page loads (or reloads)
+  // with one outstanding -- exactly the scenario that used to lose stories
+  // silently: the app backgrounds mid-upload, the WebView reloads this
+  // page when the person switches back, and the old client-driven save
+  // loop's in-memory state (and everything it hadn't gotten to yet) was
+  // just gone. Now the loop that's actually doing the work lives on the
+  // server, so all this needs to do is start watching it again.
+  useEffect(() => {
+    let raw: string | null = null;
+    try {
+      raw = localStorage.getItem(PENDING_BATCH_STORAGE_KEY);
+    } catch {
+      raw = null;
+    }
+    if (!raw) return;
+    let parsed: { batchId?: string; total?: number };
+    try {
+      parsed = JSON.parse(raw) as { batchId?: string; total?: number };
+    } catch {
+      clearPendingBatch();
+      return;
+    }
+    if (!parsed.batchId || !parsed.total) {
+      clearPendingBatch();
+      return;
+    }
+    const batchId = parsed.batchId;
+    const total = parsed.total;
+    // Deferred rather than called directly in the effect body --
+    // pollStoryBatch calls setState immediately on entry (setSaving,
+    // setBatchProgress) before its first await, which React's rules
+    // flag when called synchronously from inside an effect.
+    const timer = setTimeout(() => pollStoryBatch(batchId, total), 0);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount only, to pick up a batch left over from before this page loaded
+  }, []);
 
   async function submitReflection() {
     if (!savedMemoryId || !reflectionText.trim()) return;
@@ -382,63 +554,27 @@ function RecordPageInner() {
 
       if (storySegments.length >= 2) {
         // This document is a genuine collection of separate stories (the
-        // 35-page career-history case). Save each one as its OWN short
-        // request instead of one giant request doing 20-30 sequential AI
-        // calls -- see the comment on POST /api/memories/split for why
-        // that used to risk a proxy timeout on a genuinely story-rich
-        // document, even though the save itself had actually finished
-        // server-side by the time the client gave up on it. One story
-        // failing here doesn't lose the others -- each is independent.
-        const savedMemories: { id: string; title: string; competencies: string | null }[] = [];
-        const allMilestones: string[] = [];
-        let anyMetadataGenerated = false;
-        let failedCount = 0;
+        // 35-page career-history case). Hand the whole list to the server
+        // in one fast request (see POST /api/memories/batch) and poll for
+        // progress from there, rather than looping through per-story
+        // requests on the client ourselves -- that used to be how this
+        // worked, and it had a real failure mode: the loop silently
+        // stopped, with no error, whenever the phone's browser/WebView
+        // backgrounded long enough to suspend this page's JS mid-save (a
+        // founder-reported case: 14 stories detected, only 4 actually
+        // saved by the time they switched back). The server now keeps
+        // working through the batch regardless of whether this page is
+        // even open -- see lib/storyBatchProcessor.ts.
+        const batchRes = await fetch("/api/memories/batch", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ stories: storySegments }),
+        });
+        const batchData = await batchRes.json();
+        if (!batchRes.ok) throw new Error(batchData.error ?? "Failed to start saving that document");
 
-        for (let i = 0; i < storySegments.length; i++) {
-          setBatchProgress({ current: i + 1, total: storySegments.length });
-          const story = storySegments[i];
-          try {
-            const res = await fetch("/api/memories", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ transcript: story.content, title: story.title, source: "file" }),
-            });
-            const data = await res.json();
-            if (!res.ok) throw new Error(data.error ?? "Failed to save");
-            savedMemories.push(data.memory);
-            if (Array.isArray(data.milestones)) allMilestones.push(...data.milestones);
-            if (data.aiMetadataGenerated) anyMetadataGenerated = true;
-          } catch {
-            failedCount++;
-          }
-        }
-
-        setBatchProgress(null);
-
-        if (savedMemories.length === 0) {
-          throw new Error("Couldn't save any of the stories in that document");
-        }
-
-        setSplitSaveFailedCount(failedCount);
-        setSavedMilestones(allMilestones);
-        setAiGenerated(anyMetadataGenerated);
-        // A long uploaded document turned out to be a collection of
-        // several distinct stories -- each one is now its own real memory.
-        // There's no single praise/competency/resume-line/reflective-
-        // question set to show (each story has its own, on its own
-        // memory), so this takes the batch success branch below instead of
-        // the single-memory fields.
-        setSplitMemories(
-          savedMemories.map((m) => ({
-            id: m.id,
-            title: m.title,
-            competencies: safeJsonParse<string[]>(m.competencies, []),
-          }))
-        );
-        setStage("success");
-        if (allMilestones.length > 0) {
-          setTimeout(() => setShowPraisePopup(true), 450);
-        }
+        savePendingBatch(batchData.batchId, batchData.total);
+        await pollStoryBatch(batchData.batchId, batchData.total);
         return;
       }
 

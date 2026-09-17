@@ -27,8 +27,21 @@ function sweepExpired() {
  * made for this key within `windowMs`. Cheap and good enough for
  * protecting auth/cost-sensitive endpoints from brute force and abuse --
  * not meant to be a precise sliding-window limiter.
+ *
+ * `weight` (default 1) lets one call consume more than one unit -- added
+ * for POST /api/memories/batch (see lib/repo/storyBatches.ts), which
+ * creates up to 30 memories in one request instead of the one-request-per-
+ * memory shape every other caller of this bucket assumes. Passing
+ * `stories.length` there keeps `memory-create:<user>` an accurate budget of
+ * "how many memories has this user actually created this hour" whether
+ * they came from single saves or a batch.
  */
-export function checkRateLimit(key: string, limit: number, windowMs: number): { ok: boolean; retryAfterSeconds: number } {
+export function checkRateLimit(
+  key: string,
+  limit: number,
+  windowMs: number,
+  weight: number = 1
+): { ok: boolean; retryAfterSeconds: number } {
   sweepExpired();
   const db = getDb();
   const now = Date.now();
@@ -40,17 +53,17 @@ export function checkRateLimit(key: string, limit: number, windowMs: number): { 
   if (!existing || new Date(existing.reset_at).getTime() <= now) {
     const resetAt = new Date(now + windowMs).toISOString();
     db.prepare(
-      `INSERT INTO rate_limit_buckets (key, count, reset_at) VALUES (?, 1, ?)
-       ON CONFLICT(key) DO UPDATE SET count = 1, reset_at = excluded.reset_at`
-    ).run(key, resetAt);
-    return { ok: true, retryAfterSeconds: 0 };
+      `INSERT INTO rate_limit_buckets (key, count, reset_at) VALUES (?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET count = excluded.count, reset_at = excluded.reset_at`
+    ).run(key, weight, resetAt);
+    return { ok: weight <= limit, retryAfterSeconds: weight <= limit ? 0 : Math.ceil(windowMs / 1000) };
   }
 
-  if (existing.count >= limit) {
+  if (existing.count + weight > limit) {
     return { ok: false, retryAfterSeconds: Math.ceil((new Date(existing.reset_at).getTime() - now) / 1000) };
   }
 
-  db.prepare(`UPDATE rate_limit_buckets SET count = count + 1 WHERE key = ?`).run(key);
+  db.prepare(`UPDATE rate_limit_buckets SET count = count + ? WHERE key = ?`).run(weight, key);
   return { ok: true, retryAfterSeconds: 0 };
 }
 
@@ -70,8 +83,13 @@ export function requestIp(req: Request): string {
  *   const limited = rateLimitOrResponse(`signup:${requestIp(req)}`, 5, 60 * 60 * 1000);
  *   if (limited) return limited;
  */
-export function rateLimitOrResponse(key: string, limit: number, windowMs: number): NextResponse | null {
-  const { ok, retryAfterSeconds } = checkRateLimit(key, limit, windowMs);
+export function rateLimitOrResponse(
+  key: string,
+  limit: number,
+  windowMs: number,
+  weight: number = 1
+): NextResponse | null {
+  const { ok, retryAfterSeconds } = checkRateLimit(key, limit, windowMs, weight);
   if (ok) return null;
   return NextResponse.json(
     { error: "Too many requests. Please try again in a bit." },
