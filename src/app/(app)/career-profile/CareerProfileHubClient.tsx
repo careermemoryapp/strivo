@@ -78,6 +78,26 @@ export function CareerProfileHubClient({ progress, quizzes }: { progress: Career
     // exactly (see CareerProfileQuizClient.tsx) so the hub and the quiz
     // itself read as one continuous dark surface, not two different pages.
     <div className="min-h-screen pb-10" style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}>
+      {/* Fixed backdrop, independent of this div's own box height -- fixes
+          the "white line at the bottom" bug. AppLayout's <main> adds a
+          fixed pb-20 to clear the fixed BottomNav, but BottomNav's real
+          height varies by device (icon+label+env(safe-area-inset-bottom)),
+          so that padding strip is rarely exactly covered by BottomNav.
+          That strip sits outside THIS div's own box (it's main's padding,
+          not ours), so it fell through to the light --color-bg (#f8f7fc)
+          on AppLayout's outer wrapper -- invisible on every light-themed
+          screen, but a visible pale seam just above the nav on this dark
+          one. A `fixed inset-0` layer is pinned to the viewport itself, so
+          it always paints behind whatever's currently visible -- including
+          that padding strip -- regardless of content height or safe-area
+          math. Kept outside the motion.div below (framer-motion's
+          transform on an ancestor would turn it into the containing block
+          for `fixed`, breaking the viewport pin). */}
+      <div
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}
+        aria-hidden="true"
+      />
       <DarkHeader back inlineTitle="Career Profile" />
 
       <motion.div initial="hidden" animate="show" variants={stagger} className="px-5 pt-5 space-y-5">

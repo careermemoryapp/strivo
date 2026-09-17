@@ -149,49 +149,57 @@ const SUPERPOWER_ARCHETYPES: CareerProfileArchetype[] = [
     key: "strategic_problem_solver",
     title: "The Strategic Problem Solver",
     emoji: "🧠",
-    description: "You naturally bring structure to messy and ambiguous problems.",
+    description:
+      "You naturally bring structure to messy, ambiguous problems — mapping root causes before anyone else has even framed the question. Teams hand you the confusing stuff because you make it tractable, not because you already have the answer, but because you know how to find it.",
   },
   {
     key: "builder",
     title: "The Builder",
     emoji: "🚀",
-    description: "You'd rather build the thing than talk about building the thing.",
+    description:
+      "You'd rather build the thing than talk about building the thing. Given a vague brief, your first move is always to make something real and tangible, then improve it — momentum matters more to you than a perfect plan on paper.",
   },
   {
     key: "leader",
     title: "The Leader",
     emoji: "🧭",
-    description: "People look to you for direction when things get uncertain.",
+    description:
+      "People look to you for direction when things get uncertain, even when you don't have the title for it. You're comfortable making the call when nobody else will, and that steadiness is exactly what teams remember under pressure.",
   },
   {
     key: "influencer",
     title: "The Influencer",
     emoji: "🤝",
-    description: "You move rooms by bringing people along, not by outranking them.",
+    description:
+      "You move rooms by bringing people along, not by outranking them. Your instinct is always to understand what everyone actually needs before you push for an outcome — which is why the outcomes you push for tend to stick.",
   },
   {
     key: "operator",
     title: "The Operator",
     emoji: "🔥",
-    description: "You're the one who makes sure it actually happens, on time, every time.",
+    description:
+      "You're the one who makes sure it actually happens, on time, every time. While others debate the plan, you're already tracking the dependencies and closing the gaps — reliability, to you, is a competitive advantage, not just a trait.",
   },
   {
     key: "innovator",
     title: "The Innovator",
     emoji: "💡",
-    description: "You default to trying something new before defaulting to how it's always been done.",
+    description:
+      "You default to trying something new before defaulting to how it's always been done. You're genuinely energized by the unproven approach, and you've learned that being first to a better way is usually worth the risk of being wrong once in a while.",
   },
   {
     key: "commercial_thinker",
     title: "The Commercial Thinker",
     emoji: "🎯",
-    description: "You instinctively translate work into what it means for the business.",
+    description:
+      "You instinctively translate work into what it means for the business — the revenue, the cost, the deadline that actually matters. Where others see a task, you see the number it's supposed to move, and that's what makes your instincts hard to argue with.",
   },
   {
     key: "people_builder",
     title: "The People Builder",
     emoji: "🌱",
-    description: "You measure your own success partly by how much better the people around you get.",
+    description:
+      "You measure your own success partly by how much better the people around you get. Coaching someone through a hard moment isn't a distraction from your real job — to you, it is the real job, and it's why people remember working with you.",
   },
 ];
 
@@ -295,14 +303,62 @@ export const CAREER_SUPERPOWER_QUIZ: CareerProfileQuizDefinition = {
 // ---------------------------------------------------------------------------
 
 const CHARACTER_ARCHETYPES: CareerProfileArchetype[] = [
-  { key: "fixer", title: "The Fixer", emoji: "🧯", description: "You solve the fire before most people even smell the smoke." },
-  { key: "diplomat", title: "The Diplomat", emoji: "🤝", description: "You keep the room together when everyone else is picking sides." },
-  { key: "strategist", title: "The Strategist", emoji: "♟️", description: "You're already three moves ahead of the conversation happening right now." },
-  { key: "hype_machine", title: "The Hype Machine", emoji: "⚡", description: "Your energy is contagious, and teams move faster around you." },
-  { key: "workhorse", title: "The Workhorse", emoji: "💪", description: "You quietly get more done than anyone realizes, without needing the credit." },
-  { key: "wildcard", title: "The Wildcard", emoji: "🃏", description: "You bring the angle nobody saw coming, and it usually works." },
-  { key: "mentor", title: "The Mentor", emoji: "🌱", description: "People remember you as the one who actually took the time to explain it." },
-  { key: "closer", title: "The Closer", emoji: "🎯", description: "When it absolutely has to land, you're the one people bring in." },
+  {
+    key: "fixer",
+    title: "The Fixer",
+    emoji: "🧯",
+    description:
+      "You solve the fire before most people even smell the smoke. You've built a quiet radar for what's about to go wrong, and you'd rather fix it than get credit for noticing it first.",
+  },
+  {
+    key: "diplomat",
+    title: "The Diplomat",
+    emoji: "🤝",
+    description:
+      "You keep the room together when everyone else is picking sides. You read what each side actually needs before you say a word, which is why people trust you to carry the hard conversations.",
+  },
+  {
+    key: "strategist",
+    title: "The Strategist",
+    emoji: "♟️",
+    description:
+      "You're already three moves ahead of the conversation happening right now. While the room is reacting to today's fire, you're quietly working out what this means for next quarter — and you're usually right.",
+  },
+  {
+    key: "hype_machine",
+    title: "The Hype Machine",
+    emoji: "⚡",
+    description:
+      "Your energy is contagious, and teams move faster around you. You've figured out that momentum is often more valuable than perfect execution, so you spend yours making sure nobody in the room runs out of it.",
+  },
+  {
+    key: "workhorse",
+    title: "The Workhorse",
+    emoji: "💪",
+    description:
+      "You quietly get more done than anyone realizes, without needing the credit for it. You'd rather the work speak for itself, and over time, it always does — people notice who's actually reliable.",
+  },
+  {
+    key: "wildcard",
+    title: "The Wildcard",
+    emoji: "🃏",
+    description:
+      "You bring the angle nobody saw coming, and it usually works. You're comfortable being the person who says the unconventional thing out loud, because you've learned the obvious answer is rarely the interesting one.",
+  },
+  {
+    key: "mentor",
+    title: "The Mentor",
+    emoji: "🌱",
+    description:
+      "People remember you as the one who actually took the time to explain it. You get real satisfaction from someone else's breakthrough, even when it costs you time you didn't really have to spare.",
+  },
+  {
+    key: "closer",
+    title: "The Closer",
+    emoji: "🎯",
+    description:
+      "When it absolutely has to land, you're the one people bring in. You're calm exactly when the stakes are highest, and that composure is what actually gets deals — and decisions — across the line.",
+  },
 ];
 
 const CHARACTER_QUESTIONS: CareerProfileQuestion[] = [
@@ -396,14 +452,62 @@ export const CORPORATE_CHARACTER_QUIZ: CareerProfileQuizDefinition = {
 // ---------------------------------------------------------------------------
 
 const RED_FLAG_ARCHETYPES: CareerProfileArchetype[] = [
-  { key: "perfectionist", title: "The Perfectionist", emoji: "🔍", description: "You'll rewrite it five times before anyone else even notices a typo." },
-  { key: "over_committer", title: "The Over-Committer", emoji: "🙋", description: "You say yes before checking your calendar, then somehow still deliver." },
-  { key: "control_enthusiast", title: "The Control Enthusiast", emoji: "🎛️", description: "Delegating is a skill you're \"still working on\" — your words." },
-  { key: "people_pleaser", title: "The People-Pleaser", emoji: "🤲", description: "You'd rather stay late than let anyone down." },
-  { key: "last_minute_genius", title: "The Last-Minute Genius", emoji: "⏰", description: "You do your best work right up against the deadline, every time." },
-  { key: "multitasker", title: "The Chronic Multitasker", emoji: "🎪", description: "You've got six things open at once and somehow all of them are urgent." },
-  { key: "devils_advocate", title: "The Devil's Advocate", emoji: "🥊", description: "You'll poke holes in the plan — even your own — just to stress-test it." },
-  { key: "silent_fixer", title: "The Silent Fixer", emoji: "🤫", description: "You quietly clean up messes instead of ever mentioning who made them." },
+  {
+    key: "perfectionist",
+    title: "The Perfectionist",
+    emoji: "🔍",
+    description:
+      "You'll rewrite it five times before anyone else even notices a typo. It's not about ego — you just can't send something out into the world that you know could be a little bit better, even at 11pm on a Friday.",
+  },
+  {
+    key: "over_committer",
+    title: "The Over-Committer",
+    emoji: "🙋",
+    description:
+      "You say yes before checking your calendar, then somehow still deliver. Your genuine enthusiasm for helping outruns your actual bandwidth on a fairly regular basis — and yet, somehow, it always gets done.",
+  },
+  {
+    key: "control_enthusiast",
+    title: "The Control Enthusiast",
+    emoji: "🎛️",
+    description:
+      "Delegating is a skill you're \"still working on\" — your words. You don't distrust your team, exactly; you just trust your own version of \"done right\" a little more than everyone else's.",
+  },
+  {
+    key: "people_pleaser",
+    title: "The People-Pleaser",
+    emoji: "🤲",
+    description:
+      "You'd rather stay late than let anyone down. Saying no feels almost physically uncomfortable, so you find yourself absorbing more than your fair share — usually without anyone even asking you to.",
+  },
+  {
+    key: "last_minute_genius",
+    title: "The Last-Minute Genius",
+    emoji: "⏰",
+    description:
+      "You do your best work right up against the deadline, every time. Early starts have never quite worked for you — something about the pressure of the clock is what actually gets your best ideas out.",
+  },
+  {
+    key: "multitasker",
+    title: "The Chronic Multitasker",
+    emoji: "🎪",
+    description:
+      "You've got six things open at once and somehow all of them are urgent. Single-tasking has never really suited you — you think better with a few plates spinning than with one thing in front of you at a time.",
+  },
+  {
+    key: "devils_advocate",
+    title: "The Devil's Advocate",
+    emoji: "🥊",
+    description:
+      "You'll poke holes in the plan — even your own — just to stress-test it. It's not pessimism, it's a habit: if a plan can survive you arguing against it, you figure it can survive contact with reality too.",
+  },
+  {
+    key: "silent_fixer",
+    title: "The Silent Fixer",
+    emoji: "🤫",
+    description:
+      "You quietly clean up messes instead of ever mentioning who made them. Credit has never really been the point for you — you just can't leave something broken sitting there when you know how to fix it.",
+  },
 ];
 
 const RED_FLAG_QUESTIONS: CareerProfileQuestion[] = [
@@ -504,14 +608,62 @@ export const CORPORATE_RED_FLAG_QUIZ: CareerProfileQuizDefinition = {
 // ---------------------------------------------------------------------------
 
 const AI_ERA_ARCHETYPES: CareerProfileArchetype[] = [
-  { key: "human_judgment", title: "Human Judgment", emoji: "🧭", description: "When the stakes are high and the data's incomplete, people trust your call." },
-  { key: "relationship_capital", title: "Relationship Capital", emoji: "🤝", description: "Deals and decisions still move through trust, and people trust you." },
-  { key: "creative_leaps", title: "Creative Leaps", emoji: "🎨", description: "You connect ideas nobody else thought to connect." },
-  { key: "systems_thinking", title: "Systems Thinking", emoji: "🧩", description: "You see how the pieces fit together, not just the piece in front of you." },
-  { key: "adaptability", title: "Adaptability", emoji: "🌊", description: "You pick up new tools and new ways of working faster than most." },
-  { key: "storytelling", title: "Storytelling", emoji: "📖", description: "You make the complicated thing make sense to whoever's in the room." },
-  { key: "ownership", title: "Ownership", emoji: "🛡️", description: "When it's on the line, you're the one who takes it personally." },
-  { key: "orchestration", title: "Orchestration", emoji: "🎼", description: "You're the one who directs the tools, the people, and the plan toward one outcome." },
+  {
+    key: "human_judgment",
+    title: "Human Judgment",
+    emoji: "🧭",
+    description:
+      "When the stakes are high and the data's incomplete, people trust your call. A tool can hand you a confident answer, but you're the one who knows when the context around it means that answer is actually wrong.",
+  },
+  {
+    key: "relationship_capital",
+    title: "Relationship Capital",
+    emoji: "🤝",
+    description:
+      "Deals and decisions still move through trust, and people trust you. No model can replace the fact that when you say something will work, the room actually believes you — and acts on it.",
+  },
+  {
+    key: "creative_leaps",
+    title: "Creative Leaps",
+    emoji: "🎨",
+    description:
+      "You connect ideas nobody else thought to connect. Where a tool remixes what already exists, you're the one who notices the option that was never in the training data to begin with.",
+  },
+  {
+    key: "systems_thinking",
+    title: "Systems Thinking",
+    emoji: "🧩",
+    description:
+      "You see how the pieces fit together, not just the piece in front of you. You're the one who catches what a narrow, well-optimized answer would quietly break somewhere else downstream.",
+  },
+  {
+    key: "adaptability",
+    title: "Adaptability",
+    emoji: "🌊",
+    description:
+      "You pick up new tools and new ways of working faster than most. Change doesn't rattle you — you treat every new tool as one more thing to get good at using, not a threat to what you already know.",
+  },
+  {
+    key: "storytelling",
+    title: "Storytelling",
+    emoji: "📖",
+    description:
+      "You make the complicated thing make sense to whoever's in the room. A sharp analysis is only useful if someone acts on it, and you're the one who turns the data into a decision people actually understand.",
+  },
+  {
+    key: "ownership",
+    title: "Ownership",
+    emoji: "🛡️",
+    description:
+      "When it's on the line, you're the one who takes it personally. You don't need to be told to care about the outcome — accountability isn't a policy for you, it's just how you work.",
+  },
+  {
+    key: "orchestration",
+    title: "Orchestration",
+    emoji: "🎼",
+    description:
+      "You're the one who directs the tools, the people, and the plan toward one outcome. Plenty of people can run a single piece well; you're the one who makes sure all of the pieces are actually moving in the same direction.",
+  },
 ];
 
 const AI_ERA_QUESTIONS: CareerProfileQuestion[] = [
@@ -612,14 +764,62 @@ export const AI_ERA_ADVANTAGE_QUIZ: CareerProfileQuizDefinition = {
 // ---------------------------------------------------------------------------
 
 const CAREER_MODE_ARCHETYPES: CareerProfileArchetype[] = [
-  { key: "owner_mode", title: "Owner Mode", emoji: "🏗️", description: "You treat the work like it's yours, because to you, it is." },
-  { key: "growth_mode", title: "Growth Mode", emoji: "📈", description: "Right now, you're optimizing for how much you're learning, not just what's due." },
-  { key: "explorer_mode", title: "Explorer Mode", emoji: "🧭", description: "You're testing what actually excites you before committing to one direction." },
-  { key: "focus_mode", title: "Focus Mode", emoji: "🎯", description: "You've picked your lane and you're going deep, not wide." },
-  { key: "team_mode", title: "Team Mode", emoji: "🤝", description: "Your energy right now is about making the people around you better." },
-  { key: "stability_mode", title: "Stability Mode", emoji: "⚓", description: "You're building a solid foundation, on purpose, before the next big leap." },
-  { key: "ambition_mode", title: "Ambition Mode", emoji: "🚀", description: "You're playing for the next level, and it shows in how you show up." },
-  { key: "balance_mode", title: "Balance Mode", emoji: "🌤️", description: "You're protecting your energy so the work stays sustainable, not just intense." },
+  {
+    key: "owner_mode",
+    title: "Owner Mode",
+    emoji: "🏗️",
+    description:
+      "You treat the work like it's yours, because to you, it is. Titles and org charts are almost beside the point — if something's broken and it's in front of you, you fix it like your name is on it.",
+  },
+  {
+    key: "growth_mode",
+    title: "Growth Mode",
+    emoji: "📈",
+    description:
+      "Right now, you're optimizing for how much you're learning, not just what's due. You're deliberately choosing the harder, less certain path when it teaches you something the easy path wouldn't.",
+  },
+  {
+    key: "explorer_mode",
+    title: "Explorer Mode",
+    emoji: "🧭",
+    description:
+      "You're testing what actually excites you before committing to one direction. This is a season of genuine curiosity for you, not indecision — you're gathering real evidence about what you want before you commit to it.",
+  },
+  {
+    key: "focus_mode",
+    title: "Focus Mode",
+    emoji: "🎯",
+    description:
+      "You've picked your lane and you're going deep, not wide. Saying no to the shiny distractions is how you're building real depth right now, and it's starting to show in how good you are at the one thing you chose.",
+  },
+  {
+    key: "team_mode",
+    title: "Team Mode",
+    emoji: "🤝",
+    description:
+      "Your energy right now is about making the people around you better. Your own output has taken a back seat, on purpose, to whether the people around you are actually leveling up.",
+  },
+  {
+    key: "stability_mode",
+    title: "Stability Mode",
+    emoji: "⚓",
+    description:
+      "You're building a solid foundation, on purpose, before the next big leap. This isn't playing it safe — it's you deliberately getting your footing right so the next move actually holds.",
+  },
+  {
+    key: "ambition_mode",
+    title: "Ambition Mode",
+    emoji: "🚀",
+    description:
+      "You're playing for the next level, and it shows in how you show up. Every project right now is at least partly about proving you're ready for what's next, and you're not being quiet about it.",
+  },
+  {
+    key: "balance_mode",
+    title: "Balance Mode",
+    emoji: "🌤️",
+    description:
+      "You're protecting your energy so the work stays sustainable, not just intense. You've learned the hard way that burnout doesn't actually get you there faster, so you're deliberately playing the long game.",
+  },
 ];
 
 const CAREER_MODE_QUESTIONS: CareerProfileQuestion[] = [

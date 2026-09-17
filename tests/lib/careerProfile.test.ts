@@ -315,6 +315,10 @@ describe("Career Profile: card data", () => {
     for (const row of card!.rows) {
       expect(row.title).not.toBe("—");
       expect(row.title.length).toBeGreaterThan(0);
+      // Card now shows the archetype's own "why" line alongside its title
+      // (see careerProfileCardImage.tsx) -- every completed row should have
+      // one, never a blank explanation on a public image.
+      expect(row.description.length).toBeGreaterThan(0);
     }
   });
 

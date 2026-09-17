@@ -1,11 +1,11 @@
 // Builds the JSX passed to next/og's ImageResponse for the shareable Career
 // PROFILE Card -- the quiz-answer-based card, deliberately separate from
 // lib/careerCardImage.tsx (the memory-evidence-based Career WRAPPED card).
-// Same visual family (dark gradient/glass canvas, same footer treatment) so
-// the two read as siblings from one brand system, but this one is
-// structurally simpler by design (see the Home redesign plan's "Proposed
-// Career Profile Card" mockup): five equal-weight result rows, no stats, no
-// paragraphs -- built to be scannable at social-feed size.
+// Same dark gradient canvas as that card's family, but laid out as five
+// equal, full-bleed bands stacked to fill the entire canvas edge to edge
+// (see the "Product feedback" comment further down) rather than a floating
+// panel with margins -- each band names the archetype AND says why, via
+// the archetype's own one-line description.
 //
 // Shared by app/api/career-profile/card-preview/route.ts (the live in-app
 // preview before anything is generated), app/api/career-profile/
@@ -29,6 +29,12 @@ export type CareerProfileCardRow = {
   quizId: string; // CareerProfileQuizId -- looked up against QUIZ_GLYPHS below for the row's icon
   eyebrow: string; // e.g. "CAREER SUPERPOWER" -- CareerProfileQuizMeta.resultLabel
   title: string; // e.g. "Strategic Problem Solver" -- the archetype title, "The "/"Owner Mode" etc as-is
+  // The archetype's own "why" line (CareerProfileArchetype.description) --
+  // product feedback wanted each row to say why, not just name the
+  // archetype. Always generic to the archetype, never this user's actual
+  // memories -- Career Profile stays quiz-answer-based, never blended with
+  // Career Wrapped's memory evidence (see lib/careerProfile.ts).
+  description: string;
 };
 
 export type CareerProfileCardData = {
@@ -36,7 +42,39 @@ export type CareerProfileCardData = {
   rows: CareerProfileCardRow[]; // always 5, in CAREER_PROFILE_QUIZ_ORDER order
 };
 
-export const CAREER_PROFILE_CARD_SIZE = { width: 1080, height: 1350 };
+// Taller than a standard 4:5 social crop (1080x1350) -- product feedback
+// wanted bigger type and a real paragraph per row with nothing cramped, and
+// there wasn't room for both inside 1350. 1500 gives each band the extra
+// headroom that needs without shrinking anything back down. Still well
+// within normal share-image proportions for a direct download/WhatsApp/
+// LinkedIn/X share (this was never cropped to Instagram's feed grid).
+export const CAREER_PROFILE_CARD_SIZE = { width: 1080, height: 1500 };
+
+// Converts a hex color to an rgba() string at the given alpha -- used to
+// derive every tint/wash/border below from one base color per quiz instead
+// of hand-picking a matching rgba for each, which is how these tend to
+// drift out of sync with each other over time.
+function hexToRgba(hex: string, alpha: number): string {
+  const h = hex.replace("#", "");
+  const r = parseInt(h.substring(0, 2), 16);
+  const g = parseInt(h.substring(2, 4), 16);
+  const b = parseInt(h.substring(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+// One accent color per quiz -- product feedback wanted this to read as an
+// attractive, shareable infographic rather than a plain document, and a
+// single amber accent on every row was a big part of why it read as flat.
+// Each band now gets its own color identity (icon chip, eyebrow, numeral
+// badge, and a soft corner wash on the band's own background).
+const ROW_ACCENTS: Record<string, string> = {
+  career_superpower: "#fbbf24", // amber
+  corporate_character: "#38bdf8", // sky blue
+  corporate_red_flag: "#fb7185", // rose
+  ai_era_advantage: "#a78bfa", // violet
+  career_mode: "#34d399", // emerald
+};
+const DEFAULT_ACCENT = "#fbbf24";
 
 function LogoMarkSvg({ size = 44 }: { size?: number }) {
   return (
@@ -73,54 +111,54 @@ function LogoMarkSvg({ size = 44 }: { size?: number }) {
 // entirely (see StarGlyph/QuoteGlyph there) by drawing its own inline
 // glyphs instead. Same fix here, one simple original shape per quiz so the
 // row keeps a distinct, recognizable icon without depending on the network.
-function BoltGlyph() {
+function BoltGlyph({ size = 26, color = "#f4b73f" }: { size?: number; color?: string }) {
   // Career Superpower
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="#f4b73f" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M13 2 4 14h6l-1 8 9-12h-6z" fill={color} />
     </svg>
   );
 }
-function EyeGlyph() {
+function EyeGlyph({ size = 26, color = "#f4b73f" }: { size?: number; color?: string }) {
   // Corporate Character
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <path d="M12 5c5.5 0 9.5 5 10.5 7-1 2-5 7-10.5 7S2.5 14 1.5 12C2.5 10 6.5 5 12 5z" stroke="#f4b73f" strokeWidth={1.8} fill="none" />
-      <circle cx="12" cy="12" r="3.2" fill="#f4b73f" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M12 5c5.5 0 9.5 5 10.5 7-1 2-5 7-10.5 7S2.5 14 1.5 12C2.5 10 6.5 5 12 5z" stroke={color} strokeWidth={1.8} fill="none" />
+      <circle cx="12" cy="12" r="3.2" fill={color} />
     </svg>
   );
 }
-function FlagGlyph() {
+function FlagGlyph({ size = 26, color = "#f4b73f" }: { size?: number; color?: string }) {
   // Corporate Red Flag
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <path d="M6 3v18" stroke="#f4b73f" strokeWidth={2} strokeLinecap="round" />
-      <path d="M6 4h13l-3.2 4.2L19 12.4H6z" fill="#f4b73f" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M6 3v18" stroke={color} strokeWidth={2} strokeLinecap="round" />
+      <path d="M6 4h13l-3.2 4.2L19 12.4H6z" fill={color} />
     </svg>
   );
 }
-function NodesGlyph() {
+function NodesGlyph({ size = 26, color = "#f4b73f" }: { size?: number; color?: string }) {
   // AI-Era Career Advantage -- abstract network/orchestration motif
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <path d="M6 18 12 6l6 12" stroke="#f4b73f" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
-      <circle cx="12" cy="6" r="2.6" fill="#f4b73f" />
-      <circle cx="6" cy="18" r="2.6" fill="#f4b73f" />
-      <circle cx="18" cy="18" r="2.6" fill="#f4b73f" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <path d="M6 18 12 6l6 12" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="12" cy="6" r="2.6" fill={color} />
+      <circle cx="6" cy="18" r="2.6" fill={color} />
+      <circle cx="18" cy="18" r="2.6" fill={color} />
     </svg>
   );
 }
-function CompassGlyph() {
+function CompassGlyph({ size = 26, color = "#f4b73f" }: { size?: number; color?: string }) {
   // Career Mode
   return (
-    <svg width={26} height={26} viewBox="0 0 24 24" fill="none">
-      <circle cx="12" cy="12" r="9.5" stroke="#f4b73f" strokeWidth={1.8} fill="none" />
-      <path d="M15.5 8.5 13 13l-4.5 2.5L11 11z" fill="#f4b73f" />
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <circle cx="12" cy="12" r="9.5" stroke={color} strokeWidth={1.8} fill="none" />
+      <path d="M15.5 8.5 13 13l-4.5 2.5L11 11z" fill={color} />
     </svg>
   );
 }
 
-const QUIZ_GLYPHS: Record<string, () => ReturnType<typeof BoltGlyph>> = {
+const QUIZ_GLYPHS: Record<string, (props: { size?: number; color?: string }) => ReturnType<typeof BoltGlyph>> = {
   career_superpower: BoltGlyph,
   corporate_character: EyeGlyph,
   corporate_red_flag: FlagGlyph,
@@ -128,149 +166,160 @@ const QUIZ_GLYPHS: Record<string, () => ReturnType<typeof BoltGlyph>> = {
   career_mode: CompassGlyph,
 };
 
-function GlowOrb({ size, top, left, right, bottom, color }: { size: number; top?: number; left?: number; right?: number; bottom?: number; color: string }) {
-  const position: Record<string, number> = {};
-  if (top !== undefined) position.top = top;
-  if (left !== undefined) position.left = left;
-  if (right !== undefined) position.right = right;
-  if (bottom !== undefined) position.bottom = bottom;
+// Product feedback (round 2): round 1 read as a plain document -- gray body
+// text too small, every row the same monochrome amber-on-dark, nothing that
+// made someone want to actually share it. Fix: a distinct accent color per
+// quiz (ROW_ACCENTS) washes each band's own corner, colors its icon chip
+// and numeral badge, and the "why" paragraph is bigger and brighter. Taller
+// canvas (see CAREER_PROFILE_CARD_SIZE) gives the bigger type room to
+// breathe without going back to feeling cramped.
+const BAND_HEIGHT = CAREER_PROFILE_CARD_SIZE.height / 5; // 300 * 5 = 1500, exact, no remainder
+
+// Keeps a row's "why" line from overflowing its band on an unusually long
+// entry -- every current archetype description (see lib/careerProfile.ts)
+// runs well under this, so it's a safety net, not the normal case. Satori
+// has no reliable line-clamp, so this caps it by character count instead.
+function truncateDescription(text: string, max = 320): string {
+  if (text.length <= max) return text;
+  return `${text.slice(0, max - 1).trimEnd()}…`;
+}
+
+// One full-bleed band -- a colored icon chip, eyebrow, archetype title, its
+// full "why" paragraph in large, bright type, and a colored numeral badge.
+// Each element pulls from this row's own ROW_ACCENTS color, so the five
+// bands read as five distinct, colorful sections of one infographic rather
+// than a uniform gray list. The first band also carries the card's title
+// (who this is) and the last carries the Strivo.ai footer, both fit inside
+// that band's own height rather than given separate bands of their own.
+function Band({ row, index, cardTitle }: { row: CareerProfileCardRow; index: number; cardTitle: string }) {
+  const Glyph = QUIZ_GLYPHS[row.quizId] ?? BoltGlyph;
+  const accent = ROW_ACCENTS[row.quizId] ?? DEFAULT_ACCENT;
+  const isFirst = index === 0;
+  const isLast = index === 4;
+
   return (
     <div
       style={{
         display: "flex",
-        position: "absolute",
-        width: size,
-        height: size,
-        ...position,
-        borderRadius: size,
-        background: `radial-gradient(circle, ${color} 0%, rgba(0,0,0,0) 72%)`,
+        flexDirection: "column",
+        width: "100%",
+        height: BAND_HEIGHT,
+        flexShrink: 0,
+        padding: "0 56px",
+        // A soft wash of this row's own accent color in the top-right
+        // corner, fading back to transparent (so the dark base canvas
+        // shows through everywhere else) -- gives each band its own color
+        // identity without losing contrast for the text sitting on top.
+        background: `radial-gradient(circle at 100% 0%, ${hexToRgba(accent, 0.24)} 0%, rgba(0,0,0,0) 62%)`,
+        borderBottom: isLast ? "none" : `1px solid ${hexToRgba(accent, 0.22)}`,
       }}
-    />
-  );
-}
+    >
+      {isFirst && (
+        <div style={{ display: "flex", fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.6)", paddingTop: 24 }}>
+          {cardTitle}
+        </div>
+      )}
 
-const GLASS_PANEL: Record<string, string | number> = {
-  background: "linear-gradient(160deg, rgba(255,255,255,0.11), rgba(255,255,255,0.03))",
-  border: "1px solid rgba(255,255,255,0.14)",
-};
+      <div style={{ display: "flex", alignItems: "center", gap: 24, flexGrow: 1 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: 92,
+            height: 92,
+            flexShrink: 0,
+            borderRadius: 26,
+            background: `linear-gradient(135deg, ${hexToRgba(accent, 0.32)}, ${hexToRgba(accent, 0.12)})`,
+            border: `1px solid ${hexToRgba(accent, 0.5)}`,
+          }}
+        >
+          <Glyph size={40} color={accent} />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+          {/* The category label ("CAREER SUPERPOWER", "CORPORATE RED FLAG",
+              etc.) -- product feedback was that this needed to be bigger
+              and bolder so it's immediately clear what each section is
+              even before reading the specific result. Given its own
+              colored badge (not just colored text) so it reads as a
+              category tag, distinct from the archetype title below it. */}
+          <div
+            style={{
+              display: "flex",
+              alignSelf: "flex-start",
+              alignItems: "center",
+              fontSize: 23,
+              fontWeight: 800,
+              color: accent,
+              letterSpacing: 1.2,
+              background: hexToRgba(accent, 0.16),
+              border: `1.5px solid ${hexToRgba(accent, 0.45)}`,
+              borderRadius: 10,
+              padding: "6px 14px",
+            }}
+          >
+            {row.eyebrow}
+          </div>
+          <div style={{ display: "flex", marginTop: 10, fontSize: 38, fontWeight: 800, color: "#ffffff", lineHeight: 1.08 }}>
+            {row.title}
+          </div>
+          {!!row.description && (
+            <div style={{ display: "flex", marginTop: 11, fontSize: 22, fontWeight: 500, color: "rgba(255,255,255,0.86)", lineHeight: 1.44 }}>
+              {truncateDescription(row.description)}
+            </div>
+          )}
+        </div>
+        <div
+          style={{
+            display: "flex",
+            flexShrink: 0,
+            alignItems: "center",
+            justifyContent: "center",
+            width: 58,
+            height: 58,
+            borderRadius: 29,
+            background: hexToRgba(accent, 0.14),
+            border: `1.5px solid ${hexToRgba(accent, 0.55)}`,
+            fontSize: 21,
+            fontWeight: 800,
+            color: accent,
+          }}
+        >
+          {index + 1}
+        </div>
+      </div>
 
-// One result row -- icon chip, eyebrow label, bold title. A flat sibling in
-// the panel's children array (see the file comment on why this matters).
-function ResultRow({ row }: { row: CareerProfileCardRow }) {
-  const Glyph = QUIZ_GLYPHS[row.quizId] ?? BoltGlyph;
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          width: 56,
-          height: 56,
-          flexShrink: 0,
-          borderRadius: 16,
-          background: "rgba(255,255,255,0.09)",
-        }}
-      >
-        <Glyph />
-      </div>
-      <div style={{ display: "flex", flexDirection: "column" }}>
-        <div style={{ display: "flex", fontSize: 15, fontWeight: 700, color: "#f4b73f", letterSpacing: 1.5 }}>{row.eyebrow}</div>
-        <div style={{ display: "flex", marginTop: 4, fontSize: 27, fontWeight: 800, color: "#ffffff", lineHeight: 1.15 }}>{row.title}</div>
-      </div>
+      {isLast && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", paddingBottom: 24 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <LogoMarkSvg size={20} />
+            <div style={{ display: "flex", fontSize: 14, fontWeight: 600, color: "rgba(255,255,255,0.5)" }}>Generated by Strivo.ai</div>
+          </div>
+          <div style={{ display: "flex", fontSize: 13, fontWeight: 600, color: "rgba(255,255,255,0.38)" }}>Discover yours → strivo.ai</div>
+        </div>
+      )}
     </div>
   );
 }
 
-function RowDivider() {
-  return <div style={{ display: "flex", width: "100%", height: 1, background: "rgba(255,255,255,0.12)" }} />;
-}
-
-// The one Career Profile Card design -- dark gradient canvas matching
-// Career Wrapped's TemplateA tone, structurally simpler: an eyebrow +
-// title header, then five equal-weight rows with dividers between them,
-// then the same footer treatment as the Wrapped card.
+// The one Career Profile Card design -- five full-bleed bands, edge to
+// edge, filling the entire canvas (see the file comment above).
 function TemplateA(data: CareerProfileCardData) {
-  // Flattened, not a Fragment: dividers are interleaved directly into the
-  // rows array so every element handed to the panel below is a direct,
-  // equal-depth sibling (see the file comment's Satori/Yoga warning).
-  const rowElements = data.rows.flatMap((row, i) => {
-    const nodes = [];
-    if (i > 0) nodes.push(<RowDivider key={`divider-${row.eyebrow}`} />);
-    nodes.push(<ResultRow key={row.eyebrow} row={row} />);
-    return nodes;
-  });
-
   return (
     <div
       style={{
         width: "100%",
         height: "100%",
         display: "flex",
-        position: "relative",
         flexDirection: "column",
-        padding: 60,
         background: "linear-gradient(150deg,#1a1330 0%,#241a42 45%,#1a2247 100%)",
         fontFamily: "sans-serif",
         overflow: "hidden",
       }}
     >
-      <GlowOrb size={640} top={-220} right={-200} color="rgba(124,58,237,0.55)" />
-      <GlowOrb size={560} bottom={-180} left={-160} color="rgba(56,90,220,0.45)" />
-      <GlowOrb size={420} top={260} right={-140} color="rgba(244,183,63,0.16)" />
-
-      <div style={{ display: "flex", flexDirection: "column", position: "relative" }}>
-        <div
-          style={{
-            display: "flex",
-            alignSelf: "flex-start",
-            alignItems: "center",
-            fontSize: 20,
-            fontWeight: 700,
-            color: "#f4b73f",
-            letterSpacing: 3,
-            background: "rgba(244,183,63,0.14)",
-            border: "1px solid rgba(244,183,63,0.3)",
-            borderRadius: 999,
-            padding: "8px 18px",
-          }}
-        >
-          CAREER PROFILE
-        </div>
-        <div style={{ display: "flex", marginTop: 18, fontSize: 46, fontWeight: 800, color: "#ffffff", lineHeight: 1.12 }}>
-          {data.title}
-        </div>
-      </div>
-
-      <div
-        style={{
-          ...GLASS_PANEL,
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-          flexGrow: 1,
-          position: "relative",
-          gap: 26,
-          borderRadius: 26,
-          padding: "40px 36px",
-          marginTop: 30,
-        }}
-      >
-        {rowElements}
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", position: "relative", gap: 20, marginTop: 22 }}>
-        <div style={{ display: "flex", width: "100%", height: 1, background: "rgba(255,255,255,0.12)" }} />
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <LogoMarkSvg size={28} />
-            <div style={{ display: "flex", fontSize: 19, fontWeight: 600, color: "rgba(255,255,255,0.55)" }}>
-              Generated by Strivo.ai
-            </div>
-          </div>
-          <div style={{ display: "flex", fontSize: 17, fontWeight: 600, color: "rgba(255,255,255,0.4)" }}>Discover yours → strivo.ai</div>
-        </div>
-      </div>
+      {data.rows.map((row, i) => (
+        <Band key={row.quizId} row={row} index={i} cardTitle={data.title} />
+      ))}
     </div>
   );
 }

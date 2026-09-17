@@ -84,19 +84,16 @@ type StartChatArgs = {
   prompt: string;
 };
 
-// Home's own palette — deliberately not the shared theme tokens. Home is
-// now a fully dark, free-flowing page matching the marketing site's own
-// look (src/components/marketing/MarketingHome.tsx: bg #0a0a0f, hairline
-// `border-[#1e1e26]` section dividers instead of boxed white/bordered
-// cards, sparse `border-[#2a2a35]` cards where a card is genuinely
-// warranted) — product feedback was that a stack of differently-styled
-// boxed cards read as disconnected, and that the app and marketing site
-// should feel like one product. This is staged to Home only for now (the
-// rest of the app — Record, Chats, Memories, Settings — is still the
-// standard light theme); expanding further is a separate decision.
-const DARK = "#0a0a0f";
-const HAIRLINE = "border-[#1e1e26]";
-const CARD_BORDER = "border-[#2a2a35]";
+// Home's header tone -- same DARK as DarkHeader.tsx/BottomNav.tsx use
+// everywhere else in the app. A prior version of this file pushed Home's
+// entire BODY dark too (to match the marketing site's near-black look),
+// but that made Home visually inconsistent with the rest of the app (every
+// other screen is dark-header-on-light-body), so it's reverted here: only
+// the header stays dark, the body below is the app's normal light theme.
+// The "free-flowing, no boxy cards" principle from that experiment is kept
+// -- sections below are plain rows separated by spacing/hairlines, not
+// bordered/backgrounded boxes -- just applied to the light body instead.
+const DARK = "#26213c";
 
 // initialData is fetched server-side by page.tsx (a Server Component)
 // before anything reaches the browser — see ChatDetailClient.tsx for the
@@ -225,7 +222,7 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
   );
 
   return (
-    <div className="pb-6" style={{ background: DARK }}>
+    <div className="pb-6">
       {header}
 
       {/* "How Strivo.ai works" -- same three steps, same labels and copy as
@@ -235,24 +232,24 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
           visitors who can't act yet), these are real, functional buttons --
           product feedback was explicit that a logged-in user should be able
           to just tap Record / Create memory / Chat and go, not read a
-          description of what those do. */}
-      <div className={`border-t ${HAIRLINE} px-5 pt-6`}>
-        <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[#6d6d7a]">How Strivo.ai works</p>
-        <div className={`mt-3 flex items-stretch rounded-2xl border ${CARD_BORDER}`} style={{ background: "rgba(255,255,255,0.02)" }}>
+          description of what those do. No card/border wrapper -- just the
+          three buttons sitting directly on the light body, per the
+          "free-flowing, no boxy cards" feedback. */}
+      <div className="px-5 pt-5">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">How Strivo.ai works</p>
+        <div className="mt-2 flex items-stretch">
           <FlowButton
             icon={<Mic size={17} />}
             label="1. Record"
             sublabel="Tap the mic, speak freely"
             onClick={() => router.push("/record")}
           />
-          <div className="w-px shrink-0 self-stretch" style={{ background: "#2a2a35" }} />
           <FlowButton
             icon={<Sparkles size={17} />}
             label="2. Create memory"
             sublabel="Transcribed & tagged for you"
             onClick={() => router.push("/record?mode=type")}
           />
-          <div className="w-px shrink-0 self-stretch" style={{ background: "#2a2a35" }} />
           <FlowButton
             icon={<MessageSquare size={17} />}
             label="3. Chat"
@@ -372,33 +369,32 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
         />
       )}
 
-      {/* Calm invitation to record — same brand gradient as the Career
-          Profile/Wrapped cards above it, so it reads as a sibling in the
-          same dark card family rather than a separate light-theme block. */}
-      <div className="px-5 pt-5">
-        <div className={`rounded-2xl border ${CARD_BORDER} p-5 text-center`} style={{ background: "linear-gradient(135deg,#1c1533,#221a3d)" }}>
-          <div
-            className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-white/8 text-purple-300"
-          >
-            <Mic size={19} />
-          </div>
-          <p className="text-sm font-semibold text-white">What&apos;s on your mind today?</p>
-          <p className="mt-0.5 text-[11px] text-white/50">A minute of speaking is worth remembering.</p>
-          <button
-            onClick={() => router.push("/record")}
-            className="mt-3.5 rounded-pill px-5 py-2.5 text-xs font-semibold text-white"
-            style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
-          >
-            Start recording
-          </button>
+      {/* Calm invitation to record — no card/border either, just a centered
+          prompt flowing directly on the light body, set off from the
+          teasers above by a plain hairline rather than a boxed container. */}
+      <div className="border-t border-[#ece5f5] mt-5 px-5 pt-6 text-center">
+        <div
+          className="mx-auto mb-2.5 flex h-11 w-11 items-center justify-center rounded-full bg-surface text-[#8b5cf6]"
+          style={{ boxShadow: "0 6px 16px rgba(139,92,246,0.18)" }}
+        >
+          <Mic size={19} />
         </div>
+        <p className="text-sm font-semibold text-[#3c3650]">What&apos;s on your mind today?</p>
+        <p className="mt-0.5 text-[11px] text-[#8a82a8]">A minute of speaking is worth remembering.</p>
+        <button
+          onClick={() => router.push("/record")}
+          className="mt-3.5 rounded-pill px-5 py-2.5 text-xs font-semibold text-white"
+          style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}
+        >
+          Start recording
+        </button>
       </div>
 
       {data.recentChats.length > 0 && (
-        <div className={`border-t ${HAIRLINE} mt-5 px-5 pt-5`}>
+        <div className="border-t border-[#ece5f5] mt-5 px-5 pt-5">
           <div className="mb-2.5 flex items-center justify-between">
-            <p className="text-[10.5px] font-semibold uppercase tracking-[0.1em] text-[#6d6d7a]">Continue</p>
-            <button onClick={() => router.push("/chats")} className="text-[11px] font-semibold text-brand-secondary">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Continue</p>
+            <button onClick={() => router.push("/chats")} className="text-[11px] font-semibold text-[#8b5cf6]">
               View all
             </button>
           </div>
@@ -407,16 +403,16 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
               const Icon = chatCategoryIcon(chat.category);
               return (
                 <button key={chat.id} onClick={() => router.push(`/chats/${chat.id}`)} className="flex w-full items-center gap-3 text-left">
-                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] border ${CARD_BORDER} text-brand-secondary`} style={{ background: "#161620" }}>
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[10px] bg-[#f2effa] text-[#8b5cf6]">
                     <Icon size={16} />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="truncate text-[12.5px] font-medium text-white">{chat.title}</p>
-                    <p className="text-[11px] text-[#6d6d7a]">
+                    <p className="truncate text-[12.5px] font-medium text-ink">{chat.title}</p>
+                    <p className="text-[11px] text-ink-faint">
                       Last active {formatDistanceToNowStrict(new Date(chat.updated_at), { addSuffix: true })}
                     </p>
                   </div>
-                  <ChevronRight size={15} className="shrink-0 text-[#4a4a55]" />
+                  <ChevronRight size={15} className="shrink-0 text-[#cec7dd]" />
                 </button>
               );
             })}
@@ -437,31 +433,27 @@ function FlowButton({ icon, label, sublabel, onClick }: { icon: ReactNode; label
   return (
     <button
       onClick={onClick}
-      className="flex min-w-0 flex-1 flex-col items-center gap-1.5 px-2 py-4 text-center transition-transform active:scale-[0.97]"
+      className="flex min-w-0 flex-1 flex-col items-center gap-1.5 px-2 py-3 text-center transition-transform active:scale-[0.97]"
     >
-      <div
-        className="flex h-9 w-9 items-center justify-center rounded-full border border-[#2a2a35] text-brand-secondary"
-        style={{ background: "#161620" }}
-      >
-        {icon}
-      </div>
-      <p className="text-[11px] font-semibold leading-tight text-white">{label}</p>
-      <p className="text-[9.5px] leading-tight text-[#6d6d7a]">{sublabel}</p>
+      <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[#f2effa] text-[#8b5cf6]">{icon}</div>
+      <p className="text-[11px] font-semibold leading-tight text-ink">{label}</p>
+      <p className="text-[9.5px] leading-tight text-ink-faint">{sublabel}</p>
     </button>
   );
 }
 
-// Accent palette for the teaser cards below -- each feature keeps its own
-// established color (see each card's own comment above its usage) but all
-// now share the same dark, sparsely-bordered card shape as the marketing
-// site's own cards (border-[#2a2a35], no solid pastel fills) instead of
-// five different light, solid-fill boxes.
+// Accent palette for the teaser rows below -- each feature keeps its own
+// established color (see each row's own comment above its usage). No
+// card/border/background box around any of them -- product feedback was
+// explicit that Home should be a free-flowing list, not a stack of boxes,
+// so these are just a colored icon chip + text, separated from each other
+// by spacing alone.
 const TEASER_ACCENTS = {
-  amber: { icon: "text-amber-400", chip: "bg-amber-400/10" },
-  rose: { icon: "text-rose-400", chip: "bg-rose-400/10" },
-  indigo: { icon: "text-indigo-400", chip: "bg-indigo-400/10" },
-  violet: { icon: "text-violet-400", chip: "bg-violet-400/10" },
-  emerald: { icon: "text-emerald-400", chip: "bg-emerald-400/10" },
+  amber: { icon: "text-[#b3811f]", chip: "bg-[#f8ecd2]" },
+  rose: { icon: "text-rose-500", chip: "bg-rose-50" },
+  indigo: { icon: "text-indigo-500", chip: "bg-indigo-50" },
+  violet: { icon: "text-[#7c6ff0]", chip: "bg-[#f5f3fd]" },
+  emerald: { icon: "text-emerald-600", chip: "bg-emerald-50" },
 } as const;
 
 function TeaserCard({
@@ -480,17 +472,13 @@ function TeaserCard({
   const { icon: iconClass, chip } = TEASER_ACCENTS[accent];
   return (
     <div className="px-5 pt-4">
-      <button
-        onClick={onClick}
-        className="flex w-full items-center gap-3 rounded-2xl border border-[#2a2a35] px-4 py-3.5 text-left"
-        style={{ background: "rgba(255,255,255,0.02)" }}
-      >
-        <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${chip} ${iconClass}`}>{icon}</div>
+      <button onClick={onClick} className="flex w-full items-center gap-3 text-left">
+        <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${chip} ${iconClass}`}>{icon}</div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-[12.5px] font-semibold text-white">{title}</p>
-          <p className="truncate text-[11px] text-[#8a8a99]">{subtitle}</p>
+          <p className="truncate text-[12.5px] font-semibold text-ink">{title}</p>
+          <p className="truncate text-[11px] text-ink-faint">{subtitle}</p>
         </div>
-        <ChevronRight size={15} className="shrink-0 text-[#4a4a55]" />
+        <ChevronRight size={15} className="shrink-0 text-[#cec7dd]" />
       </button>
     </div>
   );

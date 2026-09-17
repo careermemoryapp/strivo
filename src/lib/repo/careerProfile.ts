@@ -155,6 +155,13 @@ export function buildCareerProfileCardData(userId: string, displayName: string |
       // is implemented and every completed row's result_key always matches
       // a real archetype), but never render undefined onto a public image.
       title: archetype?.title ?? "—",
+      // The archetype's own explanation of the trait -- product feedback
+      // wanted each card row to say *why*, not just name the archetype.
+      // Deliberately generic ("why this archetype means what it means"),
+      // never pulled from this user's actual memories: Career Profile is
+      // quiz-answer-based and Career Wrapped is memory-evidence-based, and
+      // the two must never blend (see lib/careerProfile.ts's file comment).
+      description: archetype?.description ?? "",
     };
   });
 

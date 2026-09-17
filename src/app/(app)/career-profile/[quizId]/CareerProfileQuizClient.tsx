@@ -78,6 +78,16 @@ export function CareerProfileQuizClient({ quiz }: { quiz: CareerProfileQuizDefin
 
   return (
     <div className="min-h-screen" style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}>
+      {/* Fixed backdrop pinned to the viewport, not this div's own box --
+          see the matching comment in CareerProfileHubClient.tsx for why
+          (AppLayout's <main> pb-20 vs BottomNav's real height leaves a
+          strip that isn't covered by either, showing the light
+          --color-bg through as a "white line" on dark pages otherwise). */}
+      <div
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}
+        aria-hidden="true"
+      />
       <DarkHeader back inlineTitle={quiz.meta.title} />
 
       <div className="px-5 pt-6">
@@ -139,6 +149,15 @@ function ResultReveal({ result }: { result: SubmitResult }) {
 
   return (
     <div className="min-h-screen px-5 pb-10 pt-6" style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}>
+      {/* Fixed backdrop pinned to the viewport -- see the matching comment
+          in CareerProfileHubClient.tsx. Kept outside the motion.div below
+          on purpose: framer-motion's transform on an ancestor would become
+          the containing block for `fixed`, breaking the viewport pin. */}
+      <div
+        className="pointer-events-none fixed inset-0 -z-10"
+        style={{ background: "linear-gradient(180deg,#1a1330 0%,#241a42 60%,#1a2247 100%)" }}
+        aria-hidden="true"
+      />
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}>
         <p className="text-center text-[13px] font-semibold uppercase tracking-wide text-amber-200/80">
           {r.resultLabel} DISCOVERED {r.emoji}
