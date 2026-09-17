@@ -66,7 +66,7 @@ type HomeData = {
   // been generated for this user yet (new account, not enough history, or
   // due for the monthly automation to catch up) -- rendered as an honest
   // "still taking shape" line rather than an empty list.
-  suggestedRoles: { title: string; industry: string | null }[] | null;
+  suggestedRoles: { title: string; industry: string | null; reasoning: string | null }[] | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -92,6 +92,12 @@ type StartChatArgs = {
   chatTitle: string;
   category: string;
   prompt: string;
+  // "roles_explainer" tells the server to render the opening AI reply
+  // deterministically from the already-computed suggested-roles list
+  // instead of asking a fresh open-ended question -- see the matching
+  // "Explore these roles" button below and sendRolesExplainerMessage in
+  // lib/chatService.ts for why.
+  kind?: "roles_explainer";
 };
 
 // Home's header tone -- same DARK as DarkHeader.tsx/BottomNav.tsx use
@@ -159,13 +165,13 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
     }
   }, []);
 
-  async function startChat({ id, chatTitle, category, prompt }: StartChatArgs) {
+  async function startChat({ id, chatTitle, category, prompt, kind }: StartChatArgs) {
     setPendingAction(id);
     try {
       const res = await fetch("/api/chats", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title: chatTitle, category, initialMessage: prompt || undefined }),
+        body: JSON.stringify({ title: chatTitle, category, initialMessage: prompt || undefined, kind }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error();
@@ -389,6 +395,7 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
                     chatTitle: "Roles I'm ready for",
                     category: "Others",
                     prompt: "Based on my memories, what roles am I ready for right now?",
+                    kind: "roles_explainer",
                   })
                 }
                 disabled={pendingAction !== null}

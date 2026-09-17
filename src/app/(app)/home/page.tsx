@@ -126,7 +126,9 @@ export default async function HomePage() {
         // not enough history, or the monthly automation hasn't run since
         // they crossed the threshold) -- HomeClient shows an honest "still
         // taking shape" line in that case rather than an empty list.
-        suggestedRoles: suggestedRoles ? suggestedRoles.roles : null,
+        suggestedRoles: suggestedRoles
+          ? suggestedRoles.roles.map((r) => ({ title: r.title, industry: r.industry, reasoning: r.reasoning ?? null }))
+          : null,
         // See the comment above -- null entirely when the feature flag is
         // off, which is what tells HomeClient to render nothing here.
         careerWrapped: careerWrapped

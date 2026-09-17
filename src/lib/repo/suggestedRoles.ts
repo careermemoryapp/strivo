@@ -1,7 +1,11 @@
 import { getDb, newId, nowIso } from "@/lib/db";
 import { countMemories, countMemoriesSince } from "@/lib/repo/memories";
 
-export type SuggestedRole = { title: string; industry: string | null };
+// reasoning is optional on read (older rows generated before this field was
+// added simply won't have it -- parseSuggestedRoles below defaults it to
+// null rather than dropping the whole role) but always populated by every
+// NEW generation (see generateSuggestedRoles in lib/ai.ts).
+export type SuggestedRole = { title: string; industry: string | null; reasoning?: string | null };
 
 export type SuggestedRolesRow = {
   id: string;
@@ -57,11 +61,17 @@ function parseSuggestedRoles(row: SuggestedRolesRow): SuggestedRole[] {
   try {
     const parsed = JSON.parse(row.roles_json);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (r): r is SuggestedRole =>
-        !!r && typeof r === "object" && typeof (r as SuggestedRole).title === "string" &&
-        ((r as SuggestedRole).industry === null || typeof (r as SuggestedRole).industry === "string")
-    );
+    return parsed
+      .filter(
+        (r): r is SuggestedRole =>
+          !!r && typeof r === "object" && typeof (r as SuggestedRole).title === "string" &&
+          ((r as SuggestedRole).industry === null || typeof (r as SuggestedRole).industry === "string")
+      )
+      .map((r) => ({
+        title: r.title,
+        industry: r.industry,
+        reasoning: typeof r.reasoning === "string" ? r.reasoning : null,
+      }));
   } catch {
     return [];
   }

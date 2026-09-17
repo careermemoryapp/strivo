@@ -483,7 +483,7 @@ export async function generateGrowthNarrative(earlyMemories: Memory[], recentMem
   }
 }
 
-export type SuggestedRoleResult = { title: string; industry: string | null };
+export type SuggestedRoleResult = { title: string; industry: string | null; reasoning: string | null };
 
 // "Roles you're ready for" (Home screen) -- names up to 5 roles a user is
 // genuinely ready for right now, grounded ONLY in a sample of their own
@@ -493,10 +493,17 @@ export type SuggestedRoleResult = { title: string; industry: string | null };
 // industry is left null whenever the memories read as industry-agnostic
 // (transferable skills without a specific field named) rather than guessed
 // from the role title alone -- the UI shows that honestly as "Any
-// industry." Returns an empty array (not an error) when nothing in the
-// sample genuinely supports naming a role -- callers should treat that the
-// same as a hard failure (skip storing anything, try again next cycle)
-// rather than caching an empty result.
+// industry." reasoning is the 1-2 sentence "why this role" explanation shown
+// (verbatim, no further AI call) when the user taps "Explore these roles" on
+// Home -- see sendRolesExplainerMessage in lib/chatService.ts. It's stored
+// alongside the role now specifically so that explanation can be rendered
+// deterministically instead of asking a fresh open-ended chat question each
+// time, which is what previously produced a different-looking (sometimes a
+// direct answer, sometimes a request for more detail) response on every tap.
+// Returns an empty array (not an error) when nothing in the sample genuinely
+// supports naming a role -- callers should treat that the same as a hard
+// failure (skip storing anything, try again next cycle) rather than caching
+// an empty result.
 export async function generateSuggestedRoles(memories: Memory[]): Promise<SuggestedRoleResult[] | null> {
   const openai = getClient();
   if (!openai || memories.length === 0) return null;
@@ -517,9 +524,11 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
           content:
             "You are a career coach reviewing someone's personal career memories (from a career-memory app) to name roles they're genuinely ready for RIGHT NOW. " +
             "You'll be given a list of memories (title, optional competencies, summary). " +
-            'Respond ONLY with JSON: {"roles": [{"title": string, "industry": string or null}]}. ' +
+            'Respond ONLY with JSON: {"roles": [{"title": string, "industry": string or null, "reasoning": string}]}. ' +
             "Up to 5 roles, best fit first. Every role must be directly supported by concrete evidence across these memories (skills actually demonstrated, scope of responsibility, kind of work actually done) -- never invent a role that isn't backed by what's actually here, and return fewer than 5 (even zero, as an empty array) rather than padding with a weak fit. " +
             "industry: only set this to a specific industry or sector (e.g. 'Renewable Energy', 'Technology / SaaS') when the memories themselves clearly point at one -- a company, sector, or domain actually mentioned or strongly implied. If the memories show transferable skills without pointing at a specific field, set industry to null -- do NOT guess an industry just because it's a common pairing for that role title. " +
+            "reasoning: 1-2 sentences, written directly to the person ('you...'), citing the SPECIFIC memory or evidence that supports this role -- e.g. what they actually did, led, or solved. This is shown to them verbatim as the explanation for why this role is on their list, so it must be concrete and checkable against their own memories, never generic career-coach filler. " +
+            "At least 2 of the roles (when 2 or more are returned at all) must be a natural next step within the industry, sector, function, or employer the person's OWN memories already show them working in -- a believable, evidenced progression from what they're currently doing, not a lateral pivot. This is what shows them the suggestions actually understand their current path. Only use the remaining slots for adjacent or different fields, and only when the evidence genuinely supports it. " +
             "Never invent facts not present in what you were given.",
         },
         { role: "user", content: listing },
@@ -541,7 +550,9 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
         const title = (item as { title: string }).title.trim().slice(0, 80);
         const industryRaw = (item as { industry: string | null }).industry;
         const industry = typeof industryRaw === "string" ? industryRaw.trim().slice(0, 60) || null : null;
-        if (title) roles.push({ title, industry });
+        const reasoningRaw = (item as { reasoning?: unknown }).reasoning;
+        const reasoning = typeof reasoningRaw === "string" ? reasoningRaw.trim().slice(0, 400) || null : null;
+        if (title) roles.push({ title, industry, reasoning });
       }
       if (roles.length >= 5) break;
     }

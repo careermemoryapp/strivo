@@ -6,6 +6,7 @@ import { isFeatureEnabled } from "@/lib/repo/featureFlags";
 import { getUserById } from "@/lib/repo/users";
 import { listRecurringEntities } from "@/lib/repo/memories";
 import { withProjectNames } from "@/lib/repo/projects";
+import { getLatestSuggestedRolesForUser } from "@/lib/repo/suggestedRoles";
 
 const HISTORY_LIMIT = 16;
 
@@ -174,4 +175,62 @@ export async function sendUserMessageAndGetReply(
   }
 
   return { userMessage, aiMessage, retrieval };
+}
+
+// Deterministic alternative to sendUserMessageAndGetReply, used only for the
+// "Explore these roles" button on Home (see the "roles_explainer" kind in
+// app/api/chats/route.ts). Tapping that button used to just send the open
+// question "what roles am I ready for right now?" through the normal AI
+// chat pipeline above -- which re-derives roles from scratch via retrieval
+// every time, so the model would sometimes answer directly and sometimes
+// ask a clarifying question first, giving a visibly different response to
+// the exact same tap (founder-reported). The roles shown on Home are
+// already computed and fixed for this user (see generateSuggestedRoles in
+// lib/ai.ts, run monthly by app/api/growth-narrative/run) -- so instead of
+// asking the model to re-decide, this just renders that same stored list
+// (title, industry, and the per-role "why" it was already generated with)
+// as the chat's opening reply, with no LLM call and therefore nothing to
+// vary between taps. Follow-up questions in the same chat ("why am I a fit
+// for [role]?") still go through sendUserMessageAndGetReply as normal --
+// the model sees exactly which roles were named and why from this opening
+// message's own text, now part of the chat history.
+// Returns null when there's nothing to render (no suggested-roles row yet,
+// or it parsed to zero roles) -- the caller falls back to the normal AI
+// chat pipeline in that case rather than showing an empty explanation.
+export async function sendRolesExplainerMessage(
+  userId: string,
+  chatId: string
+): Promise<{ userMessage: Message; aiMessage: Message } | null> {
+  const suggested = getLatestSuggestedRolesForUser(userId);
+  if (!suggested || suggested.roles.length === 0) return null;
+
+  const userMessage = createMessage({
+    chatId,
+    userId,
+    sender: "user",
+    content: "Based on my memories, what roles am I ready for right now, and why?",
+    status: "sent",
+  });
+
+  const lines = suggested.roles.map((role, i) => {
+    const industry = role.industry ?? "Any industry";
+    const reasoning = role.reasoning?.trim();
+    return `${i + 1}. **${role.title}** (${industry})${reasoning ? ` -- ${reasoning}` : ""}`;
+  });
+  const content =
+    "Here are the roles I think you're genuinely ready for right now, based on your memories:\n\n" +
+    lines.join("\n") +
+    '\n\nAsk me "why am I a fit for [one of the roles above]?" and I\'ll go deeper using your specific memories, or ask me anything else about your career.';
+
+  const aiMessage = createMessage({
+    chatId,
+    userId,
+    sender: "ai",
+    content,
+    status: "sent",
+  });
+
+  touchChat(userId, chatId, { lastMessage: content });
+
+  return { userMessage, aiMessage };
 }

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { createChat, listChats } from "@/lib/repo/chats";
-import { sendUserMessageAndGetReply } from "@/lib/chatService";
+import { sendUserMessageAndGetReply, sendRolesExplainerMessage } from "@/lib/chatService";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
 import { isTrialExpired } from "@/lib/repo/users";
 
@@ -21,6 +21,11 @@ const createSchema = z.object({
   title: z.string().trim().min(1).max(120),
   category: z.string().trim().min(1).max(60),
   initialMessage: z.string().trim().max(4000).optional(),
+  // "roles_explainer" -- Home's "Explore these roles" button. Renders the
+  // opening reply deterministically from the user's already-computed
+  // suggested-roles list instead of an open-ended AI call -- see
+  // sendRolesExplainerMessage in lib/chatService.ts.
+  kind: z.literal("roles_explainer").optional(),
 });
 
 export async function POST(req: Request) {
@@ -45,7 +50,7 @@ export async function POST(req: Request) {
   // that endpoint's rate limit entirely by always starting a fresh chat
   // instead of posting to an existing one. Sharing the same bucket closes
   // that gap.
-  if (parsed.data.initialMessage) {
+  if (parsed.data.initialMessage || parsed.data.kind === "roles_explainer") {
     const limited = rateLimitOrResponse(`chat-message:${userId}`, 60, 60 * 60 * 1000);
     if (limited) return limited;
 
@@ -58,7 +63,15 @@ export async function POST(req: Request) {
   const chat = createChat({ userId, title: parsed.data.title, category: parsed.data.category });
 
   let firstExchange = null;
-  if (parsed.data.initialMessage) {
+  if (parsed.data.kind === "roles_explainer") {
+    // Falls back to the normal AI chat pipeline only if there's no
+    // suggested-roles row to render (shouldn't normally happen, since the
+    // button that sends this is only shown when Home already has roles to
+    // display) -- see sendRolesExplainerMessage's own comment.
+    firstExchange =
+      (await sendRolesExplainerMessage(userId, chat.id)) ??
+      (parsed.data.initialMessage ? await sendUserMessageAndGetReply(userId, chat.id, parsed.data.initialMessage) : null);
+  } else if (parsed.data.initialMessage) {
     firstExchange = await sendUserMessageAndGetReply(userId, chat.id, parsed.data.initialMessage);
   }
 
