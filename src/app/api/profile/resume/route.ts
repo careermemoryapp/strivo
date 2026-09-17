@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { getUserById, setResume, clearResume, setResumeStats } from "@/lib/repo/users";
-import { analyzeResumeCareerStats } from "@/lib/ai";
+import { analyzeResumeCareerStats, type ResumeCareerStats } from "@/lib/ai";
 import { rateLimitOrResponse } from "@/lib/rateLimit";
 import { nowIso } from "@/lib/db";
 
@@ -66,7 +66,21 @@ export async function POST(req: Request) {
   const stats = await analyzeResumeCareerStats(text);
   setResumeStats(userId, stats, nowIso());
 
-  return NextResponse.json({ hasResume: true, filename: parsed.data.filename, uploadedAt });
+  // Returned so the upload screen can show what was actually found right
+  // away (see settings/resume/page.tsx) instead of making someone hunt for
+  // the supplementary line on Home to find out anything happened -- a
+  // founder-reported source of "did this even do anything?" confusion,
+  // since the resume never becomes a memory/story of its own (see this
+  // route's own top comment) and previously gave no immediate feedback at
+  // all. null here (AI unavailable, or the resume genuinely didn't show
+  // any of the four categories) is a valid, honest result, not an error --
+  // the UI shows that as "nothing further found" rather than hiding it.
+  const statsPayload: ResumeCareerStats | null =
+    stats && (stats.wins || stats.leadershipMoments || stats.problemsSolved || stats.seniorStakeholderInteractions)
+      ? stats
+      : null;
+
+  return NextResponse.json({ hasResume: true, filename: parsed.data.filename, uploadedAt, stats: statsPayload });
 }
 
 export async function DELETE() {

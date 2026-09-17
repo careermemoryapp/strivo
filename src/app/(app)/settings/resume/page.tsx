@@ -15,6 +15,32 @@ import { cn } from "@/lib/utils";
 
 type ResumeStatus = { hasResume: boolean; filename: string | null; uploadedAt: string | null };
 
+// Mirrors ResumeCareerStats in lib/ai.ts (a server-only file, not imported
+// here) -- just the shape of what POST /api/profile/resume returns as
+// `stats`. Defined locally rather than imported so this "use client" page
+// never pulls in that server-only module.
+type ResumeStats = { wins: number; leadershipMoments: number; problemsSolved: number; seniorStakeholderInteractions: number };
+
+// Turns a just-uploaded resume's stats into one short, skimmable sentence --
+// same category set and phrasing as formatResumeStatsLine in
+// CareerWrappedHomePreview.tsx (that one renders the SAVED, persisted line
+// on Home; this one is the immediate "here's what we just found" receipt
+// right after upload, so someone doesn't have to go find it on Home to know
+// anything happened -- see the upload success state below). Returns null
+// when every category is zero, which is a real, honest possible outcome
+// (see analyzeResumeCareerStats in lib/ai.ts), not an error.
+function formatStatsFound(stats: ResumeStats): string | null {
+  const parts: string[] = [];
+  if (stats.wins > 0) parts.push(`${stats.wins} win${stats.wins === 1 ? "" : "s"}`);
+  if (stats.leadershipMoments > 0) parts.push(`${stats.leadershipMoments} leadership moment${stats.leadershipMoments === 1 ? "" : "s"}`);
+  if (stats.problemsSolved > 0) parts.push(`${stats.problemsSolved} problem${stats.problemsSolved === 1 ? "" : "s"} solved`);
+  if (stats.seniorStakeholderInteractions > 0) {
+    parts.push(`${stats.seniorStakeholderInteractions} senior-stakeholder interaction${stats.seniorStakeholderInteractions === 1 ? "" : "s"}`);
+  }
+  if (parts.length === 0) return null;
+  return parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`;
+}
+
 // What actually happens with an uploaded resume behind the scenes -- shown
 // as a "why this helps" list (same icon-chip/title/description rhythm as
 // Home's Quick Actions) so this page reads as a real feature with a payoff,
@@ -60,6 +86,12 @@ export default function ResumeSettingsPage() {
   const [removing, setRemoving] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [justSaved, setJustSaved] = useState(false);
+  // What this specific upload's stats pass found -- shown right under the
+  // "Saved" confirmation below. undefined = haven't uploaded this visit yet
+  // (show nothing), null = uploaded but genuinely found nothing this time
+  // (show the honest "nothing further found" line, not silence -- see
+  // formatStatsFound's own comment).
+  const [savedStats, setSavedStats] = useState<ResumeStats | null | undefined>(undefined);
 
   useEffect(() => {
     fetch("/api/profile/resume")
@@ -80,6 +112,7 @@ export default function ResumeSettingsPage() {
     setUploading(true);
     setUploadError(null);
     setJustSaved(false);
+    setSavedStats(undefined);
     try {
       // Opening the native picker backgrounds the app, which fires
       // Capacitor's "resume" event when it returns -- see
@@ -122,6 +155,7 @@ export default function ResumeSettingsPage() {
 
       setStatus({ hasResume: true, filename: saveData.filename, uploadedAt: saveData.uploadedAt });
       setJustSaved(true);
+      setSavedStats(saveData.stats ?? null);
     } catch (e) {
       // Reported live (unlike most catch blocks in this app) because this
       // exact flow has failed silently in the field before with no visible
@@ -141,6 +175,7 @@ export default function ResumeSettingsPage() {
       if (!res.ok) throw new Error();
       setStatus({ hasResume: false, filename: null, uploadedAt: null });
       setJustSaved(false);
+      setSavedStats(undefined);
     } catch {
       setUploadError("Couldn't remove your resume. Please try again.");
     } finally {
@@ -154,8 +189,9 @@ export default function ResumeSettingsPage() {
       <DarkHeader back inlineTitle="Resume" />
       <div className="px-5 pt-5">
         <p className="text-sm text-ink-soft">
-          Upload a resume so Strivo already knows your background. It&apos;s never shown as a memory of its own —
-          Strivo just uses it quietly to make chat answers and resume lines sharper.
+          Upload a resume so Strivo already knows your background. It&apos;s never shown as a memory or story of
+          its own — Strivo just uses it quietly as background in chats, and counts its achievements toward your
+          career stats on Home.
         </p>
 
         {loadError && (
@@ -209,6 +245,21 @@ export default function ResumeSettingsPage() {
                 {status.uploadedAt && (
                   <p className="mt-0.5 text-xs text-[#8a82a8]">
                     Uploaded {formatDistanceToNow(new Date(status.uploadedAt), { addSuffix: true })}
+                  </p>
+                )}
+
+                {/* Immediate receipt for THIS upload -- shown once, right
+                    after saving, so someone doesn't have to go check Home to
+                    find out anything happened (a resume never becomes a
+                    memory/story of its own, so without this there was no
+                    visible confirmation at all -- founder-reported
+                    confusion). savedStats === undefined means nothing was
+                    just uploaded this visit, so nothing renders. */}
+                {justSaved && savedStats !== undefined && (
+                  <p className="mt-2 max-w-xs text-xs text-[#6d5fa8]">
+                    {savedStats && formatStatsFound(savedStats)
+                      ? `Found ${formatStatsFound(savedStats)} in this resume — counted toward your career stats on Home.`
+                      : "No countable achievements found in this resume this time -- your career stats are unaffected."}
                   </p>
                 )}
 
@@ -318,7 +369,7 @@ export default function ResumeSettingsPage() {
       <ConfirmDialog
         open={confirmRemove}
         title="Remove resume?"
-        description="Your resume will stop being used as background context in chats and new memories. You can upload it again anytime."
+        description="Your resume will stop being used as background context in chats and toward your career stats. You can upload it again anytime."
         confirmLabel="Remove"
         loading={removing}
         onConfirm={handleRemove}
