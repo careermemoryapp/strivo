@@ -44,11 +44,15 @@ export type CareerProfileCardData = {
 
 // Taller than a standard 4:5 social crop (1080x1350) -- product feedback
 // wanted bigger type and a real paragraph per row with nothing cramped, and
-// there wasn't room for both inside 1350. 1500 gives each band the extra
-// headroom that needs without shrinking anything back down. Still well
-// within normal share-image proportions for a direct download/WhatsApp/
-// LinkedIn/X share (this was never cropped to Instagram's feed grid).
-export const CAREER_PROFILE_CARD_SIZE = { width: 1080, height: 1500 };
+// there wasn't room for both inside 1350. 1500 for the five bands (see
+// BAND_HEIGHT below) gives each band the extra headroom that needs without
+// shrinking anything back down, plus HEADER_HEIGHT on top for the card's
+// name -- product feedback wanted that big and clearly visible, not the
+// small top-left label the first band used to carry. Still well within
+// normal share-image proportions for a direct download/WhatsApp/LinkedIn/X
+// share (this was never cropped to Instagram's feed grid).
+const HEADER_HEIGHT = 200;
+export const CAREER_PROFILE_CARD_SIZE = { width: 1080, height: 1500 + HEADER_HEIGHT };
 
 // Converts a hex color to an rgba() string at the given alpha -- used to
 // derive every tint/wash/border below from one base color per quiz instead
@@ -173,7 +177,7 @@ const QUIZ_GLYPHS: Record<string, (props: { size?: number; color?: string }) => 
 // and numeral badge, and the "why" paragraph is bigger and brighter. Taller
 // canvas (see CAREER_PROFILE_CARD_SIZE) gives the bigger type room to
 // breathe without going back to feeling cramped.
-const BAND_HEIGHT = CAREER_PROFILE_CARD_SIZE.height / 5; // 300 * 5 = 1500, exact, no remainder
+const BAND_HEIGHT = (CAREER_PROFILE_CARD_SIZE.height - HEADER_HEIGHT) / 5; // 300 * 5 = 1500, exact, no remainder
 
 // Keeps a row's "why" line from overflowing its band on an unusually long
 // entry -- every current archetype description (see lib/careerProfile.ts)
@@ -184,6 +188,54 @@ function truncateDescription(text: string, max = 320): string {
   return `${text.slice(0, max - 1).trimEnd()}…`;
 }
 
+// The card's name, big and centered -- product feedback was that the old
+// small top-left label buried inside the first band wasn't "clearly
+// visible," so this is now its own full-width header strip above the five
+// bands (see HEADER_HEIGHT). Centered eyebrow + centered name, same purple
+// glow treatment the marketing site's own quiz-teaser section uses, so a
+// card someone screenshots or shares immediately reads as "whose profile
+// this is" before anything else on the page.
+function Header({ cardTitle }: { cardTitle: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        height: HEADER_HEIGHT,
+        flexShrink: 0,
+        padding: "0 64px",
+        background: "radial-gradient(circle at 50% 0%, rgba(124,58,237,0.35) 0%, rgba(0,0,0,0) 65%)",
+        borderBottom: "1px solid rgba(255,255,255,0.08)",
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <LogoMarkSvg size={28} />
+        <div style={{ display: "flex", fontSize: 16, fontWeight: 700, letterSpacing: 2, color: "rgba(196,181,253,0.85)" }}>
+          CAREER PROFILE
+        </div>
+      </div>
+      <div
+        style={{
+          display: "flex",
+          width: "100%",
+          marginTop: 14,
+          fontSize: 56,
+          fontWeight: 800,
+          color: "#ffffff",
+          lineHeight: 1.12,
+          textAlign: "center",
+          justifyContent: "center",
+        }}
+      >
+        {cardTitle}
+      </div>
+    </div>
+  );
+}
+
 // One full-bleed band -- a colored icon chip, eyebrow, archetype title, its
 // full "why" paragraph in large, bright type, and a colored numeral badge.
 // Each element pulls from this row's own ROW_ACCENTS color, so the five
@@ -191,10 +243,9 @@ function truncateDescription(text: string, max = 320): string {
 // than a uniform gray list. The first band also carries the card's title
 // (who this is) and the last carries the Strivo.ai footer, both fit inside
 // that band's own height rather than given separate bands of their own.
-function Band({ row, index, cardTitle }: { row: CareerProfileCardRow; index: number; cardTitle: string }) {
+function Band({ row, index }: { row: CareerProfileCardRow; index: number }) {
   const Glyph = QUIZ_GLYPHS[row.quizId] ?? BoltGlyph;
   const accent = ROW_ACCENTS[row.quizId] ?? DEFAULT_ACCENT;
-  const isFirst = index === 0;
   const isLast = index === 4;
 
   return (
@@ -214,12 +265,6 @@ function Band({ row, index, cardTitle }: { row: CareerProfileCardRow; index: num
         borderBottom: isLast ? "none" : `1px solid ${hexToRgba(accent, 0.22)}`,
       }}
     >
-      {isFirst && (
-        <div style={{ display: "flex", fontSize: 16, fontWeight: 700, color: "rgba(255,255,255,0.6)", paddingTop: 24 }}>
-          {cardTitle}
-        </div>
-      )}
-
       <div style={{ display: "flex", alignItems: "center", gap: 24, flexGrow: 1 }}>
         <div
           style={{
@@ -317,8 +362,9 @@ function TemplateA(data: CareerProfileCardData) {
         overflow: "hidden",
       }}
     >
+      <Header cardTitle={data.title} />
       {data.rows.map((row, i) => (
-        <Band key={row.quizId} row={row} index={i} cardTitle={data.title} />
+        <Band key={row.quizId} row={row} index={i} />
       ))}
     </div>
   );

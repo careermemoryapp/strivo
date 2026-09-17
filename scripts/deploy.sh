@@ -48,6 +48,20 @@ echo "Stopping the app for the build..."
 pm2 stop strivo || true
 
 echo ""
+echo "Clearing stale type-check cache..."
+# Next.js's generated tsconfig always includes ".next/types/**/*.ts" -- a
+# fixed path, NOT NEXT_DIST_DIR-aware -- so even though the build below
+# writes into the .next-build scratch dir, `next build`'s own typecheck
+# step still picks up whatever's sitting in the OLD, currently-live .next
+# from the last deploy. If this deploy deletes an API route file that the
+# previous build's .next/types/validator.ts still references, the typecheck
+# fails on a file that no longer has anything to do with the new build --
+# confirmed root cause of the 2026-09-17 stuck deploy (career-profile route
+# removals). Deleting it here means every build always typechecks against
+# itself, never a leftover from the last one.
+rm -rf .next
+
+echo ""
 echo "Building..."
 # Build into a scratch directory instead of the live ".next" -- even with
 # the app stopped above, building straight into ".next" risks the restart
