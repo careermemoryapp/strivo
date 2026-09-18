@@ -33,7 +33,8 @@ import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
-import type { AdminMetrics, AdminUserRow } from "@/lib/repo/admin";
+import type { AdminMetrics, AdminUserRow, CareerProfileFunnelPoint } from "@/lib/repo/admin";
+import type { CareerProfileQuizId } from "@/lib/careerProfile";
 import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
 import type { EmailSegment, EmailCampaign } from "@/lib/repo/emailCampaigns";
@@ -214,6 +215,58 @@ function ActiveUsersLineChart({ data }: { data: { date: string; dau: number; wau
         <Line type="monotone" dataKey="dau" name="DAU" stroke="#8b5cf6" strokeWidth={2.5} dot={{ r: 3 }} />
         <Line type="monotone" dataKey="wau" name="WAU" stroke="#60a5fa" strokeWidth={2.5} dot={{ r: 3 }} />
         <Line type="monotone" dataKey="mau" name="MAU" stroke="#34d399" strokeWidth={2.5} dot={{ r: 3 }} />
+      </RechartsLineChart>
+    </ResponsiveContainer>
+  );
+}
+
+// One line per individual Career Profile quiz, plus the existing
+// cards-generated line -- lets the founder see where people actually drop
+// off in the 5-quiz flow, not just how many make it all the way through
+// (see the funnel explanation above CareerProfileFunnelChart's call site,
+// and the career_profile_public_quiz_completions comment in lib/db.ts).
+// Colors are picked to stay distinct from each other at a glance; "Cards"
+// keeps the amber it always had as the headline line.
+const QUIZ_FUNNEL_SERIES: { key: CareerProfileQuizId | "cards"; label: string; color: string }[] = [
+  { key: "cards", label: "Cards (all 5 done)", color: "#f59e0b" },
+  { key: "career_superpower", label: "Superpower", color: "#8b5cf6" },
+  { key: "corporate_character", label: "Character", color: "#60a5fa" },
+  { key: "corporate_red_flag", label: "Red Flag", color: "#f472b6" },
+  { key: "ai_era_advantage", label: "AI-Era", color: "#34d399" },
+  { key: "career_mode", label: "Mode", color: "#14b8a6" },
+];
+
+function CareerProfileFunnelChart({ data }: { data: CareerProfileFunnelPoint[] }) {
+  return (
+    <ResponsiveContainer width="100%" height={260}>
+      <RechartsLineChart data={data} margin={{ top: 8, right: 12, bottom: 0, left: -20 }}>
+        <CartesianGrid stroke="#f0ecf7" vertical={false} />
+        <XAxis
+          dataKey="date"
+          tickFormatter={shortDate}
+          tick={{ fontSize: 11, fill: "#a8a2bd" }}
+          axisLine={{ stroke: "#f0ecf7" }}
+          tickLine={false}
+          interval="preserveStartEnd"
+        />
+        <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#a8a2bd" }} axisLine={false} tickLine={false} />
+        <Tooltip
+          labelFormatter={(v: ReactNode) => (typeof v === "string" ? shortDate(v) : String(v ?? ""))}
+          contentStyle={{ borderRadius: 10, borderColor: "#ece5f5", fontSize: 12 }}
+        />
+        <Legend wrapperStyle={{ fontSize: 11 }} />
+        {QUIZ_FUNNEL_SERIES.map((s) => (
+          <Line
+            key={s.key}
+            type="monotone"
+            dataKey={s.key}
+            name={s.label}
+            stroke={s.color}
+            strokeWidth={2.5}
+            dot={{ r: 2.5 }}
+            activeDot={{ r: 4.5 }}
+          />
+        ))}
       </RechartsLineChart>
     </ResponsiveContainer>
   );
@@ -1409,12 +1462,13 @@ export default function AdminDashboardPage() {
                 <StatCard label="Generated this week" value={String(metrics.careerProfileCardsThisWeek)} />
               </div>
               <p className="mt-2 text-[11px] text-ink-faint">
-                Counts people who finished all 5 quizzes and generated a shareable card. The quiz itself doesn&apos;t
-                record who starts or partway completes it yet — that would need a separate tracking change.
+                &quot;Cards generated&quot; counts people who finished all 5 quizzes. Most people don&apos;t get that
+                far — the chart below also tracks each individual quiz&apos;s completions, so you can see where people
+                actually drop off.
               </p>
               <div className="mt-3">
-                <ChartCard title="Career Profile Cards generated — last 30 days">
-                  <TrendLineChart data={metrics.dailyCareerProfileCards} color="#f59e0b" />
+                <ChartCard title="Career Profile funnel — cards + individual quizzes, last 30 days">
+                  <CareerProfileFunnelChart data={metrics.careerProfileFunnel} />
                 </ChartCard>
               </div>
             </section>

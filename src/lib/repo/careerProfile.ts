@@ -159,6 +159,22 @@ export type CareerProfilePublicShareRow = {
   created_at: string;
 };
 
+// Logs one individual-quiz completion event on the public (no-login) /quiz
+// flow -- see the career_profile_public_quiz_completions comment in
+// lib/db.ts. Called from the public score route right after it successfully
+// scores a set of answers, i.e. the moment a visitor finishes THIS quiz,
+// regardless of whether they go on to finish the other 4 and generate a
+// card. Fire-and-forget from the caller's point of view: this is a metrics
+// event, not something the score response depends on.
+export function recordPublicQuizCompletion(quizId: CareerProfileQuizId): void {
+  const db = getDb();
+  db.prepare(`INSERT INTO career_profile_public_quiz_completions (id, quiz_id, created_at) VALUES (?, ?, ?)`).run(
+    newId("cpqc"),
+    quizId,
+    nowIso()
+  );
+}
+
 export function createPublicCareerProfileShare(cardData: unknown): CareerProfilePublicShareRow {
   const db = getDb();
   const id = newId("cpshare");

@@ -1,6 +1,17 @@
 import { getDb } from "@/lib/db";
 import { getSubscriptionInfo, type User } from "@/lib/repo/users";
 import { listProductUpdatePostsOrdered } from "@/lib/repo/blogPosts";
+import { CAREER_PROFILE_QUIZ_ORDER, type CareerProfileQuizId } from "@/lib/careerProfile";
+
+// One funnel point per day: the existing "card generated" count (someone
+// finished all 5 quizzes) alongside a completion count for each individual
+// quiz -- see dailyCareerProfileFunnel() below and the
+// career_profile_public_quiz_completions comment in lib/db.ts for why the
+// per-quiz counts exist now. Modeled as one combined type (rather than a
+// separate array per quiz) so the admin dashboard can plot every line on
+// one chart from one data array, the same shape activeUsersTrend() already
+// uses for the DAU/WAU/MAU chart.
+export type CareerProfileFunnelPoint = { date: string; cards: number } & Record<CareerProfileQuizId, number>;
 
 export type AdminMetrics = {
   totalUsers: number;
@@ -42,20 +53,22 @@ export type AdminMetrics = {
   // session tracking.
   recordedLast7dRate: number;
   // Career Profile Cards generated on the public, no-login quiz
-  // (strivo.ai/quiz) — the only server-side signal of quiz engagement that
-  // exists today. The public scoring endpoint
-  // (api/public/career-profile/[quizId]/score) is a pure function with NO
-  // db write, and a visitor's progress across the 5 quizzes lives only in
-  // their own browser's localStorage — so there's no way to count quiz
-  // *attempts* or partial completions yet, only people who finished all 5
-  // and got as far as generating a shareable card
-  // (career_profile_public_shares). If per-quiz or funnel/drop-off
-  // tracking is ever wanted, that needs a new db write added to the score
-  // route itself, not just a new read here.
+  // (strivo.ai/quiz) — people who finished all 5 quizzes and got as far as
+  // generating a shareable card (career_profile_public_shares). 2026-09-18:
+  // the public score route now also logs each individual quiz completion
+  // (career_profile_public_quiz_completions), so per-quiz/funnel numbers
+  // exist too — see careerProfileFunnel below. Attempts that never finish a
+  // quiz (someone bails partway through the 7 questions) still aren't
+  // tracked; that would need a write on question-answer, not just on score.
   totalCareerProfileCards: number;
   careerProfileCardsToday: number;
   careerProfileCardsThisWeek: number;
-  dailyCareerProfileCards: { date: string; count: number }[];
+  // Day-by-day, oldest first: cards generated alongside each individual
+  // quiz's completion count -- see dailyCareerProfileFunnel() and
+  // CareerProfileFunnelPoint above. Replaces the old cards-only
+  // dailyCareerProfileCards field (2026-09-18) -- the cards count still
+  // lives here, as the `cards` key on each point.
+  careerProfileFunnel: CareerProfileFunnelPoint[];
 };
 
 function isoDaysAgo(days: number): string {
@@ -204,6 +217,41 @@ function activeUsersTrend(days = 30): { date: string; dau: number; wau: number; 
   return out;
 }
 
+// Day-by-day, oldest first: the existing cards-generated count (dailyCounts
+// on career_profile_public_shares) alongside a completion count for each
+// individual quiz (career_profile_public_quiz_completions) -- one row per
+// visitor who finished that quiz, gaps filled in as 0, same IST-calendar-day
+// bucketing as dailyCounts above. Pulls all completions in the window in one
+// query and buckets date+quiz_id in JS, same tradeoff as activeUsersTrend.
+function dailyCareerProfileFunnel(days = 30): CareerProfileFunnelPoint[] {
+  const db = getDb();
+  const rows = db
+    .prepare(`SELECT quiz_id, created_at FROM career_profile_public_quiz_completions WHERE created_at >= ?`)
+    .all(istMidnightUtcDaysAgo(days - 1)) as { quiz_id: string; created_at: string }[];
+
+  const byDate = new Map<string, Map<string, number>>();
+  for (const r of rows) {
+    const dateKey = istDateKey(r.created_at);
+    const perQuiz = byDate.get(dateKey) ?? new Map<string, number>();
+    perQuiz.set(r.quiz_id, (perQuiz.get(r.quiz_id) ?? 0) + 1);
+    byDate.set(dateKey, perQuiz);
+  }
+
+  const cardsByDate = new Map(dailyCounts("career_profile_public_shares", days).map((d) => [d.date, d.count]));
+
+  const out: CareerProfileFunnelPoint[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const dateKey = istDateKey(istMidnightUtcDaysAgo(i));
+    const perQuiz = byDate.get(dateKey);
+    const point = { date: dateKey, cards: cardsByDate.get(dateKey) ?? 0 } as CareerProfileFunnelPoint;
+    for (const quizId of CAREER_PROFILE_QUIZ_ORDER) {
+      point[quizId] = perQuiz?.get(quizId) ?? 0;
+    }
+    out.push(point);
+  }
+  return out;
+}
+
 export function computeAdminMetrics(): AdminMetrics {
   const db = getDb();
 
@@ -296,7 +344,7 @@ export function computeAdminMetrics(): AdminMetrics {
     totalCareerProfileCards,
     careerProfileCardsToday,
     careerProfileCardsThisWeek,
-    dailyCareerProfileCards: dailyCounts("career_profile_public_shares"),
+    careerProfileFunnel: dailyCareerProfileFunnel(),
   };
 }
 

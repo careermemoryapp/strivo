@@ -9,6 +9,7 @@ import {
   scoreCareerProfileQuiz,
   type CareerProfileQuizId,
 } from "@/lib/careerProfile";
+import { recordPublicQuizCompletion } from "@/lib/repo/careerProfile";
 
 // Public, unauthenticated twin of
 // app/api/career-profile/quiz/[quizId]/submit/route.ts -- for the
@@ -63,6 +64,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ quizId:
   if (!archetype) {
     return NextResponse.json({ error: "Could not compute a result" }, { status: 500 });
   }
+
+  // The one server-side write this route makes -- see the comment on
+  // recordPublicQuizCompletion and career_profile_public_quiz_completions
+  // in lib/db.ts. Logged here (once scoring actually succeeded), not
+  // earlier, so a malformed/invalid submission that got rejected above
+  // never counts as a completion.
+  recordPublicQuizCompletion(quizId);
 
   return NextResponse.json({
     result: {

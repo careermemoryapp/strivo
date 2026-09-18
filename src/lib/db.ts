@@ -652,6 +652,26 @@ function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL
     );
 
+    -- One row per individual quiz someone finishes on the public /quiz flow
+    -- (written from app/api/public/career-profile/[quizId]/score/route.ts
+    -- right after it scores an answer set) -- added 2026-09-18 because the
+    -- admin dashboard's only quiz signal used to be
+    -- career_profile_public_shares above, i.e. people who finished all 5
+    -- quizzes and generated a card. The founder pointed out that's a long
+    -- way to ask people to go before showing up in any metric at all --
+    -- most drop-off happens quiz-by-quiz, well before anyone reaches a
+    -- card, and none of that was visible. Same "no user_id, anonymous
+    -- event" posture as career_profile_public_shares (see its comment
+    -- above) -- a retake logs another row on purpose, this counts
+    -- completion events, not unique visitors.
+    CREATE TABLE IF NOT EXISTS career_profile_public_quiz_completions (
+      id TEXT PRIMARY KEY,
+      quiz_id TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_career_profile_public_quiz_completions_quiz
+      ON career_profile_public_quiz_completions(quiz_id, created_at);
+
     -- Server-driven processing for a long uploaded document that splits
     -- into several separate stories (see splitDocumentIntoStories in
     -- lib/ai.ts). Exists to fix a founder-reported bug (2026-09-17): the
