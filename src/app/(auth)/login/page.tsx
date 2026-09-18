@@ -46,6 +46,17 @@ function AppleIcon() {
   );
 }
 
+// Temporarily hidden: Apple Sign-In was built for Apple App Store Guideline
+// 4.8 compliance (see docs/apple-app-store-checklist.md item 0), which only
+// actually applies once the iOS app ships (still an upcoming phase — see
+// CLAUDE.md). The button had no platform gating, so real Android users were
+// already signing in with Apple ID via web OAuth ahead of when it's needed,
+// creating a second identity path before there's a reason to. Flip this back
+// to true once iOS is ready to submit -- the whole Apple sign-in flow
+// (auth.ts's AppleProvider, handleApple below, /mobile-apple-start) is left
+// fully intact, this only controls whether the button renders.
+const APPLE_SIGNIN_ENABLED = false;
+
 function LoginForm() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -184,16 +195,18 @@ function LoginForm() {
         Continue with Google
       </Button>
 
-      <Button
-        type="button"
-        variant="ghost"
-        className="mt-3 w-full flex items-center justify-center gap-2"
-        loading={loading}
-        onClick={handleApple}
-      >
-        <AppleIcon />
-        Continue with Apple
-      </Button>
+      {APPLE_SIGNIN_ENABLED && (
+        <Button
+          type="button"
+          variant="ghost"
+          className="mt-3 w-full flex items-center justify-center gap-2"
+          loading={loading}
+          onClick={handleApple}
+        >
+          <AppleIcon />
+          Continue with Apple
+        </Button>
+      )}
 
       <p className="mt-6 text-center text-xs text-ink-faint">
         New here? Signing in creates your {APP_NAME} account automatically — no separate
