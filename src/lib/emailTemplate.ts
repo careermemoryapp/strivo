@@ -159,7 +159,7 @@ export function wrapBrandedEmail(params: {
   const button =
     params.buttonText?.trim() && isValidHttpsUrl(params.buttonUrl)
       ? `<tr>
-          <td style="padding:8px 32px 8px;">
+          <td style="padding:8px 32px 8px;" class="email-button-cell">
             <a href="${params.buttonUrl}" style="display:inline-block;background:${accent};color:#ffffff;font-size:14px;font-weight:600;text-decoration:none;padding:12px 22px;border-radius:999px;">
               ${escapeAttr(params.buttonText.trim())}
             </a>
@@ -173,9 +173,26 @@ export function wrapBrandedEmail(params: {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Strivo</title>
+<style>
+  /* Desktop/base padding is set inline on each cell below (for mail
+     clients that strip <style> blocks entirely). This override only
+     kicks in on narrow screens, where the fixed 32px side padding was
+     eating a big chunk of the available width -- less width per line
+     means more line wraps, which is what was making the whole email
+     read as much longer on mobile than the same copy looks on desktop.
+     !important is required here: it's overriding an inline style, which
+     normally wins over a stylesheet. */
+  @media only screen and (max-width: 480px) {
+    .email-shell { padding: 20px 8px !important; }
+    .email-header { padding: 22px 20px 8px !important; }
+    .email-body { padding: 12px 20px 8px !important; }
+    .email-button-cell { padding: 6px 20px 6px !important; }
+    .email-footer { padding: 18px 20px 22px !important; }
+  }
+</style>
 </head>
 <body style="margin:0;padding:0;background:#faf9fc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf9fc;padding:32px 16px;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#faf9fc;padding:32px 16px;" class="email-shell">
     <tr>
       <td align="center">
         <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:18px;overflow:hidden;">
@@ -183,7 +200,7 @@ export function wrapBrandedEmail(params: {
             <td style="height:6px;background-color:${accent};"></td>
           </tr>
           <tr>
-            <td style="padding:28px 32px 8px;">
+            <td style="padding:28px 32px 8px;" class="email-header">
               <table role="presentation" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="padding-right:10px;">
@@ -204,13 +221,13 @@ export function wrapBrandedEmail(params: {
           </tr>
           ${banner}
           <tr>
-            <td style="padding:16px 32px 8px;">
+            <td style="padding:16px 32px 8px;" class="email-body">
               ${params.bodyHtml}
             </td>
           </tr>
           ${button}
           <tr>
-            <td style="padding:24px 32px 28px;border-top:1px solid #f0ecf7;margin-top:16px;">
+            <td style="padding:24px 32px 28px;border-top:1px solid #f0ecf7;margin-top:16px;" class="email-footer">
               <p style="margin:16px 0 0;font-size:12px;line-height:1.6;color:#a39bb0;">
                 You're receiving this because you have a Strivo account.
                 <a href="${params.unsubscribeUrl}" style="color:#a39bb0;text-decoration:underline;">Unsubscribe</a>
