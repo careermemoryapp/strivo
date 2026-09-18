@@ -7,6 +7,7 @@ import { isNativeApp, getNativePlatform, consumeExpectedResume, markExpectedResu
 import { usePushRegistration } from "@/lib/usePushRegistration";
 import { useAppVersionPing } from "@/lib/useAppVersionPing";
 import { initSingular } from "@/lib/singular";
+import { initPostHog, identifyPostHogUser, resetPostHog } from "@/lib/posthog";
 
 // Tags every client-side error Sentry captures (instrumentation-client.ts)
 // with which platform and native app build it came from, so the admin
@@ -132,6 +133,20 @@ function PushRegistration() {
       Sentry.setUser({ id: data.user.id });
     } else if (status === "unauthenticated") {
       Sentry.setUser(null);
+    }
+  }, [status, data?.user?.id]);
+
+  // Same idea as the Sentry effect above, for PostHog product
+  // analytics/retention tracking (see lib/posthog.ts for why this is
+  // scoped to signed-in usage only, and why it identifies by id, never
+  // email/name). initPostHog() is a no-op after its first successful
+  // call, so calling it here on every authenticated render is safe.
+  useEffect(() => {
+    if (status === "authenticated" && data?.user?.id) {
+      initPostHog();
+      identifyPostHogUser(data.user.id);
+    } else if (status === "unauthenticated") {
+      resetPostHog();
     }
   }, [status, data?.user?.id]);
 
