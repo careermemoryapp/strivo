@@ -165,6 +165,10 @@ export default async function HomePage() {
         // false (not just omitted) for a missing user, matching every other
         // field's safe fallback above.
         showPhoneBanner: user ? shouldShowPhoneBanner(user) : false,
+        // Already-captured country (see maybeSetUserCountry above) -- lets
+        // PhoneNumberBanner pre-fill the right dial code instead of asking
+        // someone to know and type their own country code.
+        country: user?.country ?? null,
       }}
     />
   );

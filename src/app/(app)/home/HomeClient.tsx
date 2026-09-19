@@ -72,6 +72,10 @@ type HomeData = {
   // show the phone-number banner right now. See PhoneNumberBanner.tsx for
   // why this is a Home banner rather than a blocking gate.
   showPhoneBanner: boolean;
+  // Already-captured 2-letter country (see maybeSetUserCountry) -- lets
+  // PhoneNumberBanner pre-fill the right dial code. Null for anyone not
+  // captured yet (see that column's own comment in repo/users.ts).
+  country: string | null;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -282,7 +286,7 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
     <div className="pb-6">
       {header}
 
-      <PhoneNumberBanner initiallyVisible={data.showPhoneBanner} />
+      <PhoneNumberBanner initiallyVisible={data.showPhoneBanner} country={data.country} />
 
       {/* "How Strivo.ai works" -- same three steps, same labels and copy as
           the marketing site's own "How it works" section (MarketingHome.tsx)
