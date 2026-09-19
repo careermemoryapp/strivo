@@ -19,6 +19,7 @@ import { timeOfDayGreeting } from "@/lib/utils";
 import { chatCategoryIcon } from "@/lib/categoryIcons";
 import type { Chat } from "@/lib/repo/chats";
 import { CareerWrappedHomePreview, type CareerWrappedHomePreviewData, type ResumeStatsData } from "@/components/CareerWrappedHomePreview";
+import { PhoneNumberBanner } from "@/components/PhoneNumberBanner";
 
 type HomeData = {
   user: { id: string; firstName: string; lastName: string; email: string } | null;
@@ -67,6 +68,10 @@ type HomeData = {
   // due for the monthly automation to catch up) -- rendered as an honest
   // "still taking shape" line rather than an empty list.
   suggestedRoles: { title: string; industry: string | null; reasoning: string | null }[] | null;
+  // Computed server-side by shouldShowPhoneBanner (page.tsx) -- whether to
+  // show the phone-number banner right now. See PhoneNumberBanner.tsx for
+  // why this is a Home banner rather than a blocking gate.
+  showPhoneBanner: boolean;
 };
 
 // How many days out the reminder starts showing -- chosen so it's a real
@@ -276,6 +281,8 @@ export function HomeClient({ initialData }: { initialData: HomeData }) {
   return (
     <div className="pb-6">
       {header}
+
+      <PhoneNumberBanner initiallyVisible={data.showPhoneBanner} />
 
       {/* "How Strivo.ai works" -- same three steps, same labels and copy as
           the marketing site's own "How it works" section (MarketingHome.tsx)

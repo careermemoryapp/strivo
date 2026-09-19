@@ -45,6 +45,10 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
       accountCreatedAt: user.created_at,
       subscriptionStatus: user.subscription_status,
       preferredPlan: user.preferred_plan,
+      // Null if they never added one (see phone_number's comment on the
+      // User type in repo/users.ts) -- included now that it's collected,
+      // same portability treatment as every other profile field here.
+      phoneNumber: user.phone_number,
     },
     memories: memories.map((m) => ({
       id: m.id,

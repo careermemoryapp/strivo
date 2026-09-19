@@ -402,6 +402,11 @@ export type AdminUserRow = {
   // obtained before their data went to OpenAI, not just documented in a
   // policy somewhere.
   aiConsentAt: string | null;
+  // Phone number captured via the Home banner (PhoneNumberBanner.tsx) or
+  // Settings -- null means they haven't added one. This is the growing
+  // audience list for whenever WhatsApp-based re-engagement actually gets
+  // built (see phone_number's comment on the User type in repo/users.ts).
+  phoneNumber: string | null;
   // Title of the last Product Updates drip email this person actually
   // received (see /api/product-update-drip/run) -- null if they haven't
   // gotten one yet. Deliberately per-user rather than "today's post": the
@@ -498,6 +503,7 @@ export function listUsersForAdmin(search?: string, page = 1, pageSize = 20): Adm
       lastActiveAt: u.last_active_at,
       country: u.country,
       aiConsentAt: u.ai_consent_at,
+      phoneNumber: u.phone_number,
       lastProductUpdateTitle,
     };
   });

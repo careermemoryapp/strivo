@@ -1409,6 +1409,40 @@ function migrate(db: DatabaseSync) {
   if (!userColumns.includes("resume_stats_computed_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN resume_stats_computed_at TEXT;`);
   }
+
+  // WhatsApp/re-engagement phone capture (2026-09-19 product decision --
+  // push notifications are effectively dead as a re-engagement channel: see
+  // the Home banner in components/PhoneNumberBanner.tsx and its gate in
+  // (app)/home/page.tsx via shouldShowPhoneBanner in repo/users.ts). Three
+  // columns, deliberately separate rather than one:
+  //
+  // - phone_number: raw, user-entered, expected (but not enforced at the DB
+  //   level) to include a country code -- see the client-side validation in
+  //   PhoneNumberBanner.tsx. Null until someone submits the banner or adds
+  //   one from Settings.
+  // - phone_consent_at: stamped every time the banner/settings form is
+  //   submitted, alongside the number -- this is the compliance evidence
+  //   trail for WhatsApp's Marketing-template consent requirement, same
+  //   role ai_consent_at plays for the OpenAI disclosure (see that column's
+  //   comment above). Unlike ai_consent_at this is NOT write-once: it's
+  //   deliberately re-stamped if someone updates their number later, since
+  //   each submission is its own fresh, explicit consent event, not a
+  //   one-time gate.
+  // - phone_banner_dismissed_at: lets the Home banner behave like the
+  //   plan-nudge screen (see PLAN_NUDGE_AFTER_MS/needsPlanNudge above) --
+  //   dismissing it doesn't hide it forever, it resurfaces after
+  //   PHONE_BANNER_SNOOZE_MS so someone who dismissed reflexively without
+  //   reading it still gets asked again, without nagging every single
+  //   visit.
+  if (!userColumns.includes("phone_number")) {
+    db.exec(`ALTER TABLE users ADD COLUMN phone_number TEXT;`);
+  }
+  if (!userColumns.includes("phone_consent_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN phone_consent_at TEXT;`);
+  }
+  if (!userColumns.includes("phone_banner_dismissed_at")) {
+    db.exec(`ALTER TABLE users ADD COLUMN phone_banner_dismissed_at TEXT;`);
+  }
 }
 
 export function getDb(): DatabaseSync {

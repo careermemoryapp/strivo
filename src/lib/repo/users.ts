@@ -106,12 +106,36 @@ export type User = {
   // permission going forward per Guideline 5.1.2(i), not just recording
   // that time passed). Never cleared once set.
   ai_consent_at: string | null;
+  // Raw, user-entered phone number (expected to include a country code --
+  // see PhoneNumberBanner.tsx's validation) captured via the Home banner or
+  // Settings, for future WhatsApp-based re-engagement now that push
+  // notifications are effectively dead (all current users have them off).
+  // Null until someone submits it. See the matching migration comment in
+  // lib/db.ts for the full reasoning on all three phone_* columns.
+  phone_number: string | null;
+  // Stamped every time phone_number is (re)submitted -- the consent
+  // evidence trail for WhatsApp's Marketing-template requirement.
+  // Deliberately NOT write-once (unlike ai_consent_at): updating your
+  // number is its own fresh consent event.
+  phone_consent_at: string | null;
+  // When the phone-number Home banner was last dismissed -- null means
+  // never dismissed. Compared against PHONE_BANNER_SNOOZE_MS in
+  // shouldShowPhoneBanner() below, same "ask again later, don't nag every
+  // visit" pattern as preferred_plan_chosen_at/PLAN_NUDGE_AFTER_MS.
+  phone_banner_dismissed_at: string | null;
   created_at: string;
 };
 
 // How long after choosing "I'll decide later" someone should be shown the
 // plan-choice nudge screen again (see /plan-nudge + (app)/layout.tsx).
 export const PLAN_NUDGE_AFTER_MS = 7 * 24 * 60 * 60 * 1000;
+
+// How long after dismissing the phone-number Home banner (see
+// PhoneNumberBanner.tsx) it should resurface, if the person still hasn't
+// added a number. Same idea as PLAN_NUDGE_AFTER_MS above, shorter interval
+// -- this is a low-stakes, non-blocking ask (unlike the plan-nudge screen,
+// which is a full-screen redirect), so it's fine to check back sooner.
+export const PHONE_BANNER_SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 
 export type SubscriptionInfo = {
   status: "trial" | "active" | "expired";
@@ -256,6 +280,41 @@ export function deleteUser(id: string) {
 export function setDismissedNudge(id: string, nudgeId: string) {
   const db = getDb();
   db.prepare(`UPDATE users SET dismissed_nudge_id = ? WHERE id = ?`).run(nudgeId, id);
+}
+
+// Saves (or updates) a user's phone number, stamping fresh consent at the
+// same time -- see phone_consent_at's comment on the User type for why this
+// re-stamps on every call rather than being write-once. Called from
+// POST /api/user/phone (the Home banner, and later Settings if a phone
+// field is added there).
+export function setUserPhoneNumber(id: string, phoneNumber: string) {
+  const db = getDb();
+  const now = nowIso();
+  db.prepare(`UPDATE users SET phone_number = ?, phone_consent_at = ? WHERE id = ?`).run(phoneNumber, now, id);
+  return getUserById(id);
+}
+
+// Records that the phone-number Home banner was dismissed just now -- see
+// shouldShowPhoneBanner() below for how this is used to bring it back after
+// PHONE_BANNER_SNOOZE_MS rather than hiding it forever.
+export function setPhoneBannerDismissed(id: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET phone_banner_dismissed_at = ? WHERE id = ?`).run(nowIso(), id);
+}
+
+// Whether Home should show the phone-number banner for this user -- true
+// when they haven't added a number yet AND either never dismissed the
+// banner or dismissed it long enough ago (PHONE_BANNER_SNOOZE_MS) to be
+// worth asking again. Computed here (not stored) so it's always derived
+// from current time, same approach as needsPlanNudge in
+// getSubscriptionInfo above.
+export function shouldShowPhoneBanner(
+  user: Pick<User, "phone_number" | "phone_banner_dismissed_at">
+): boolean {
+  if (user.phone_number) return false;
+  if (!user.phone_banner_dismissed_at) return true;
+  const dismissedMs = new Date(user.phone_banner_dismissed_at).getTime();
+  return Date.now() - dismissedMs >= PHONE_BANNER_SNOOZE_MS;
 }
 
 // Pinged once per native app open/resume (see useAppVersionPing.ts) so the

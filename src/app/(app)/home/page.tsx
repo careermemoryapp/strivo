@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation";
 import { requireUserId } from "@/lib/serverAuth";
-import { getUserById, getSubscriptionInfo } from "@/lib/repo/users";
+import { getUserById, getSubscriptionInfo, shouldShowPhoneBanner } from "@/lib/repo/users";
 import { countMemories, listMemoryDates } from "@/lib/repo/memories";
 import { listChats } from "@/lib/repo/chats";
 import { getRecentWeeklyRecap } from "@/lib/repo/weeklyRecaps";
@@ -160,6 +160,11 @@ export default async function HomePage() {
                 seniorStakeholder: user.resume_stats_stakeholder ?? 0,
               }
             : null,
+        // Computed server-side so the client never has to know the
+        // snooze-interval logic -- see shouldShowPhoneBanner's own comment.
+        // false (not just omitted) for a missing user, matching every other
+        // field's safe fallback above.
+        showPhoneBanner: user ? shouldShowPhoneBanner(user) : false,
       }}
     />
   );

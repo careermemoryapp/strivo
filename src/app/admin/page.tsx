@@ -1955,6 +1955,7 @@ export default function AdminDashboardPage() {
                           <th className="px-4 py-3 font-semibold">Emails</th>
                           <th className="px-4 py-3 font-semibold">Last seen</th>
                           <th className="px-4 py-3 font-semibold">Country</th>
+                          <th className="px-4 py-3 font-semibold">Phone</th>
                           <th className="px-4 py-3 font-semibold">AI consent</th>
                           <th className="px-4 py-3 font-semibold">Last email</th>
                           <th className="px-4 py-3 font-semibold">Joined</th>
@@ -2033,6 +2034,13 @@ export default function AdminDashboardPage() {
                                 <span className="text-[12px] text-ink-soft">{u.country}</span>
                               ) : (
                                 <span className="text-[12px] text-ink-faint">Unknown</span>
+                              )}
+                            </td>
+                            <td className="px-4 py-3 whitespace-nowrap">
+                              {u.phoneNumber ? (
+                                <span className="text-[12px] text-ink-soft">{u.phoneNumber}</span>
+                              ) : (
+                                <span className="text-[12px] text-ink-faint">Not added</span>
                               )}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
