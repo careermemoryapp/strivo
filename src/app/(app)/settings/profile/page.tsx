@@ -33,6 +33,7 @@ export default function ProfilePage() {
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   useEffect(() => {
     fetch("/api/user/profile")
@@ -97,6 +98,28 @@ export default function ProfilePage() {
     }
   }
 
+  // "Remove number" -- see clearUserPhoneNumber's comment in repo/users.ts
+  // for why this exists: the Privacy Policy explicitly promises removal is
+  // possible at any time from Settings, so it has to actually work.
+  // Trivially reversible (just re-enter a number), so no confirm dialog --
+  // unlike account/memory deletion elsewhere in Settings, which are.
+  async function handleRemovePhone() {
+    setRemoving(true);
+    setError(null);
+    setSaved(false);
+    try {
+      const res = await fetch("/api/user/phone", { method: "DELETE" });
+      if (!res.ok) throw new Error();
+      setUser((u) => (u ? { ...u, phoneNumber: null } : u));
+      const detected = dialCodeForCountry(user?.country ?? null);
+      setPhone(detected ? `${detected.dialCode} ` : "");
+    } catch {
+      setError("Couldn't remove your number. Please try again.");
+    } finally {
+      setRemoving(false);
+    }
+  }
+
   if (!user && !error) {
     return (
       <div className="flex items-center justify-center py-24">
@@ -134,8 +157,23 @@ export default function ProfilePage() {
                   placeholder="+91 98765 43210"
                 />
                 <p className="mt-1.5 text-xs text-ink-faint">
-                  We&apos;ll only message you about your own Strivo activity.
+                  By saving, you agree to receive WhatsApp messages about your own Strivo
+                  activity — see our{" "}
+                  <a href="/privacy" target="_blank" className="font-medium text-brand-primary underline">
+                    Privacy Policy
+                  </a>
+                  .
                 </p>
+                {user.phoneNumber && (
+                  <button
+                    type="button"
+                    onClick={handleRemovePhone}
+                    disabled={removing || saving}
+                    className="mt-1.5 text-xs font-medium text-red-600 underline disabled:opacity-50"
+                  >
+                    {removing ? "Removing…" : "Remove number"}
+                  </button>
+                )}
               </div>
               {saved && <p className="text-sm text-green-600">Profile updated.</p>}
               <Button type="submit" className="w-full" loading={saving}>

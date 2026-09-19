@@ -294,6 +294,19 @@ export function setUserPhoneNumber(id: string, phoneNumber: string) {
   return getUserById(id);
 }
 
+// Removes a saved phone number -- the Privacy Policy's "Phone number and
+// WhatsApp messages" section explicitly promises this is possible "at any
+// time from Settings" (see settings/profile/page.tsx's "Remove number"
+// button), so this needs to actually exist, not just the add/update path.
+// Clears phone_consent_at along with it -- once there's no number on file,
+// a leftover consent timestamp would misleadingly suggest we still have
+// standing permission for some number we don't have anymore.
+export function clearUserPhoneNumber(id: string) {
+  const db = getDb();
+  db.prepare(`UPDATE users SET phone_number = NULL, phone_consent_at = NULL WHERE id = ?`).run(id);
+  return getUserById(id);
+}
+
 // Records that the phone-number Home banner was dismissed just now -- see
 // shouldShowPhoneBanner() below for how this is used to bring it back after
 // PHONE_BANNER_SNOOZE_MS rather than hiding it forever.

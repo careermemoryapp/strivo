@@ -162,7 +162,12 @@ export function PhoneNumberBanner({ initiallyVisible, country }: { initiallyVisi
           </form>
           {error && <p className="mt-2 text-[11px] text-red-600">{error}</p>}
           <p className="mt-2.5 text-[10.5px] leading-relaxed text-[#8a8296]">
-            We&apos;ll only message you about your own Strivo activity. No spam, ever.
+            By saving, you agree to receive WhatsApp messages about your own Strivo activity. No
+            spam, ever — see our{" "}
+            <a href="/privacy" target="_blank" className="font-semibold underline">
+              Privacy Policy
+            </a>
+            .
           </p>
         </div>
       </div>

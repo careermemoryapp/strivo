@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
-import { setUserPhoneNumber } from "@/lib/repo/users";
+import { setUserPhoneNumber, clearUserPhoneNumber } from "@/lib/repo/users";
 
 // Called from the Home phone-number banner (PhoneNumberBanner.tsx), and
 // later Settings if a phone field is added there. Requires a leading "+"
@@ -28,5 +28,16 @@ export async function POST(req: Request) {
   }
   const user = setUserPhoneNumber(userId, parsed.data.phoneNumber);
   if (!user) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  return NextResponse.json({ ok: true });
+}
+
+// "Remove number" in Settings (settings/profile/page.tsx) -- see
+// clearUserPhoneNumber's own comment for why this needs to exist: the
+// Privacy Policy's "Phone number and WhatsApp messages" section promises
+// removal is possible at any time.
+export async function DELETE() {
+  const userId = await requireUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  clearUserPhoneNumber(userId);
   return NextResponse.json({ ok: true });
 }

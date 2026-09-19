@@ -5,7 +5,7 @@ export const metadata = {
   title: `Privacy Policy — ${APP_NAME}`,
 };
 
-const LAST_UPDATED = "August 27, 2026";
+const LAST_UPDATED = "September 19, 2026";
 
 export default function PrivacyPolicyPage() {
   return (
@@ -46,6 +46,11 @@ export default function PrivacyPolicyPage() {
                 you ask and the AI&apos;s responses, so you can revisit past conversations.
               </li>
               <li>
+                <span className="font-medium text-ink">Phone / WhatsApp number (optional):</span> only if you
+                choose to add one from Settings or a prompt in the app — see &quot;Phone number and WhatsApp
+                messages&quot; below.
+              </li>
+              <li>
                 <span className="font-medium text-ink">Support messages:</span> anything you send
                 us through the Help &amp; Support form.
               </li>
@@ -68,6 +73,11 @@ export default function PrivacyPolicyPage() {
               <li>Transcribe voice recordings and extract text from uploaded documents.</li>
               <li>Automatically summarize and categorize memories so they&apos;re easy to find.</li>
               <li>Maintain your account, chat history, and subscription status.</li>
+              <li>
+                Send you optional WhatsApp reminders about your own account activity, only if
+                you&apos;ve added a phone number — see &quot;Phone number and WhatsApp
+                messages&quot; below.
+              </li>
               <li>Respond to support requests.</li>
             </ul>
             <p className="mt-3">
@@ -86,7 +96,9 @@ export default function PrivacyPolicyPage() {
               API data-use terms and does not use API content to train its models. We also use
               Amazon Web Services (AWS) to host the app and database, and Google Analytics (GA4)
               on our public marketing site only — never inside the app itself — to understand
-              traffic to strivo.ai.
+              traffic to strivo.ai. If you&apos;ve added a phone number, we use Meta&apos;s
+              WhatsApp Business Platform to deliver the messages described under &quot;Phone
+              number and WhatsApp messages&quot; below.
             </p>
             <p className="mt-3">
               We do not use your memories, chat conversations, or documents for advertising, and
@@ -96,13 +108,28 @@ export default function PrivacyPolicyPage() {
           </section>
 
           <section>
+            <h2 className="text-base font-semibold text-ink">Phone number and WhatsApp messages</h2>
+            <p className="mt-3">
+              Adding a phone number is entirely optional and only happens when you explicitly
+              provide one — from a prompt on Home or from Settings. If you add a number, we use
+              it only to send you WhatsApp messages about your own {APP_NAME} activity, such as a
+              reminder about a memory you haven&apos;t yet turned into a resume line. We never use
+              your number for advertising, never share it with third parties for their own
+              marketing, and never use it to call or text you outside WhatsApp. By submitting your
+              number, you agree to receive these messages; this is the only basis on which we send
+              them. You can add, change, or remove your number, and stop these messages, at any
+              time from Settings.
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-base font-semibold text-ink">Legal basis for processing (EU/UK users)</h2>
             <p className="mt-3">
               If you&apos;re in the European Economic Area or the UK, we process your information
               under these legal bases: performance of a contract (creating your account,
               providing the core app features you&apos;ve signed up for), your consent (marketing
-              emails, which you can withdraw at any time — see &quot;Your choices&quot; below), and
-              our legitimate interest in keeping the service secure, reliable, and functioning
+              emails and WhatsApp reminder messages, both of which you can withdraw at any time —
+              see &quot;Your choices&quot; below), and our legitimate interest in keeping the service secure, reliable, and functioning
               correctly (fraud prevention, rate limiting, error monitoring). Where we rely on
               consent, withdrawing it doesn&apos;t affect the lawfulness of anything we did before
               you withdrew it.
@@ -185,6 +212,11 @@ export default function PrivacyPolicyPage() {
                 You can opt out of marketing emails at any time using the unsubscribe link in any
                 marketing email we send, or by contacting us. This doesn&apos;t affect essential
                 account emails (like security notices).
+              </li>
+              <li>
+                You can add, change, or remove your WhatsApp number, and stop reminder messages,
+                at any time from Settings — see &quot;Phone number and WhatsApp messages&quot;
+                above.
               </li>
             </ul>
           </section>
