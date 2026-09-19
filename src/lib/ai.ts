@@ -894,19 +894,28 @@ export async function translateToEnglish(text: string): Promise<string> {
   const openai = getClient();
   if (!openai) return text;
   try {
-    const completion = await openai.chat.completions.create({
-      model: CHAT_MODEL,
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Translate the user's message to English. If it's already in English, return it completely unchanged. " +
-            "Respond with ONLY the translation — no quotes, no commentary, no explanation.",
-        },
-        { role: "user", content: text },
-      ],
-    });
+    // Bounded well under a normal reverse-proxy read timeout (this call sits
+    // in front of embedText + chatCompletion in the sendUserMessageAndGetReply
+    // chain -- see that function's comment -- so an unbounded hang here stalls
+    // the whole reply). Fails soft into the original text below either way,
+    // so a timeout just means losing the cross-language retrieval boost for
+    // this one message, never a broken response.
+    const completion = await openai.chat.completions.create(
+      {
+        model: CHAT_MODEL,
+        temperature: 0,
+        messages: [
+          {
+            role: "system",
+            content:
+              "Translate the user's message to English. If it's already in English, return it completely unchanged. " +
+              "Respond with ONLY the translation — no quotes, no commentary, no explanation.",
+          },
+          { role: "user", content: text },
+        ],
+      },
+      { timeout: 12_000 }
+    );
     const translated = completion.choices[0]?.message?.content?.trim();
     return translated || text;
   } catch (err) {
@@ -980,10 +989,18 @@ export async function embedText(text: string): Promise<number[] | null> {
   const openai = getClient();
   if (!openai) return null;
   try {
-    const res = await openai.embeddings.create({
-      model: EMBED_MODEL,
-      input: text.slice(0, 8000),
-    });
+    // Same reasoning as translateToEnglish's timeout just above: this sits
+    // mid-chain in sendUserMessageAndGetReply, and the null return on
+    // failure already has a defined, safe fallback (keyword retrieval), so
+    // bounding it here only trades a slow/hung call for that existing
+    // graceful degradation instead of a multi-minute stall.
+    const res = await openai.embeddings.create(
+      {
+        model: EMBED_MODEL,
+        input: text.slice(0, 8000),
+      },
+      { timeout: 12_000 }
+    );
     return res.data[0]?.embedding ?? null;
   } catch (err) {
     console.error("embedText failed:", err);
@@ -1486,11 +1503,23 @@ export async function chatCompletion(
     return { error: "AI is not configured on the server (missing OPENAI_API_KEY)." };
   }
   try {
-    const completion = await openai.chat.completions.create({
-      model: CHAT_MODEL,
-      temperature: 0.6,
-      messages: [{ role: "system", content: systemPrompt }, ...history],
-    });
+    // Was previously unbounded (SDK default is 10 minutes) -- on a request
+    // that's already slow, that meant the reverse proxy in front of the app
+    // would give up and return its own HTML error page long before this
+    // promise ever settled, and the client would try to JSON-parse that HTML
+    // (see the fetch in ChatDetailClient.tsx's send()) and show the user a
+    // raw "Unexpected token '<'" parse error instead of anything meaningful.
+    // Bounding it here means a genuinely slow/hung call instead resolves
+    // into the existing, friendly `{ error }` path below well before any
+    // proxy timeout fires.
+    const completion = await openai.chat.completions.create(
+      {
+        model: CHAT_MODEL,
+        temperature: 0.6,
+        messages: [{ role: "system", content: systemPrompt }, ...history],
+      },
+      { timeout: 25_000 }
+    );
     const reply = completion.choices[0]?.message?.content;
     if (!reply) return { error: "The AI returned an empty response." };
     return { reply };

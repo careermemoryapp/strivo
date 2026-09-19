@@ -120,12 +120,39 @@ export function ChatDetailClient({
     };
     setMessages((prev) => [...prev, optimisticUser]);
 
+    // ai.ts's chatCompletion (and the calls ahead of it in
+    // sendUserMessageAndGetReply) now bail out at 25s worst case instead of
+    // hanging -- see that file's comment. This client-side ceiling just
+    // needs to sit comfortably above that plus normal network/DB overhead,
+    // so a real reply still has room to land, while a connection that's
+    // genuinely stuck (e.g. the reverse proxy dropped it) doesn't leave
+    // "Thinking..." on screen indefinitely with no way out but a refresh.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45_000);
+
     try {
       const res = await fetch(`/api/chats/${chatId}/messages`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ content }),
+        signal: controller.signal,
       });
+
+      // The server route always responds with JSON, success or failure (see
+      // sendUserMessageAndGetReply / the route handler) -- but anything
+      // sitting IN FRONT of it (a reverse-proxy timeout page, a platform
+      // error page) responds in HTML, starting with "<!DOCTYPE". Calling
+      // res.json() straight on that used to throw a raw
+      // "Unexpected token '<' ... is not valid JSON" SyntaxError that then
+      // surfaced verbatim as the on-screen error message below -- accurate
+      // to what happened, meaningless to a user. Checking content-type first
+      // and translating that case into one clear sentence fixes the message
+      // without needing to know *why* something upstream gave up.
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        throw new Error("The server took too long to respond. Please try again.");
+      }
+
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Failed to send message.");
 
@@ -134,8 +161,16 @@ export function ChatDetailClient({
     } catch (e) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticUser.id));
       setLastFailedContent(content);
-      setSendError(e instanceof Error ? e.message : "Couldn't send your message. Check your connection.");
+      const timedOut = e instanceof DOMException && e.name === "AbortError";
+      setSendError(
+        timedOut
+          ? "This is taking longer than it should. Please try again."
+          : e instanceof Error
+            ? e.message
+            : "Couldn't send your message. Check your connection."
+      );
     } finally {
+      clearTimeout(timeoutId);
       setSending(false);
     }
   }
