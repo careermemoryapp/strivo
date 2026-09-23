@@ -81,37 +81,53 @@ function OpportunityCardItem({
   reacting: boolean;
   onFeedback: (jobId: string, feedback: "relevant" | "not_for_me") => void;
 }) {
-  // The found bug: `animate-fade-in-up` (globals.css) is a CSS *animation*,
-  // and a finished animation with fill-mode "both" keeps holding its own
-  // end-state opacity/transform at a higher cascade priority than an
-  // ordinary utility class targeting the same properties -- for as long as
-  // that animation class stays on the element. Left on permanently, it
-  // silently blocked the opacity-0/scale-95 exit transition below from
-  // ever visibly rendering: the card looked completely normal right up
-  // until it left `visible` and was removed from the DOM outright, which
-  // is exactly the "card just disappears, no reaction to the tap" bug this
-  // fixes. Stripping the entrance class once its animation actually
-  // finishes (onAnimationEnd) hands opacity/transform back to ordinary
-  // utility classes, so the later exit transition can take over cleanly.
-  const [entered, setEntered] = useState(false);
+  const [shown, setShown] = useState(false);
+  useEffect(() => {
+    // One animation frame after mount, not the same tick -- so the browser
+    // has actually painted the initial opacity-0/translate-y-2 state (see
+    // phaseClass below) before this flips it to the shown state. Flipping
+    // on the same tick risks the browser/React coalescing both states into
+    // a single paint, which silently skips the transition altogether.
+    const raf = requestAnimationFrame(() => setShown(true));
+    return () => cancelAnimationFrame(raf);
+  }, []);
+
+  // First attempt at this used globals.css's shared `animate-fade-in-up`
+  // (a CSS @keyframes *animation*) for the entrance, stripped via
+  // onAnimationEnd once it finished, so the exit transition below could
+  // take over cleanly -- a finished animation with fill-mode "both" holds
+  // its own end-state opacity/transform at a cascade priority ABOVE an
+  // ordinary utility class targeting the same properties, for as long as
+  // the animation class stays on the element. That fix only half-worked:
+  // tapping Fit/Not a fit BEFORE the entrance animation had finished (very
+  // easy to do -- the whole point of the stagger is some cards are still
+  // mid-entrance when the list first renders) put `reacting`'s opacity-0
+  // in a straight fight with the still-live entrance animation's opacity,
+  // and the animation won every time, so the card visibly did nothing
+  // right up until it hit `dismissedIds` and was yanked from the DOM --
+  // exactly the bug this is fixing, just gated on timing instead of always.
+  //
+  // Rebuilt on plain CSS *transitions* instead, for both entrance AND
+  // exit: transitioning properties always take cascade priority over an
+  // animation's, so there's no fight to lose regardless of when a tap
+  // lands. `shown` flips true one animation frame after mount (not on the
+  // same tick -- see the effect above) so the browser actually paints the
+  // initial hidden state before transitioning away from it; `reacting`
+  // simply overrides `shown`'s classes with the exit ones the instant a
+  // thumb is tapped, whatever phase the card was in.
   const fitCfg = opp.fit ? FIT_CONFIG[opp.fit] : null;
   const FitIcon = fitCfg?.icon ?? null;
   const isRecent = opp.postedDate && !isNaN(new Date(opp.postedDate).getTime());
+  const phaseClass = reacting
+    ? "opacity-0 scale-95 translate-y-0 duration-200"
+    : shown
+      ? "opacity-100 scale-100 translate-y-0 duration-500"
+      : "opacity-0 scale-100 translate-y-2 duration-500";
 
   return (
     <Card
-      onAnimationEnd={() => setEntered(true)}
-      className={cn(
-        // fade-in-up is the same entrance the rest of the app already uses
-        // for "this just appeared" moments (see globals.css) -- staggered
-        // per card (capped at 8 cards' worth of delay) so the list reads
-        // as filling in rather than popping in all at once. Only applied
-        // pre-`entered`, per the comment above.
-        !entered && "animate-fade-in-up",
-        "transition-all duration-200 ease-out",
-        reacting && "opacity-0 scale-95"
-      )}
-      style={!entered ? { animationDelay: `${Math.min(index, 8) * 60}ms` } : undefined}
+      className={cn("transition-all ease-out", phaseClass)}
+      style={!shown && !reacting ? { transitionDelay: `${Math.min(index, 8) * 60}ms` } : undefined}
     >
       <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary text-[16px] font-bold">
