@@ -1,15 +1,26 @@
 // Orchestration for the Opportunities tab -- the piece that decides
-// personalized-vs-generic and turns the cheap job_postings pool (see
-// lib/repo/jobPostings.ts, filled by app/api/opportunities/refresh-pool/run)
-// plus a user's own career evidence into the ranked list GET
-// /api/opportunities actually serves. Deliberately kept as ONE function
-// callers can treat as a black box -- the API route and any future caller
-// (a push-notification "new opportunities" job, say) shouldn't need to know
-// about caching, thresholds, or the personalized/generic split themselves.
+// personalized-vs-not-yet-unlocked and turns the cheap job_postings pool
+// (see lib/repo/jobPostings.ts, filled by
+// app/api/opportunities/refresh-pool/run) plus a user's own career
+// evidence into the ranked list GET /api/opportunities actually serves.
+// Deliberately kept as ONE function callers can treat as a black box -- the
+// API route and any future caller (a push-notification "new opportunities"
+// job, say) shouldn't need to know about caching, thresholds, or the
+// personalized/locked split themselves.
+//
+// There is deliberately NO generic/unpersonalized job list anymore -- a
+// direct product call. Until a person has enough recorded memories for
+// Strivo to name real roles for them (wantsPersonalized below), this
+// returns an EMPTY list rather than a generic sample of the pool, so the
+// tab reads as locked ("create more memories to unlock this") instead of
+// quietly working already. See the !wantsPersonalized branch below and
+// OpportunitiesClient.tsx's locked-state card for the actual copy.
 
 import { countMemories } from "@/lib/repo/memories";
 import { getUserById } from "@/lib/repo/users";
+import { detectCityFromText } from "@/lib/geo";
 import { getLatestSuggestedRolesForUser, MIN_TOTAL_MEMORIES } from "@/lib/repo/suggestedRoles";
+import { getJobPreferences, hasStatedPreferences, type JobPreferences } from "@/lib/repo/jobPreferences";
 import {
   listActiveJobPostings,
   type JobPosting,
@@ -29,16 +40,28 @@ export type OpportunityCard = {
   salary: string | null;
   sourceUrl: string;
   postedDate: string | null;
-  fit: "strong" | "good" | "possible" | null; // null on the generic (not-yet-personalized) path
+  fit: "strong" | "good" | "possible" | null; // null when not yet personalized, or on the rare AI-unavailable fallback
   reason: string | null;
 };
 
 export type OpportunitiesResult = {
   personalized: boolean;
   memoryCount: number;
-  // How many more memories would unlock personalization -- 0 once already
-  // personalized. Drives the "N more memories to personalize" nudge copy.
+  // How many more memories would unlock memory-based personalization -- 0
+  // once already personalized via memories. Note this can be >0 even when
+  // personalized is true, if what unlocked it was stated preferences
+  // instead (see statedPreferences) -- the UI shouldn't show this as a
+  // literal countdown (see OpportunitiesClient.tsx: recording a handful of
+  // low-effort one-line memories just to hit a number doesn't actually
+  // help matching), just as an internal signal of how thin the memory
+  // evidence still is.
   memoriesNeeded: number;
+  // What the user has directly told Strivo they're looking for (see
+  // POST /api/opportunities/preferences) -- null fields mean "not stated".
+  // Surfaced so the client can pre-fill the ask-for-info form when editing,
+  // and to decide whether personalized:false should be shown as "tell us
+  // what you want" vs "record more memories" framing.
+  statedPreferences: JobPreferences | null;
   opportunities: OpportunityCard[];
 };
 
@@ -80,7 +103,24 @@ function keywordsFrom(text: string): string[] {
     .filter((w) => w.length > 2 && !STOPWORDS.has(w));
 }
 
-function preFilterCandidates(pool: JobPosting[], profileKeywords: string[], excludeIds: Set<string>, limit: number): JobPosting[] {
+// A job whose location matches the person's own (detected) city is worth
+// far more than any single keyword hit -- this was the actual bug behind
+// "jobs don't consider my location": profileKeywords used to come ONLY
+// from suggested_roles' title/industry, so a resume's city never factored
+// into which ~80 candidates even reached the LLM ranking step in the first
+// place. A flat, large bonus (rather than folding "delhi" into the regular
+// keyword set) means a same-city job always outranks an equally-generic
+// one from elsewhere, without letting location alone drown out genuine
+// function/industry signal for the jobs that DO share real keyword overlap.
+const LOCATION_MATCH_BONUS = 8;
+
+function preFilterCandidates(
+  pool: JobPosting[],
+  profileKeywords: string[],
+  excludeIds: Set<string>,
+  limit: number,
+  boostCity: string | null
+): JobPosting[] {
   const kw = new Set(profileKeywords);
   const scored = pool
     .filter((job) => !excludeIds.has(job.id))
@@ -88,6 +128,9 @@ function preFilterCandidates(pool: JobPosting[], profileKeywords: string[], excl
       const haystack = keywordsFrom(`${job.title} ${job.snippet ?? ""}`);
       let score = 0;
       for (const word of haystack) if (kw.has(word)) score++;
+      if (boostCity && job.location && job.location.toLowerCase().includes(boostCity.toLowerCase())) {
+        score += LOCATION_MATCH_BONUS;
+      }
       return { job, score };
     })
     // A job with zero keyword overlap is still worth a chance at the
@@ -100,16 +143,39 @@ function preFilterCandidates(pool: JobPosting[], profileKeywords: string[], excl
 
 function buildProfileText(
   roles: { title: string; industry: string | null; reasoning?: string | null }[],
-  resumeText: string | null
+  resumeText: string | null,
+  detectedCity: string | null,
+  stated: JobPreferences | null
 ): string {
   const rolesListing = roles
     .map((r) => `- ${r.title}${r.industry ? ` (${r.industry})` : ""}${r.reasoning ? ` -- ${r.reasoning}` : ""}`)
     .join("\n");
+  const rolesSection = rolesListing
+    ? `Roles this person is genuinely ready for right now, per their own recorded career memories:\n${rolesListing}`
+    : null;
+  // What they typed into the "tell us what you're looking for" form (see
+  // POST /api/opportunities/preferences) -- may be the ONLY signal at all
+  // for someone too new to have suggested_roles yet, so this is stated as
+  // its own clear line rather than folded silently into the resume
+  // excerpt. City is handled separately via locationLine below (it already
+  // takes a stated city over a resume-detected one -- see the caller).
+  const statedBits = stated ? [stated.function, stated.industry].filter((v): v is string => !!v) : [];
+  const statedLine =
+    statedBits.length > 0 ? `They directly told Strivo they're looking for: ${statedBits.join(", ")}.` : null;
   const resumeExcerpt = resumeText ? resumeText.slice(0, 3000) : null;
-  return (
-    `Roles this person is genuinely ready for right now, per their own recorded career memories:\n${rolesListing}` +
-    (resumeExcerpt ? `\n\nResume excerpt:\n${resumeExcerpt}` : "")
+  // Stated explicitly, ahead of the resume excerpt, rather than trusting
+  // the model to notice a city name buried in it -- see rankOpportunities'
+  // system prompt in lib/ai.ts for how this is judged.
+  const locationLine = detectedCity
+    ? `Likely based in: ${detectedCity}${stated?.city ? " (they told Strivo this directly)" : " (detected from their resume)"}`
+    : null;
+
+  const parts = [rolesSection, statedLine, locationLine, resumeExcerpt ? `Resume excerpt:\n${resumeExcerpt}` : null].filter(
+    (p): p is string => !!p
   );
+  return parts.length > 0
+    ? parts.join("\n\n")
+    : "No career evidence recorded yet beyond what they stated directly above.";
 }
 
 function isCacheFresh(
@@ -132,8 +198,17 @@ function isCacheFresh(
 export async function getOpportunitiesForUser(userId: string): Promise<OpportunitiesResult> {
   const memoryCount = countMemories(userId);
   const suggestedRoles = getLatestSuggestedRolesForUser(userId);
-  const wantsPersonalized = !!suggestedRoles && suggestedRoles.roles.length > 0;
-  const memoriesNeeded = wantsPersonalized ? 0 : Math.max(0, MIN_TOTAL_MEMORIES - memoryCount);
+  const roles = suggestedRoles?.roles ?? [];
+  const prefs = getJobPreferences(userId);
+  // Two independent ways to unlock real matching: enough recorded memories
+  // for Strivo to have named real roles (roles.length > 0), OR the person
+  // just telling Strivo directly what they want via the ask-for-info form
+  // (see POST /api/opportunities/preferences). Either is enough on its
+  // own -- someone with zero memories but a filled-in city/function/
+  // industry gets real (if thinner-signal) matching immediately, rather
+  // than waiting on memories alone.
+  const wantsPersonalized = roles.length > 0 || hasStatedPreferences(prefs);
+  const memoriesNeeded = roles.length > 0 ? 0 : Math.max(0, MIN_TOTAL_MEMORIES - memoryCount);
 
   const cache = getCachedOpportunities(userId);
   if (isCacheFresh(cache, memoryCount, wantsPersonalized)) {
@@ -141,47 +216,62 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
       personalized: cache[0].personalized === 1,
       memoryCount,
       memoriesNeeded,
+      statedPreferences: prefs,
       opportunities: cache.map((row) => toCard(row.job, row.fit, row.reason)),
     };
+  }
+
+  if (!wantsPersonalized) {
+    // Deliberately BLANK, not a generic sample of the shared pool -- a
+    // direct product call: showing real jobs before Strivo actually knows
+    // this person undercuts the entire incentive to record memories (why
+    // bother, the tab already has jobs). This IS the nudge; see
+    // OpportunitiesClient.tsx's locked-state card, which combines this
+    // with an inline form to state city/function/industry directly --
+    // that's the other way out of this branch, see wantsPersonalized
+    // above. Still cached the same way as the other two return paths below
+    // so a page reload within CACHE_MAX_AGE_DAYS doesn't redo this work
+    // for nothing.
+    replaceUserOpportunities(userId, [], { personalized: false, memoryCountAtGeneration: memoryCount });
+    return { personalized: false, memoryCount, memoriesNeeded, statedPreferences: prefs, opportunities: [] };
   }
 
   const pool = listActiveJobPostings();
   const excludeIds = listFeedbackedJobIds(userId);
 
-  if (!wantsPersonalized || pool.length === 0) {
-    // Generic path: most-recently-seen postings, one per company where
-    // possible so the tab doesn't read as a single employer's listings
-    // repeated -- simple diversity heuristic, not real ranking.
-    const seenCompanies = new Set<string>();
-    const generic: JobPosting[] = [];
-    for (const job of pool) {
-      if (excludeIds.has(job.id)) continue;
-      const companyKey = (job.company ?? job.id).toLowerCase();
-      if (seenCompanies.has(companyKey) && generic.length < pool.length) continue;
-      seenCompanies.add(companyKey);
-      generic.push(job);
-      if (generic.length >= TARGET_COUNT) break;
-    }
-    replaceUserOpportunities(
-      userId,
-      generic.map((job, i) => ({ jobPostingId: job.id, rank: i + 1, fit: null, reason: null })),
-      { personalized: false, memoryCountAtGeneration: memoryCount }
-    );
-    return {
-      personalized: false,
-      memoryCount,
-      memoriesNeeded,
-      opportunities: generic.map((job) => toCard(job, null, null)),
-    };
+  if (pool.length === 0) {
+    // A genuinely different situation from the branch above -- this person
+    // DOES have enough signal to match on (wantsPersonalized is true
+    // here), the shared job pool itself is just empty (e.g. right after a
+    // fresh deploy, before refresh-pool's first run has ever completed).
+    // Deliberately NOT cached as a settled personalized:false outcome --
+    // unlike the "nothing to match on yet" case, this should resolve
+    // itself as soon as the pool has something in it, not sit stale for
+    // CACHE_MAX_AGE_DAYS.
+    return { personalized: false, memoryCount, memoriesNeeded: 0, statedPreferences: prefs, opportunities: [] };
   }
 
-  // Personalized path.
+  // Personalized path -- reachable via memory-derived roles, stated
+  // preferences, or both at once; everything below just uses whichever
+  // sources are actually present.
   const user = getUserById(userId);
-  const profileText = buildProfileText(suggestedRoles.roles, user?.resume_text ?? null);
-  const profileKeywords = keywordsFrom(
-    suggestedRoles.roles.map((r) => `${r.title} ${r.industry ?? ""}`).join(" ")
-  );
-  const candidates = preFilterCandidates(pool, profileKeywords, excludeIds, 80);
+  const resumeText = user?.resume_text ?? null;
+  // An explicitly stated city always wins over one merely detected in the
+  // resume -- the person said it themselves, no inference needed.
+  const detectedCity = prefs?.city || detectCityFromText(resumeText);
+  const profileText = buildProfileText(roles, resumeText, detectedCity, prefs);
+  // Role title/industry keywords, PLUS the first slice of resume text,
+  // PLUS whatever function/industry the person stated directly -- the
+  // resume alone is what carries someone's actual seniority language
+  // ("VP", "5 years") and sector specifics that suggested_roles doesn't
+  // capture, and stated preferences are the only signal at all for someone
+  // who unlocked this via the form rather than memories.
+  const profileKeywords = [
+    ...keywordsFrom(roles.map((r) => `${r.title} ${r.industry ?? ""}`).join(" ")),
+    ...keywordsFrom((resumeText ?? "").slice(0, 1500)),
+    ...keywordsFrom(`${prefs?.function ?? ""} ${prefs?.industry ?? ""}`),
+  ];
+  const candidates = preFilterCandidates(pool, profileKeywords, excludeIds, 80, detectedCity);
   const opportunityCandidates: OpportunityCandidate[] = candidates.map((job) => ({
     id: job.id,
     title: job.title,
@@ -207,6 +297,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
       personalized: false,
       memoryCount,
       memoriesNeeded,
+      statedPreferences: prefs,
       opportunities: fallback.map((job) => toCard(job, null, null)),
     };
   }
@@ -230,6 +321,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
     personalized: true,
     memoryCount,
     memoriesNeeded: 0,
+    statedPreferences: prefs,
     opportunities: items.map((item) => toCard(item.job, item.fit, item.reason)),
   };
 }

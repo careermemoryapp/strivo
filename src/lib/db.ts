@@ -768,11 +768,13 @@ function migrate(db: DatabaseSync) {
     -- that would actually change the ranking happens (new memories past a
     -- threshold, a new/refreshed suggested_roles row, or the cache going
     -- stale past OPPORTUNITIES_CACHE_MAX_AGE_DAYS -- see opportunities.ts).
-    -- personalized = 0 means this was the generic (not-yet-personalized)
-    -- fallback list shown to a user under the suggested_roles memory
-    -- threshold, not a real ranking -- kept separate from a genuine
-    -- personalized miss so the UI's "add memories to personalize" nudge and
-    -- the cache-staleness check can both tell the two apart.
+    -- personalized = 0 means nothing was matchable yet (no suggested_roles
+    -- AND no stated user_job_preferences -- see lib/opportunities.ts) --
+    -- rows is empty in that case, this is just the cached "still locked"
+    -- outcome so a page reload doesn't redo that check for nothing.
+    -- personalized = 1 covers BOTH real matching sources (memory-derived
+    -- suggested_roles, or a user's own stated user_job_preferences) --
+    -- there's no third "generic sample of the pool" state anymore.
     CREATE TABLE IF NOT EXISTS user_opportunities (
       id TEXT PRIMARY KEY,
       user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -802,6 +804,26 @@ function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_opportunity_feedback_user ON opportunity_feedback(user_id, job_posting_id);
+
+    -- What a user directly TOLD Strivo they're looking for (see
+    -- POST /api/opportunities/preferences and lib/repo/jobPreferences.ts) --
+    -- city, function/role, and industry, each optional and each free text.
+    -- Exists specifically for the gap between "just signed up" and "has
+    -- enough recorded memories for suggested_roles to exist": rather than
+    -- showing a dead blank Opportunities tab while memories accumulate,
+    -- this lets someone unlock real (if thinner-signal) matching
+    -- immediately by just stating what they want, while memory-based
+    -- personalization keeps improving in the background. One row per user
+    -- (overwritten, not appended -- this is current stated intent, not a
+    -- history of past answers) -- see getOpportunitiesForUser in
+    -- lib/opportunities.ts for how this and suggested_roles combine.
+    CREATE TABLE IF NOT EXISTS user_job_preferences (
+      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      city TEXT,
+      function TEXT,
+      industry TEXT,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

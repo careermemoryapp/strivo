@@ -17,6 +17,19 @@ export type JobPosting = {
   last_seen_at: string;
 };
 
+// Whether a job we've already vetted (see resolveDirectApplyUrl in
+// lib/applyLinkResolver.ts) is already in the pool under this external_id.
+// Checked BEFORE resolving a job's real apply link, so a refresh only ever
+// spends a resolution request on a genuinely new posting -- re-seeing an
+// already-known job across refreshes (very common; the same listing keeps
+// matching the same query) costs nothing extra. See the caller in
+// app/api/opportunities/refresh-pool/run.
+export function externalIdExists(externalId: string): boolean {
+  const db = getDb();
+  const row = db.prepare(`SELECT 1 FROM job_postings WHERE external_id = ? LIMIT 1`).get(externalId);
+  return !!row;
+}
+
 // Upserts one Adzuna result into the shared pool (see job_postings'
 // comment in lib/db.ts). Keyed on external_id, NOT our own id -- the same
 // job can legitimately turn up again in a later refresh (still live) or
@@ -25,6 +38,13 @@ export type JobPosting = {
 // one row, with last_seen_at bumped and function_tag/city_tag left as
 // whichever cell inserted it first rather than overwritten, since both are
 // purely informational (see the column comment in lib/db.ts).
+//
+// source_url is DELIBERATELY left out of the ON CONFLICT UPDATE -- it's
+// set once, at first insert, to the already-resolved-and-vetted direct
+// apply link (see resolveDirectApplyUrl), never the raw Adzuna redirect.
+// Re-upserting an existing row must never silently put the unresolved
+// Adzuna link back; only a genuinely new external_id goes through
+// resolution at all (see externalIdExists above and the caller).
 export function upsertJobPosting(job: AdzunaJob, functionTag: string, cityTag: string): void {
   const db = getDb();
   const id = newId("job");
@@ -39,7 +59,6 @@ export function upsertJobPosting(job: AdzunaJob, functionTag: string, cityTag: s
        location = excluded.location,
        snippet = excluded.snippet,
        salary = excluded.salary,
-       source_url = excluded.source_url,
        last_seen_at = excluded.last_seen_at`
   ).run(
     id,

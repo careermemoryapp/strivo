@@ -16,7 +16,7 @@ const ITEMS = [
   { href: "/home", label: "Home", icon: Home, tourId: "nav-home" },
   { href: "/chats", label: "Chats", icon: MessageSquare, tourId: "nav-chats" },
   { href: "/memories", label: "Memories", icon: Brain, tourId: "nav-memories" },
-  { href: "/opportunities", label: "Jobs", icon: Briefcase, tourId: "nav-opportunities" },
+  { href: "/opportunities", label: "Opportunities", icon: Briefcase, tourId: "nav-opportunities" },
   { href: "/record", label: "Record", icon: Mic, tourId: "nav-record" },
 ];
 

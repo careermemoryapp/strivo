@@ -58,6 +58,19 @@ export function getCachedOpportunities(userId: string): UserOpportunityWithJob[]
   }));
 }
 
+// Wipes the cache outright rather than writing a fresh (possibly stale)
+// row -- used when something outside the normal cache-freshness checks in
+// lib/opportunities.ts just changed and the NEXT GET /api/opportunities
+// should recompute unconditionally, rather than trusting whatever's cached
+// until it ages out. Currently only called from
+// POST /api/opportunities/preferences: saving a new city/function/industry
+// should be reflected the moment the user reopens the tab, not up to
+// CACHE_MAX_AGE_DAYS later.
+export function clearUserOpportunities(userId: string): void {
+  const db = getDb();
+  db.prepare(`DELETE FROM user_opportunities WHERE user_id = ?`).run(userId);
+}
+
 // Full replace, not a merge -- a fresh ranking supersedes the old one
 // entirely (job order, fit labels and reasons can all shift once new
 // memories or new pool jobs are in the mix), so there's nothing worth

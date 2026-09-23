@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Briefcase, ThumbsUp, ThumbsDown, ExternalLink, Sparkles } from "lucide-react";
+import { Briefcase, ThumbsUp, ThumbsDown, ExternalLink, Lock, ShieldCheck } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
+import { TextField } from "@/components/TextField";
 import { EmptyState } from "@/components/EmptyState";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -27,10 +28,13 @@ type OpportunityCard = {
   reason: string | null;
 };
 
+type JobPreferences = { city: string | null; function: string | null; industry: string | null };
+
 type OpportunitiesResponse = {
   personalized: boolean;
   memoryCount: number;
   memoriesNeeded: number;
+  statedPreferences: JobPreferences | null;
   opportunities: OpportunityCard[];
 };
 
@@ -51,6 +55,16 @@ export function OpportunitiesClient() {
   // same "optimistic local removal" pattern as MemoryCard's delete.
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
 
+  // The "tell us what you're looking for" form shown on the locked state
+  // (see the !data.personalized block below) -- seeded from whatever's
+  // already stored (see load() below) so re-opening the tab shows what you
+  // told Strivo last time, not a blank form every visit.
+  const [prefCity, setPrefCity] = useState("");
+  const [prefFunction, setPrefFunction] = useState("");
+  const [prefIndustry, setPrefIndustry] = useState("");
+  const [savingPrefs, setSavingPrefs] = useState(false);
+  const [prefsError, setPrefsError] = useState<string | null>(null);
+
   async function load() {
     setError(null);
     try {
@@ -58,10 +72,39 @@ export function OpportunitiesClient() {
       if (!res.ok) throw new Error();
       const json = (await res.json()) as OpportunitiesResponse;
       setData(json);
+      setPrefCity(json.statedPreferences?.city ?? "");
+      setPrefFunction(json.statedPreferences?.function ?? "");
+      setPrefIndustry(json.statedPreferences?.industry ?? "");
     } catch {
       setError("Couldn't load opportunities. Check your connection and try again.");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function savePreferences() {
+    setPrefsError(null);
+    setSavingPrefs(true);
+    try {
+      const res = await fetch("/api/opportunities/preferences", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          city: prefCity.trim() || null,
+          function: prefFunction.trim() || null,
+          industry: prefIndustry.trim() || null,
+        }),
+      });
+      if (!res.ok) throw new Error();
+      // Saving clears the server-side cache (see clearUserOpportunities in
+      // lib/repo/userOpportunities.ts), so this re-fetch picks up real
+      // matches immediately rather than the stale locked result.
+      setLoading(true);
+      await load();
+    } catch {
+      setPrefsError("Couldn't save that -- check your connection and try again.");
+    } finally {
+      setSavingPrefs(false);
     }
   }
 
@@ -108,34 +151,25 @@ export function OpportunitiesClient() {
         <div className="mt-5">
           <h1 className="text-[21px] font-bold text-white">Opportunities</h1>
           <p className="mt-1 text-[12px] text-white/55">Based on your experience and everything Strivo knows about your career.</p>
+          {/* Trust marker -- always shown, not tied to any particular
+              result state, since it's a standing promise about the whole
+              tab: every listing here resolves to the employer's own apply
+              flow (see resolveDirectApplyUrl in lib/applyLinkResolver.ts,
+              which drops anything that lands on LinkedIn, Naukri, Indeed,
+              and similar). Called out explicitly because it's a real
+              quality/trust differentiator, not just an implementation
+              detail -- applying through a portal listing often just
+              doesn't work the way applying on the company's own page
+              does. */}
+          <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1.5 text-[11px] font-medium text-white/80">
+            <ShieldCheck size={13} className="shrink-0" />
+            Only jobs you can apply to on the company&apos;s own page — never job portals
+          </div>
         </div>
       </DarkHeader>
 
       <div className="px-4 pt-4 space-y-3">
         {error && <ErrorBanner message={error} onRetry={load} />}
-
-        {!error && data && !data.personalized && (
-          <Card className="!bg-brand-primary-soft !border-brand-primary/20">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-brand-primary">
-                <Sparkles size={18} />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-semibold text-ink">
-                  {data.memoriesNeeded > 0
-                    ? `Record ${data.memoriesNeeded} more ${data.memoriesNeeded === 1 ? "memory" : "memories"} to personalize this list`
-                    : "Add a few more memories to sharpen these matches"}
-                </p>
-                <p className="mt-1 text-[13px] text-ink-soft">
-                  These are broad matches for now. The more Strivo knows about what you&apos;ve actually done, the more specific — and better-fitting — your opportunities get.
-                </p>
-                <Button variant="secondary" className="mt-3 !py-2 !px-3 text-[13px]" onClick={() => router.push("/record")}>
-                  Record a memory
-                </Button>
-              </div>
-            </div>
-          </Card>
-        )}
 
         {loading && (
           <div className="flex flex-col items-center justify-center py-16">
@@ -144,7 +178,69 @@ export function OpportunitiesClient() {
           </div>
         )}
 
-        {!loading && !error && visible.length === 0 && (
+        {/* Locked state: deliberately no jobs at all until Strivo has
+            enough recorded memories, OR the person has told Strivo
+            directly what they want (see wantsPersonalized in
+            lib/opportunities.ts -- product decision, not a loading state).
+            Showing a generic sample of the pool here used to undercut the
+            whole incentive to record memories, so this replaces that with
+            an explicit "unlock" card, PLUS a quick form as the faster path
+            in for someone who doesn't want to wait on memories at all. */}
+        {!loading && !error && data && !data.personalized && (
+          <Card>
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-brand-primary-soft text-brand-primary">
+                <Lock size={18} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-ink">
+                  {data.memoriesNeeded > 0 ? "Record more memories to unlock Opportunities" : "Opportunities unlocks soon"}
+                </p>
+                <p className="mt-1 text-[13px] text-ink-soft">
+                  {data.memoriesNeeded > 0
+                    ? "This tab stays empty until Strivo actually knows enough about your experience to judge fit — your seniority, industry, and location — rather than showing you a generic list from the pool."
+                    : "You've recorded enough for Strivo to start naming real roles for you. This list fills in automatically once that finishes — usually within a few days."}
+                </p>
+                <Button variant="secondary" className="mt-3 !py-2 !px-3 text-[13px]" onClick={() => router.push("/record")}>
+                  Record a memory
+                </Button>
+              </div>
+            </div>
+
+            <div className="mt-5 border-t border-border pt-4">
+              <p className="text-sm font-semibold text-ink">Or tell us what you&apos;re looking for</p>
+              <p className="mt-1 text-[13px] text-ink-soft">
+                While we keep learning from your memories, you can point us at real jobs right now — city, role, and industry.
+              </p>
+              <div className="mt-3 space-y-3">
+                <TextField label="City" placeholder="e.g. Bengaluru" value={prefCity} onChange={(e) => setPrefCity(e.target.value)} />
+                <TextField
+                  label="Function / role"
+                  placeholder="e.g. Product Manager"
+                  value={prefFunction}
+                  onChange={(e) => setPrefFunction(e.target.value)}
+                />
+                <TextField
+                  label="Industry"
+                  placeholder="e.g. Fintech"
+                  value={prefIndustry}
+                  onChange={(e) => setPrefIndustry(e.target.value)}
+                />
+              </div>
+              {prefsError && <p className="mt-2 text-[13px] text-red-600">{prefsError}</p>}
+              <Button
+                className="mt-3 !py-2 !px-4 text-[13px]"
+                loading={savingPrefs}
+                disabled={!prefCity.trim() && !prefFunction.trim() && !prefIndustry.trim()}
+                onClick={savePreferences}
+              >
+                Find jobs for this
+              </Button>
+            </div>
+          </Card>
+        )}
+
+        {!loading && !error && data?.personalized && visible.length === 0 && (
           <EmptyState
             icon={<Briefcase size={24} />}
             title="No opportunities yet"
@@ -153,6 +249,7 @@ export function OpportunitiesClient() {
         )}
 
         {!loading &&
+          data?.personalized &&
           visible.map((opp) => (
             <Card key={opp.id}>
               <div className="flex items-start justify-between gap-3">
