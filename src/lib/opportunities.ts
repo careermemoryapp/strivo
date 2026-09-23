@@ -69,14 +69,26 @@ const TARGET_COUNT = 25; // direct founder call: "at least 25" -- was 22
 const CACHE_MAX_AGE_DAYS = 3;
 // A job shown to a user must have been posted within this many days --
 // separate from STALE_AFTER_DAYS in lib/repo/jobPostings.ts, which decides
-// how long a row stays in the raw pool at all (sized for the monthly
-// refresh cadence, not for "is this too old to show someone"). Direct
-// founder call: nothing older than about a month should ever reach a
-// user's list. Checked against job_postings.posted_date (Adzuna's own
-// "created" timestamp, set once at first insert and never overwritten --
-// see upsertJobPosting -- so this age genuinely reflects the listing's
-// real age, not just when we last re-saw it).
-const MAX_JOB_AGE_DAYS = 30;
+// how long a row stays in the raw pool at all (kept much looser than this,
+// at 40 days, so the pool itself doesn't go empty between a function's
+// chunk-refreshes -- see that constant's own comment). Direct founder
+// call: since each function only actually gets re-queried against Adzuna
+// roughly every 14-16 days (the chunked refresh-pool cadence -- see
+// app/api/opportunities/refresh-pool/run's top comment), a user's list
+// should never show anything older than that same ~15-day window, so what
+// they see always reflects a genuinely current pass over the job market
+// rather than a stale one sitting around for weeks. Checked against
+// job_postings.posted_date (Adzuna's own "created" timestamp, set once at
+// first insert and never overwritten -- see upsertJobPosting -- so this
+// age genuinely reflects the listing's real age, not just when we last
+// re-saw it). Note this is a little tight against the refresh cadence: for
+// a function whose chunk hasn't been re-queried in close to the full
+// 14-16 days, some of its older postings will drop out of a user's list a
+// day or two before that function's next refresh brings fresher ones in --
+// accepted deliberately, since the pool spans all 80 functions (only 1/5
+// of them are ever that close to their next refresh at once) and 3-day
+// cache means a user's own list re-pulls from the pool often anyway.
+const MAX_JOB_AGE_DAYS = 15;
 // Re-rank once at least this many NEW memories have landed since the cache
 // was generated, even if it isn't stale by age yet -- new evidence should
 // visibly change the list, not sit unused until the next scheduled refresh.
