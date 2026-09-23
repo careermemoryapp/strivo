@@ -64,6 +64,128 @@ const FIT_CONFIG: Record<
   possible: { label: "Worth exploring", icon: null, badgeClass: "bg-ink-soft/10 text-ink-soft" },
 };
 
+// Split out from the main list render so each card can track its own
+// entrance-animation state -- see the `entered` comment below for why that
+// turned out to matter. `onFeedback` is the parent's sendFeedback, passed
+// through rather than duplicated here since the parent also owns
+// reactingIds/dismissedIds (the removal timer needs to survive this card
+// unmounting from `visible`, which a card-local timer wouldn't).
+function OpportunityCardItem({
+  opp,
+  index,
+  reacting,
+  onFeedback,
+}: {
+  opp: OpportunityCard;
+  index: number;
+  reacting: boolean;
+  onFeedback: (jobId: string, feedback: "relevant" | "not_for_me") => void;
+}) {
+  // The found bug: `animate-fade-in-up` (globals.css) is a CSS *animation*,
+  // and a finished animation with fill-mode "both" keeps holding its own
+  // end-state opacity/transform at a higher cascade priority than an
+  // ordinary utility class targeting the same properties -- for as long as
+  // that animation class stays on the element. Left on permanently, it
+  // silently blocked the opacity-0/scale-95 exit transition below from
+  // ever visibly rendering: the card looked completely normal right up
+  // until it left `visible` and was removed from the DOM outright, which
+  // is exactly the "card just disappears, no reaction to the tap" bug this
+  // fixes. Stripping the entrance class once its animation actually
+  // finishes (onAnimationEnd) hands opacity/transform back to ordinary
+  // utility classes, so the later exit transition can take over cleanly.
+  const [entered, setEntered] = useState(false);
+  const fitCfg = opp.fit ? FIT_CONFIG[opp.fit] : null;
+  const FitIcon = fitCfg?.icon ?? null;
+  const isRecent = opp.postedDate && !isNaN(new Date(opp.postedDate).getTime());
+
+  return (
+    <Card
+      onAnimationEnd={() => setEntered(true)}
+      className={cn(
+        // fade-in-up is the same entrance the rest of the app already uses
+        // for "this just appeared" moments (see globals.css) -- staggered
+        // per card (capped at 8 cards' worth of delay) so the list reads
+        // as filling in rather than popping in all at once. Only applied
+        // pre-`entered`, per the comment above.
+        !entered && "animate-fade-in-up",
+        "transition-all duration-200 ease-out",
+        reacting && "opacity-0 scale-95"
+      )}
+      style={!entered ? { animationDelay: `${Math.min(index, 8) * 60}ms` } : undefined}
+    >
+      <div className="flex items-start gap-3">
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary text-[16px] font-bold">
+          {(opp.company?.trim()?.[0] ?? opp.title.trim()[0] ?? "?").toUpperCase()}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <p className="min-w-0 font-semibold text-ink leading-snug">{opp.title}</p>
+            {fitCfg && (
+              <span
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                  fitCfg.badgeClass
+                )}
+              >
+                {FitIcon && <FitIcon size={12} />}
+                {fitCfg.label}
+              </span>
+            )}
+          </div>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-ink-soft">
+            {opp.company && <span className="font-medium">{opp.company}</span>}
+            {opp.location && (
+              <span className="inline-flex items-center gap-1">
+                <MapPin size={12} className="text-ink-faint" />
+                {opp.location}
+              </span>
+            )}
+            {isRecent && (
+              <span className="inline-flex items-center gap-1">
+                <Clock3 size={12} className="text-ink-faint" />
+                {formatDistanceToNowStrict(new Date(opp.postedDate!), { addSuffix: true })}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {opp.reason && <p className="mt-2.5 text-[13px] text-ink-soft leading-relaxed">{opp.reason}</p>}
+
+      <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+        <div className="flex items-center gap-1.5">
+          <button
+            aria-label="Fit"
+            onClick={() => onFeedback(opp.id, "relevant")}
+            disabled={reacting}
+            className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-success/40 hover:bg-success/10 hover:text-success active:scale-95 disabled:pointer-events-none"
+          >
+            <ThumbsUp size={14} />
+            Fit
+          </button>
+          <button
+            aria-label="Not a fit"
+            onClick={() => onFeedback(opp.id, "not_for_me")}
+            disabled={reacting}
+            className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-95 disabled:pointer-events-none"
+          >
+            <ThumbsDown size={14} />
+            Not a fit
+          </button>
+        </div>
+        <a
+          href={opp.sourceUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1.5 rounded-input bg-gradient-brand px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm active:scale-95 transition"
+        >
+          Apply <ExternalLink size={13} />
+        </a>
+      </div>
+    </Card>
+  );
+}
+
 export function OpportunitiesClient() {
   const router = useRouter();
   const user = useCurrentUser();
@@ -342,99 +464,9 @@ export function OpportunitiesClient() {
 
         {!loading &&
           data?.personalized &&
-          visible.map((opp, i) => {
-            const fitCfg = opp.fit ? FIT_CONFIG[opp.fit] : null;
-            const FitIcon = fitCfg?.icon ?? null;
-            const isRecent = opp.postedDate && !isNaN(new Date(opp.postedDate).getTime());
-            const reacting = reactingIds.has(opp.id);
-            return (
-              <Card
-                key={opp.id}
-                className={cn(
-                  // fade-in-up is the same entrance the rest of the app
-                  // already uses for "this just appeared" moments (see
-                  // globals.css) -- staggered per card (capped at 8 cards'
-                  // worth of delay) so the list reads as filling in rather
-                  // than popping in all at once. The opacity/scale pair on
-                  // `reacting` is the exit half of the same idea: a tap
-                  // reads as the card visibly leaving, not vanishing.
-                  "animate-fade-in-up transition-all duration-200 ease-out",
-                  reacting && "opacity-0 scale-95"
-                )}
-                style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}
-              >
-                <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary text-[16px] font-bold">
-                    {(opp.company?.trim()?.[0] ?? opp.title.trim()[0] ?? "?").toUpperCase()}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="min-w-0 font-semibold text-ink leading-snug">{opp.title}</p>
-                      {fitCfg && (
-                        <span
-                          className={cn(
-                            "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                            fitCfg.badgeClass
-                          )}
-                        >
-                          {FitIcon && <FitIcon size={12} />}
-                          {fitCfg.label}
-                        </span>
-                      )}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-ink-soft">
-                      {opp.company && <span className="font-medium">{opp.company}</span>}
-                      {opp.location && (
-                        <span className="inline-flex items-center gap-1">
-                          <MapPin size={12} className="text-ink-faint" />
-                          {opp.location}
-                        </span>
-                      )}
-                      {isRecent && (
-                        <span className="inline-flex items-center gap-1">
-                          <Clock3 size={12} className="text-ink-faint" />
-                          {formatDistanceToNowStrict(new Date(opp.postedDate!), { addSuffix: true })}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {opp.reason && <p className="mt-2.5 text-[13px] text-ink-soft leading-relaxed">{opp.reason}</p>}
-
-                <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      aria-label="Fit"
-                      onClick={() => sendFeedback(opp.id, "relevant")}
-                      disabled={reacting}
-                      className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-success/40 hover:bg-success/10 hover:text-success active:scale-95 disabled:pointer-events-none"
-                    >
-                      <ThumbsUp size={14} />
-                      Fit
-                    </button>
-                    <button
-                      aria-label="Not a fit"
-                      onClick={() => sendFeedback(opp.id, "not_for_me")}
-                      disabled={reacting}
-                      className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-95 disabled:pointer-events-none"
-                    >
-                      <ThumbsDown size={14} />
-                      Not a fit
-                    </button>
-                  </div>
-                  <a
-                    href={opp.sourceUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center gap-1.5 rounded-input bg-gradient-brand px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm active:scale-95 transition"
-                  >
-                    Apply <ExternalLink size={13} />
-                  </a>
-                </div>
-              </Card>
-            );
-          })}
+          visible.map((opp, i) => (
+            <OpportunityCardItem key={opp.id} opp={opp} index={i} reacting={reactingIds.has(opp.id)} onFeedback={sendFeedback} />
+          ))}
       </div>
     </div>
   );
