@@ -475,8 +475,22 @@ export default function AdminDashboardPage() {
       if (res.status === 401) return handleUnauthorized();
       if (!res.ok) throw new Error();
       const json = await res.json();
+      // Breakdown of WHY anything was filtered out, not just how many --
+      // added after a run that filtered out 100% of resolutions with
+      // nothing to explain it beyond a single opaque count. "unresolved"
+      // means the fetch itself failed/timed out; "aggregator" means it
+      // resolved fine but landed on a denylisted domain -- topAggregatorDomains
+      // names exactly which ones, most-hit first, so "everything's
+      // bouncing back to adzuna.in" is visible at a glance instead of
+      // looking identical to "these were genuinely all portal listings".
+      const filterBreakdown =
+        json.filteredOut > 0
+          ? ` [unresolved: ${json.unresolvedCount ?? "?"}, aggregator: ${json.aggregatorCount ?? "?"}${
+              json.topAggregatorDomains?.length ? " -- " + json.topAggregatorDomains.join(", ") : ""
+            }]`
+          : "";
       setOppResult(
-        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Filtered out (portal/unresolved): ${json.filteredOut} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
+        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Filtered out (portal/unresolved): ${json.filteredOut}${filterBreakdown} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
       );
       if (json.adzunaUsage) setOppUsage({ poolSize: json.poolSize, adzunaUsage: json.adzunaUsage });
     } catch {

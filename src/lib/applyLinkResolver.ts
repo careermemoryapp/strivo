@@ -113,15 +113,36 @@ export async function resolveFinalUrl(url: string): Promise<string | null> {
 }
 
 // The one function refresh-pool/run actually calls: resolve, then judge.
-// Returns the final URL when it's a real, non-aggregator apply link;
-// null when it couldn't be resolved OR resolved to an aggregator --
-// callers treat both the same (drop the job), matching the product
-// decision to fail closed rather than show a maybe-broken apply link.
-export async function resolveDirectApplyUrl(redirectUrl: string): Promise<string | null> {
+// Returns a discriminated result rather than a bare string|null -- a job
+// still gets dropped either way (that product decision hasn't changed),
+// but WHY it was dropped now survives past this call instead of
+// collapsing into one undifferentiated "filtered out" count. Added after
+// the very first post-purge run filtered out 100% of resolutions (150/150,
+// 0 upserted) -- with only a plain null to go on, there was no way to
+// tell "every one of these genuinely landed on a job portal" apart from
+// "the resolver itself is broken for some systemic reason" (network,
+// timeout, or -- the actual suspect -- Adzuna's redirect_url not issuing a
+// real HTTP 3xx and fetch correctly stopping at Adzuna's own domain,
+// which IS itself in AGGREGATOR_DOMAINS). See refresh-pool/run's use of
+// this for how the breakdown gets surfaced.
+export type ApplyUrlResolution =
+  | { url: string; reason?: undefined }
+  // resolveFinalUrl came back empty -- a network error, a timeout, or
+  // (rare) a response with no res.url at all. Genuinely couldn't reach a
+  // verdict, as opposed to reaching one and not liking it (below).
+  | { url: null; reason: "unresolved" }
+  // Resolved fine, but the final landed host is on the denylist -- domain
+  // is the actual hostname that matched, so a run-level tally can show
+  // e.g. "adzuna.in (150)" instead of a single opaque number.
+  | { url: null; reason: "aggregator"; domain: string };
+
+export async function resolveDirectApplyUrl(redirectUrl: string): Promise<ApplyUrlResolution> {
   const finalUrl = await resolveFinalUrl(redirectUrl);
-  if (!finalUrl) return null;
-  if (isAggregatorDomain(finalUrl)) return null;
-  return finalUrl;
+  if (!finalUrl) return { url: null, reason: "unresolved" };
+  if (isAggregatorDomain(finalUrl)) {
+    return { url: null, reason: "aggregator", domain: hostnameOf(finalUrl) ?? finalUrl };
+  }
+  return { url: finalUrl };
 }
 
 // Runs `fn` over `items` with at most `limit` in flight at once -- plain

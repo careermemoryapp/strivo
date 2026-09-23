@@ -187,6 +187,14 @@ export async function POST(req: Request) {
   // outcome: both mean "don't show this").
   let filteredOut = 0;
   let filteredCapped = 0; // new posting, but this run already hit MAX_RESOLUTIONS_PER_RUN
+  // Breakdown of WHY filteredOut jobs got dropped -- see
+  // ApplyUrlResolution's own comment in lib/applyLinkResolver.ts for why
+  // this exists. unresolved = fetch itself failed/timed out; aggregator =
+  // resolved fine but landed on a denylisted domain (see
+  // aggregatorDomainCounts for exactly which ones).
+  let unresolvedCount = 0;
+  let aggregatorCount = 0;
+  const aggregatorDomainCounts = new Map<string, number>();
 
   const cells: QueryCell[] = [];
   for (const fn of chunkFunctions) for (const city of CITIES) cells.push({ fn, city });
@@ -230,12 +238,18 @@ export async function POST(req: Request) {
     resolutionsUsed += toResolve.length;
 
     await mapWithConcurrency(toResolve, RESOLVE_CONCURRENCY, async (job) => {
-      const finalUrl = await resolveDirectApplyUrl(job.link);
-      if (!finalUrl) {
+      const outcome = await resolveDirectApplyUrl(job.link);
+      if (!outcome.url) {
         filteredOut++;
+        if (outcome.reason === "aggregator") {
+          aggregatorCount++;
+          aggregatorDomainCounts.set(outcome.domain, (aggregatorDomainCounts.get(outcome.domain) ?? 0) + 1);
+        } else {
+          unresolvedCount++;
+        }
         return;
       }
-      upsertJobPosting({ ...job, link: finalUrl }, cell.fn, cell.city);
+      upsertJobPosting({ ...job, link: outcome.url }, cell.fn, cell.city);
       jobsUpserted++;
       jobsNew++;
     });
@@ -254,6 +268,17 @@ export async function POST(req: Request) {
     jobsUpserted,
     jobsNew,
     filteredOut,
+    // The breakdown behind filteredOut -- see the counters' own comments
+    // above. topAggregatorDomains is sorted by count, most-hit first, so
+    // "everything landed back on adzuna.in" (the resolver never actually
+    // reaching a real HTTP redirect) is immediately visible instead of
+    // looking identical to "these 150 genuinely were portal listings".
+    unresolvedCount,
+    aggregatorCount,
+    topAggregatorDomains: Array.from(aggregatorDomainCounts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([domain, count]) => `${domain} (${count})`),
     filteredCapped,
     staleRemoved: removed,
     poolSize: countActiveJobPostings(),
