@@ -16,7 +16,13 @@ const nextConfig: NextConfig = {
   // Marking these as server-external tells Next.js to leave them as plain
   // node_modules requires instead of bundling them, so the worker path
   // resolves correctly.
-  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas"],
+  //
+  // impit (lib/applyLinkResolver.ts) is a native module too (a napi-rs
+  // Rust addon, not a JS file) -- Turbopack's production build failed
+  // outright trying to bundle it ("non-ecmascript placeable asset... not
+  // placeable in ESM chunks"), the same class of problem the three above
+  // already needed this same fix for.
+  serverExternalPackages: ["pdf-parse", "pdfjs-dist", "@napi-rs/canvas", "impit"],
 
   // Security headers applied to every response. Deliberately not adding a
   // strict Content-Security-Policy here — Strivo doesn't embed third-party
