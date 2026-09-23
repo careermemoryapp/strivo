@@ -197,3 +197,56 @@ export async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (i
   await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
   return results;
 }
+
+// Debug-only: a raw look at what a redirect_url actually returns, instead
+// of just resolveFinalUrl's pass/fail verdict. Used ONLY by the admin
+// dashboard's "Test resolver" probe (app/api/admin/opportunities-test-
+// resolve/route.ts) -- never called from the real refresh-pool path, so it
+// can afford to read the response body instead of cancelling it. Exists
+// because switching to impit (see this file's top comment) still didn't
+// get past Adzuna's block -- every test result still landed back on
+// adzuna.in even with real Chrome TLS impersonation, which means either
+// impit's impersonation still isn't convincing enough, OR (per this file's
+// own comment on mapWithConcurrency, about the earlier Jooble/Cloudflare
+// incident) this server's IP itself is flagged regardless of how good the
+// TLS handshake looks. Status code, a snippet of the actual page content,
+// and a couple of headers are enough to tell those apart: a real Cloudflare
+// interstitial usually says so in the HTML and sets a cf-ray header; a
+// generic "200 with no real content" points more at IP-level blocking.
+export type DebugResolution = {
+  status: number | null;
+  headers: Record<string, string>;
+  bodySnippet: string | null;
+  finalUrl: string | null;
+  error: string | null;
+};
+
+export async function debugResolveFinalUrl(url: string): Promise<DebugResolution> {
+  try {
+    const res = await impitClient.fetch(url, { method: "GET", redirect: "follow" });
+    const headers: Record<string, string> = {};
+    // Only the headers actually useful for telling a Cloudflare-style
+    // interstitial apart from a plain deny page -- not dumping every
+    // header impit reports, most of which won't mean anything here.
+    for (const name of ["server", "cf-ray", "cf-mitigated", "content-type", "content-length"]) {
+      const value = res.headers.get(name);
+      if (value) headers[name] = value;
+    }
+    let bodySnippet: string | null = null;
+    try {
+      const text = await res.text();
+      bodySnippet = text.slice(0, 500);
+    } catch {
+      bodySnippet = null;
+    }
+    return { status: res.status, headers, bodySnippet, finalUrl: res.url ?? null, error: null };
+  } catch (err) {
+    return {
+      status: null,
+      headers: {},
+      bodySnippet: null,
+      finalUrl: null,
+      error: err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err),
+    };
+  }
+}

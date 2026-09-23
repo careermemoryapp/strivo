@@ -428,6 +428,20 @@ export default function AdminDashboardPage() {
   const [oppTestResult, setOppTestResult] = useState<{
     queried: number;
     results: { title: string; company: string; ok: boolean; finalUrl: string | null; reason: string | null; domain: string | null }[];
+    // Raw look at whatever the FIRST sample job's redirect actually
+    // returned -- status/headers/body, not just resolveDirectApplyUrl's
+    // pass/fail verdict. Added after impit (Chrome TLS impersonation)
+    // still didn't get a single result past the adzuna.in denylist, to
+    // tell "impit's impersonation isn't convincing enough" apart from
+    // "this server's IP itself is blocked" (see applyLinkResolver.ts's
+    // own comment on debugResolveFinalUrl for the reasoning).
+    debug: {
+      status: number | null;
+      headers: Record<string, string>;
+      bodySnippet: string | null;
+      finalUrl: string | null;
+      error: string | null;
+    } | null;
   } | null>(null);
   const [oppTestError, setOppTestError] = useState<string | null>(null);
   const [oppUsage, setOppUsage] = useState<{
@@ -1360,6 +1374,27 @@ export default function AdminDashboardPage() {
                     )}
                   </div>
                 ))}
+                {oppTestResult.debug && (
+                  <div className="rounded-[10px] border border-amber-200 bg-amber-50 p-2 text-[12px]">
+                    <span className="font-semibold text-ink">Raw diagnostic (first job&apos;s redirect):</span>
+                    <br />
+                    {oppTestResult.debug.error ? (
+                      <span className="text-red-600">Request itself failed: {oppTestResult.debug.error}</span>
+                    ) : (
+                      <>
+                        <span className="text-ink-soft">Status: {oppTestResult.debug.status ?? "—"}</span>
+                        <br />
+                        <span className="text-ink-soft">Final URL: {oppTestResult.debug.finalUrl ?? "—"}</span>
+                        <br />
+                        <span className="text-ink-soft">
+                          Headers: {Object.keys(oppTestResult.debug.headers).length > 0 ? JSON.stringify(oppTestResult.debug.headers) : "(none of the tracked ones present)"}
+                        </span>
+                        <br />
+                        <span className="text-ink-soft break-all">Body snippet: {oppTestResult.debug.bodySnippet || "(empty)"}</span>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             <p className="mt-3 text-[11px] text-ink-faint">
