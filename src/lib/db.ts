@@ -727,18 +727,22 @@ function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_story_batch_items_batch ON story_batch_items(batch_id, ordinal);
 
-    -- The Opportunities tab's shared job pool (see lib/jooble.ts and
+    -- The Opportunities tab's shared job pool (see lib/adzuna.ts and
     -- app/api/opportunities/refresh-pool/run) -- fetched centrally for a
-    -- fixed grid of functions x Indian cities, NOT per-user, specifically
-    -- to stay inside Jooble's free-tier lifetime request cap. One row here
-    -- can be matched against every user; refresh-pool/run upserts on
-    -- jooble_id + last_seen_at so a job that's still live just gets its
+    -- fixed grid of functions x Indian cities, NOT per-user, to stay
+    -- comfortably inside Adzuna's free-tier monthly request cap (see
+    -- ADZUNA_APP_ID's comment in .env.example). One row here can be
+    -- matched against every user; refresh-pool/run upserts on
+    -- external_id + last_seen_at so a job that's still live just gets its
     -- timestamp bumped rather than duplicated, and pruneStaleJobPostings
     -- (lib/repo/jobPostings.ts) drops rows that stop showing up in fresh
-    -- fetches (the job's gone/filled at the source).
+    -- fetches (the job's gone/filled at the source). external_id was
+    -- named jooble_id until the provider swap from Jooble to Adzuna (see
+    -- the incremental migration below) -- it's the source provider's own
+    -- job id either way, whichever provider that ends up being.
     CREATE TABLE IF NOT EXISTS job_postings (
       id TEXT PRIMARY KEY,
-      jooble_id TEXT NOT NULL UNIQUE,
+      external_id TEXT NOT NULL UNIQUE,
       title TEXT NOT NULL,
       company TEXT,
       location TEXT,
@@ -803,6 +807,18 @@ function migrate(db: DatabaseSync) {
   // --- Incremental migrations for columns/data added after initial launch ---
   // SQLite has no "ADD COLUMN IF NOT EXISTS", so we check pragma table_info
   // first and only add the column if it's missing. Safe to run on every boot.
+  // Provider swap: Jooble -> Adzuna (see lib/adzuna.ts). job_postings.
+  // jooble_id -> external_id, a rename rather than an add-plus-backfill
+  // since the table was still empty (poolSize: 0, pre-launch) when this
+  // ran -- no data to lose. Guarded on the OLD column still being present
+  // so this is a no-op on every boot after the first.
+  const jobPostingColumns = (db.prepare(`PRAGMA table_info(job_postings)`).all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (jobPostingColumns.includes("jooble_id") && !jobPostingColumns.includes("external_id")) {
+    db.exec(`ALTER TABLE job_postings RENAME COLUMN jooble_id TO external_id;`);
+  }
+
   const userColumns = (db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name);
   if (!userColumns.includes("trial_ends_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at TEXT;`);

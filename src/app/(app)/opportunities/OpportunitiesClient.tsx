@@ -162,11 +162,12 @@ export function OpportunitiesClient() {
                     {[
                       opp.company,
                       opp.location,
-                      // Jooble's own "updated" timestamp, not a distinct
-                      // posted-date field -- close enough for "how fresh is
-                      // this listing" at a glance. Guarded against an
-                      // unparseable/missing value rather than trusting
-                      // every upstream row to have a clean ISO string.
+                      // Adzuna's own "created" timestamp (see lib/adzuna.ts),
+                      // not a distinct posted-date field -- close enough for
+                      // "how fresh is this listing" at a glance. Guarded
+                      // against an unparseable/missing value rather than
+                      // trusting every upstream row to have a clean ISO
+                      // string.
                       opp.postedDate && !isNaN(new Date(opp.postedDate).getTime())
                         ? formatDistanceToNowStrict(new Date(opp.postedDate), { addSuffix: true })
                         : null,

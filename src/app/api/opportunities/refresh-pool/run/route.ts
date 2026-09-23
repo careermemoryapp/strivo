@@ -1,17 +1,20 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthed, checkOpportunitiesRefreshSecret } from "@/lib/adminAuth";
-import { joobleConfigured, searchJoobleJobs } from "@/lib/jooble";
+import { adzunaConfigured, searchAdzunaJobs } from "@/lib/adzuna";
 import { upsertJobPosting, pruneStaleJobPostings, countActiveJobPostings } from "@/lib/repo/jobPostings";
 
 // Fixed function x city grid -- the entire point of this being fixed
 // (rather than generated per-user, which an earlier draft of this feature
-// considered) is staying WAY inside Jooble's free-tier 500-REQUEST
-// LIFETIME cap (see JOOBLE_API_KEY's comment in .env.example). One page
-// per cell, one run = FUNCTIONS.length * CITIES.length = 48 calls. Trigger
-// this by hand a handful of times while building/testing (well under the
-// 500 budget); do NOT put it on a recurring schedule until Jooble's
-// commercial pricing is sorted -- see the "protecting the 500 free calls"
-// discussion this feature came out of.
+// considered) is staying comfortably inside Adzuna's free-tier MONTHLY
+// request cap (2,500/month as of writing -- see ADZUNA_APP_ID's comment in
+// .env.example). One page per cell, one run = FUNCTIONS.length *
+// CITIES.length = 80 calls. Unlike the earlier Jooble integration (a
+// 500-request LIFETIME cap, which meant this route was manual-trigger-only
+// during MVP), Adzuna's cap renews every month -- 80/day * 30 days = 2,400,
+// a 100-request buffer -- so this IS meant to run on a daily schedule (a
+// crontab entry on the server hitting this route once a day with the
+// x-opportunities-refresh-secret header). Still callable by hand too, same
+// as before.
 const FUNCTIONS = [
   "Product Manager",
   "Strategy Manager",
@@ -23,21 +26,31 @@ const FUNCTIONS = [
   "Data Analyst",
 ];
 
-const CITIES = ["Delhi NCR", "Bengaluru", "Mumbai", "Pune", "Hyderabad", "Chennai"];
+const CITIES = [
+  "Delhi NCR",
+  "Bengaluru",
+  "Mumbai",
+  "Pune",
+  "Hyderabad",
+  "Chennai",
+  "Kolkata",
+  "Ahmedabad",
+  "Jaipur",
+  "Kochi",
+];
 
-// Called manually from an admin session, or by hand via curl with the
-// x-opportunities-refresh-secret header -- NOT wired to a crontab entry
-// yet (see the comment on FUNCTIONS above for why). Best-effort per cell:
-// one query failing (rate limit, transient network error) shouldn't abort
-// the rest of the grid, same posture as every other /run route's per-user
-// loop.
+// Called on a daily crontab entry (see the comment on FUNCTIONS above),
+// or by hand from an admin session / curl with the
+// x-opportunities-refresh-secret header. Best-effort per cell: one query
+// failing (rate limit, transient network error) shouldn't abort the rest
+// of the grid, same posture as every other /run route's per-user loop.
 export async function POST(req: Request) {
   const authed = (await isAdminAuthed()) || checkOpportunitiesRefreshSecret(req.headers.get("x-opportunities-refresh-secret"));
   if (!authed) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  if (!joobleConfigured()) {
-    return NextResponse.json({ error: "JOOBLE_API_KEY not configured" }, { status: 500 });
+  if (!adzunaConfigured()) {
+    return NextResponse.json({ error: "ADZUNA_APP_ID/ADZUNA_APP_KEY not configured" }, { status: 500 });
   }
 
   let queriesRun = 0;
@@ -47,7 +60,7 @@ export async function POST(req: Request) {
   for (const fn of FUNCTIONS) {
     for (const city of CITIES) {
       queriesRun++;
-      const jobs = await searchJoobleJobs(fn, city, 1);
+      const jobs = await searchAdzunaJobs(fn, city, 1);
       if (!jobs) {
         queriesFailed++;
         continue;

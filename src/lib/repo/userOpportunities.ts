@@ -20,7 +20,7 @@ export function getCachedOpportunities(userId: string): UserOpportunityWithJob[]
   const rows = db
     .prepare(
       `SELECT uo.*,
-              jp.id as jp_id, jp.jooble_id, jp.title, jp.company, jp.location, jp.snippet,
+              jp.id as jp_id, jp.external_id, jp.title, jp.company, jp.location, jp.snippet,
               jp.salary, jp.source_url, jp.function_tag, jp.city_tag, jp.posted_date,
               jp.fetched_at, jp.last_seen_at
          FROM user_opportunities uo
@@ -42,7 +42,7 @@ export function getCachedOpportunities(userId: string): UserOpportunityWithJob[]
     generated_at: r.generated_at as string,
     job: {
       id: r.jp_id as string,
-      jooble_id: r.jooble_id as string,
+      external_id: r.external_id as string,
       title: r.title as string,
       company: r.company as string | null,
       location: r.location as string | null,

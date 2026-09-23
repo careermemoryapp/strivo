@@ -177,11 +177,13 @@ export function checkEngagementNudgeSecret(secret: string | null): boolean {
 // /api/opportunities/refresh-pool/run) -- its own credential, separate from
 // every other secret above. Deliberately its OWN trigger, not folded onto
 // an existing automation's schedule the way suggested_roles was folded
-// onto growth-narrative/run -- this one burns real, budget-capped Jooble
-// API calls (see JOOBLE_API_KEY's comment in .env.example) every time it
-// fires, so it needs to be triggered deliberately/manually during MVP
-// rather than inherit some other feature's cadence. Checked via a request
-// header (`x-opportunities-refresh-secret`).
+// onto growth-narrative/run -- this one burns real, budget-capped Adzuna
+// API calls (see ADZUNA_APP_ID's comment in .env.example) every time it
+// fires. Unlike the earlier Jooble integration this replaced, Adzuna's
+// free tier renews monthly rather than being a lifetime cap, so this IS
+// meant to run on a daily crontab entry (see the comment on FUNCTIONS in
+// that route). Checked via a request header
+// (`x-opportunities-refresh-secret`).
 export function checkOpportunitiesRefreshSecret(secret: string | null): boolean {
   const expected = process.env.OPPORTUNITIES_REFRESH_SECRET;
   if (!expected || !secret) return false;

@@ -1,9 +1,9 @@
 import { getDb, newId, nowIso } from "@/lib/db";
-import type { JoobleJob } from "@/lib/jooble";
+import type { AdzunaJob } from "@/lib/adzuna";
 
 export type JobPosting = {
   id: string;
-  jooble_id: string;
+  external_id: string;
   title: string;
   company: string | null;
   location: string | null;
@@ -17,23 +17,23 @@ export type JobPosting = {
   last_seen_at: string;
 };
 
-// Upserts one Jooble result into the shared pool (see job_postings' comment
-// in lib/db.ts). Keyed on jooble_id, NOT our own id -- the same job can
-// legitimately turn up again in a later refresh (still live) or under a
-// different (function, city) grid cell (e.g. a Bengaluru "Product
+// Upserts one Adzuna result into the shared pool (see job_postings'
+// comment in lib/db.ts). Keyed on external_id, NOT our own id -- the same
+// job can legitimately turn up again in a later refresh (still live) or
+// under a different (function, city) grid cell (e.g. a Bengaluru "Product
 // Strategy" listing also matching the "Strategy" query) -- either way it's
 // one row, with last_seen_at bumped and function_tag/city_tag left as
 // whichever cell inserted it first rather than overwritten, since both are
 // purely informational (see the column comment in lib/db.ts).
-export function upsertJobPosting(job: JoobleJob, functionTag: string, cityTag: string): void {
+export function upsertJobPosting(job: AdzunaJob, functionTag: string, cityTag: string): void {
   const db = getDb();
   const id = newId("job");
   const ts = nowIso();
   db.prepare(
     `INSERT INTO job_postings
-       (id, jooble_id, title, company, location, snippet, salary, source_url, function_tag, city_tag, posted_date, fetched_at, last_seen_at)
+       (id, external_id, title, company, location, snippet, salary, source_url, function_tag, city_tag, posted_date, fetched_at, last_seen_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT(jooble_id) DO UPDATE SET
+     ON CONFLICT(external_id) DO UPDATE SET
        title = excluded.title,
        company = excluded.company,
        location = excluded.location,
