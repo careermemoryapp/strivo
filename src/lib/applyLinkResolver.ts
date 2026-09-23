@@ -205,14 +205,33 @@ export async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (i
 // can afford to read the response body instead of cancelling it. Exists
 // because switching to impit (see this file's top comment) still didn't
 // get past Adzuna's block -- every test result still landed back on
-// adzuna.in even with real Chrome TLS impersonation, which means either
-// impit's impersonation still isn't convincing enough, OR (per this file's
-// own comment on mapWithConcurrency, about the earlier Jooble/Cloudflare
-// incident) this server's IP itself is flagged regardless of how good the
-// TLS handshake looks. Status code, a snippet of the actual page content,
-// and a couple of headers are enough to tell those apart: a real Cloudflare
-// interstitial usually says so in the HTML and sets a cf-ray header; a
-// generic "200 with no real content" points more at IP-level blocking.
+// adzuna.in even with real Chrome TLS impersonation.
+//
+// First round of this diagnostic (debugResolveFinalUrl, now folded into the
+// "plain" variant below) showed: HTTP 403, no cf-ray/cf-mitigated header
+// (so NOT a Cloudflare interstitial), and a body that's Adzuna's own
+// "Access Denied" page (title says so outright, assets served from their
+// own zunastatic-abf.kxcdn.com). That rules out impit's TLS impersonation
+// being unconvincing -- if the handshake itself were the problem, Adzuna's
+// edge wouldn't complete the connection well enough to hand back a full,
+// well-formed HTML page with the right content-type. This looks like an
+// application-level decision, not a transport-level one.
+//
+// Two real hypotheses remain, both testable without a code change to the
+// real resolver yet: (1) IP/ASN reputation -- this server's EC2 IP is
+// flagged as datacenter/automated traffic regardless of what the request
+// looks like (see this file's own comment on mapWithConcurrency, about the
+// earlier Jooble/Cloudflare incident); (2) missing request provenance --
+// Adzuna's redirect_url is meant to be followed by a browser that just
+// came from an actual adzuna.in page (search results, a job listing) with
+// a Referer/cookie to match, and our resolver calls it cold, with neither.
+// "withReferer" and "withSession" below test (2) directly: if either comes
+// back with something other than the same 403 Access Denied page, (2) is
+// the real cause and the fix is cheap (add that header/cookie to the real
+// resolver). If all three variants come back identical, that's real
+// evidence for (1), which needs a different class of fix (see this file's
+// top comment for why a residential/rotating-IP proxy or dropping
+// server-side verification were the two alternatives already discussed).
 export type DebugResolution = {
   status: number | null;
   headers: Record<string, string>;
@@ -221,14 +240,15 @@ export type DebugResolution = {
   error: string | null;
 };
 
-export async function debugResolveFinalUrl(url: string): Promise<DebugResolution> {
+async function debugFetchOnce(url: string, extraHeaders?: Record<string, string>): Promise<DebugResolution> {
   try {
-    const res = await impitClient.fetch(url, { method: "GET", redirect: "follow" });
+    const res = await impitClient.fetch(url, { method: "GET", redirect: "follow", headers: extraHeaders });
     const headers: Record<string, string> = {};
     // Only the headers actually useful for telling a Cloudflare-style
-    // interstitial apart from a plain deny page -- not dumping every
-    // header impit reports, most of which won't mean anything here.
-    for (const name of ["server", "cf-ray", "cf-mitigated", "content-type", "content-length"]) {
+    // interstitial apart from a plain deny page, or spotting a session
+    // cookie Adzuna wants -- not dumping every header impit reports, most
+    // of which won't mean anything here.
+    for (const name of ["server", "cf-ray", "cf-mitigated", "content-type", "content-length", "set-cookie"]) {
       const value = res.headers.get(name);
       if (value) headers[name] = value;
     }
@@ -249,4 +269,42 @@ export async function debugResolveFinalUrl(url: string): Promise<DebugResolution
       error: err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err),
     };
   }
+}
+
+export type DebugResolutionVariants = {
+  plain: DebugResolution;
+  withReferer: DebugResolution;
+  withSession: DebugResolution;
+};
+
+export async function debugResolveFinalUrlVariants(url: string): Promise<DebugResolutionVariants> {
+  const plain = await debugFetchOnce(url);
+  const withReferer = await debugFetchOnce(url, { referer: "https://www.adzuna.in/" });
+
+  // Visit Adzuna's own homepage first (a real page a browser would have
+  // loaded before ever seeing this redirect), grab whatever cookie it
+  // hands back, then retry the redirect carrying that cookie plus the same
+  // Referer. If Adzuna's block is really about "this request never
+  // originated from our own site," this is the variant that would get
+  // through where the other two don't.
+  let withSession: DebugResolution;
+  try {
+    const homepageRes = await impitClient.fetch("https://www.adzuna.in/", { method: "GET" });
+    const setCookie = homepageRes.headers.get("set-cookie");
+    homepageRes.body?.cancel().catch(() => {});
+    withSession = await debugFetchOnce(url, {
+      referer: "https://www.adzuna.in/",
+      ...(setCookie ? { cookie: setCookie } : {}),
+    });
+  } catch (err) {
+    withSession = {
+      status: null,
+      headers: {},
+      bodySnippet: null,
+      finalUrl: null,
+      error: err instanceof Error ? `${err.constructor.name}: ${err.message}` : String(err),
+    };
+  }
+
+  return { plain, withReferer, withSession };
 }

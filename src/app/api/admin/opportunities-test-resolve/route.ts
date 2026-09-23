@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { adzunaConfigured, searchAdzunaJobs } from "@/lib/adzuna";
-import { debugResolveFinalUrl, resolveDirectApplyUrl } from "@/lib/applyLinkResolver";
+import { debugResolveFinalUrlVariants, resolveDirectApplyUrl } from "@/lib/applyLinkResolver";
 import { recordAdzunaCall } from "@/lib/repo/adzunaUsage";
 
 // A cheap, read-only probe -- ONE Adzuna query (1 call, not a 240-call
@@ -50,14 +50,15 @@ export async function POST() {
     })
   );
 
-  // Raw diagnostic on just the first sample job -- status code, a couple of
-  // headers, and a body snippet, so a still-failing run shows WHY (a real
-  // Cloudflare interstitial vs. a generic block vs. a network/timeout
-  // error) instead of just another "landed on adzuna.in". Only one job,
+  // Raw diagnostic on just the first sample job -- three variants (plain /
+  // with a Referer header / with a Referer + a cookie picked up from
+  // Adzuna's own homepage first), so a still-failing run shows WHY (a real
+  // Cloudflare interstitial vs. an IP-level block vs. a missing-session
+  // block) instead of just another "landed on adzuna.in". Only one job,
   // not all five -- this is a debug probe, not something that needs to
-  // characterize the whole sample, and reading five response bodies for
-  // one button click isn't worth it.
-  const debug = sample.length > 0 ? await debugResolveFinalUrl(sample[0].link) : null;
+  // characterize the whole sample, and three variants x five jobs is a lot
+  // of extra requests for one button click.
+  const debug = sample.length > 0 ? await debugResolveFinalUrlVariants(sample[0].link) : null;
 
   return NextResponse.json({ queried: jobs.length, results, debug });
 }

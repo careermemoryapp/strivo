@@ -425,23 +425,29 @@ export default function AdminDashboardPage() {
   // /api/admin/opportunities-test-resolve's own comment for why this
   // exists instead of just running a real chunk to check.
   const [oppTesting, setOppTesting] = useState(false);
+  type DebugResolution = {
+    status: number | null;
+    headers: Record<string, string>;
+    bodySnippet: string | null;
+    finalUrl: string | null;
+    error: string | null;
+  };
   const [oppTestResult, setOppTestResult] = useState<{
     queried: number;
     results: { title: string; company: string; ok: boolean; finalUrl: string | null; reason: string | null; domain: string | null }[];
     // Raw look at whatever the FIRST sample job's redirect actually
-    // returned -- status/headers/body, not just resolveDirectApplyUrl's
-    // pass/fail verdict. Added after impit (Chrome TLS impersonation)
-    // still didn't get a single result past the adzuna.in denylist, to
-    // tell "impit's impersonation isn't convincing enough" apart from
-    // "this server's IP itself is blocked" (see applyLinkResolver.ts's
-    // own comment on debugResolveFinalUrl for the reasoning).
-    debug: {
-      status: number | null;
-      headers: Record<string, string>;
-      bodySnippet: string | null;
-      finalUrl: string | null;
-      error: string | null;
-    } | null;
+    // returned, tried three ways -- plain / with a Referer header / with a
+    // Referer plus a cookie picked up from Adzuna's own homepage first --
+    // instead of just resolveDirectApplyUrl's pass/fail verdict. Added
+    // after impit (Chrome TLS impersonation) still didn't get a single
+    // result past the adzuna.in denylist: the first single-variant probe
+    // showed a real "Access Denied" page from Adzuna itself (no Cloudflare
+    // headers), which ruled out the TLS handshake as the problem and left
+    // two live hypotheses -- IP-reputation blocking, or the redirect
+    // needing to look like it came from a real Adzuna browsing session.
+    // These three variants test the second one directly (see
+    // applyLinkResolver.ts's own comment on debugResolveFinalUrlVariants).
+    debug: { plain: DebugResolution; withReferer: DebugResolution; withSession: DebugResolution } | null;
   } | null>(null);
   const [oppTestError, setOppTestError] = useState<string | null>(null);
   const [oppUsage, setOppUsage] = useState<{
@@ -1375,24 +1381,37 @@ export default function AdminDashboardPage() {
                   </div>
                 ))}
                 {oppTestResult.debug && (
-                  <div className="rounded-[10px] border border-amber-200 bg-amber-50 p-2 text-[12px]">
-                    <span className="font-semibold text-ink">Raw diagnostic (first job&apos;s redirect):</span>
-                    <br />
-                    {oppTestResult.debug.error ? (
-                      <span className="text-red-600">Request itself failed: {oppTestResult.debug.error}</span>
-                    ) : (
-                      <>
-                        <span className="text-ink-soft">Status: {oppTestResult.debug.status ?? "—"}</span>
-                        <br />
-                        <span className="text-ink-soft">Final URL: {oppTestResult.debug.finalUrl ?? "—"}</span>
-                        <br />
-                        <span className="text-ink-soft">
-                          Headers: {Object.keys(oppTestResult.debug.headers).length > 0 ? JSON.stringify(oppTestResult.debug.headers) : "(none of the tracked ones present)"}
-                        </span>
-                        <br />
-                        <span className="text-ink-soft break-all">Body snippet: {oppTestResult.debug.bodySnippet || "(empty)"}</span>
-                      </>
-                    )}
+                  <div className="space-y-1.5">
+                    {(
+                      [
+                        ["plain", "No extra headers (what the real resolver sends today)"],
+                        ["withReferer", "+ Referer: adzuna.in"],
+                        ["withSession", "+ Referer, + cookie picked up from adzuna.in's homepage"],
+                      ] as const
+                    ).map(([key, label]) => {
+                      const d = oppTestResult.debug![key];
+                      return (
+                        <div key={key} className="rounded-[10px] border border-amber-200 bg-amber-50 p-2 text-[12px]">
+                          <span className="font-semibold text-ink">Raw diagnostic — {label}:</span>
+                          <br />
+                          {d.error ? (
+                            <span className="text-red-600">Request itself failed: {d.error}</span>
+                          ) : (
+                            <>
+                              <span className="text-ink-soft">Status: {d.status ?? "—"}</span>
+                              <br />
+                              <span className="text-ink-soft">Final URL: {d.finalUrl ?? "—"}</span>
+                              <br />
+                              <span className="text-ink-soft">
+                                Headers: {Object.keys(d.headers).length > 0 ? JSON.stringify(d.headers) : "(none of the tracked ones present)"}
+                              </span>
+                              <br />
+                              <span className="text-ink-soft break-all">Body snippet: {d.bodySnippet || "(empty)"}</span>
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>
