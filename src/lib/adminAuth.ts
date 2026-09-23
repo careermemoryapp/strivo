@@ -173,6 +173,21 @@ export function checkEngagementNudgeSecret(secret: string | null): boolean {
   return timingSafeStringEqual(secret, expected);
 }
 
+// Same idea again, for the Opportunities job-pool refresh automation (see
+// /api/opportunities/refresh-pool/run) -- its own credential, separate from
+// every other secret above. Deliberately its OWN trigger, not folded onto
+// an existing automation's schedule the way suggested_roles was folded
+// onto growth-narrative/run -- this one burns real, budget-capped Jooble
+// API calls (see JOOBLE_API_KEY's comment in .env.example) every time it
+// fires, so it needs to be triggered deliberately/manually during MVP
+// rather than inherit some other feature's cadence. Checked via a request
+// header (`x-opportunities-refresh-secret`).
+export function checkOpportunitiesRefreshSecret(secret: string | null): boolean {
+  const expected = process.env.OPPORTUNITIES_REFRESH_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}
+
 // Same idea again, for the category-imbalance insight automation (see
 // /api/category-insight/run and lib/categoryInsight.ts) -- its own
 // credential, separate from every other secret above. Checked via a request

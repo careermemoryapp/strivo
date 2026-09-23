@@ -21,7 +21,14 @@ export type SuggestedRolesRow = {
 // minForFullAnalysis = 5 in lib/careerWrapped.ts) since a named job title
 // (plus an industry claim) is a much more concrete, checkable statement
 // than a muscle-strength count.
-const MIN_TOTAL_MEMORIES = 6;
+//
+// Exported (not just a local const) because lib/opportunities.ts reuses it
+// as the same "personalize or show the generic nudge instead" gate for the
+// Opportunities tab -- deliberately the SAME number rather than a second
+// tuned threshold, since both features are really asking the identical
+// question ("do we know this person well enough yet") and drifting them
+// apart would just make Strivo's own behavior harder to reason about.
+export const MIN_TOTAL_MEMORIES = 6;
 
 // Same "enough new material, or enough time plus a little new material"
 // re-trigger shape as growth narratives (see growthNarratives.ts) --

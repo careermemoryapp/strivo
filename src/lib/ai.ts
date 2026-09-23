@@ -597,6 +597,105 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
   }
 }
 
+export type OpportunityCandidate = {
+  id: string; // job_postings.id
+  title: string;
+  company: string | null;
+  location: string | null;
+  snippet: string | null;
+};
+
+export type RankedOpportunity = {
+  id: string;
+  fit: "strong" | "good" | "possible";
+  reason: string;
+};
+
+// Only ever called on a pre-filtered candidate set (see
+// lib/opportunities.ts) -- never the whole job_postings pool. Hard cap
+// here too as a last line of defense against an accidentally huge prompt.
+const MAX_OPPORTUNITY_CANDIDATES = 80;
+const MAX_RANKED_OPPORTUNITIES = 25;
+
+// Opportunities tab ranking (see lib/opportunities.ts). Given a text
+// description of who this person is -- built from their suggested_roles
+// (lib/repo/suggestedRoles.ts, already generated monthly from their actual
+// memories) plus resume text -- and a batch of candidate jobs already
+// pre-filtered by cheap matching, asks the model to judge genuine fit and
+// return the best MAX_RANKED_OPPORTUNITIES, best first. Deliberately one
+// batched call over the whole candidate set rather than one call per job:
+// keeps cost bounded and lets the model compare candidates against each
+// other, not just against the profile in isolation.
+//
+// Returns null (not an error) when the API isn't configured or the
+// candidate list is empty -- callers should treat that as "nothing to
+// show," not retry.
+export async function rankOpportunities(
+  profileText: string,
+  candidates: OpportunityCandidate[]
+): Promise<RankedOpportunity[] | null> {
+  const openai = getClient();
+  if (!openai || candidates.length === 0) return null;
+  const pool = candidates.slice(0, MAX_OPPORTUNITY_CANDIDATES);
+  try {
+    const listing = pool
+      .map((c) => {
+        const snippet = c.snippet ? (c.snippet.length > 300 ? `${c.snippet.slice(0, 300)}…` : c.snippet) : "(no description)";
+        return `[${c.id}] "${c.title}" at ${c.company ?? "Unknown company"}, ${c.location ?? "Location unspecified"}\n  ${snippet}`;
+      })
+      .join("\n\n");
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You are a career coach matching a real person to real job postings, using ONLY the career evidence you're given about them -- never invent experience they haven't shown. " +
+            "You'll get a short profile of the person (roles they're genuinely ready for right now, with reasoning grounded in their actual career memories, plus resume text) and a numbered list of candidate job postings, each tagged with an [id] you must use exactly as given. " +
+            'Respond ONLY with JSON: {"ranked": [{"id": string, "fit": "strong" | "good" | "possible", "reason": string}]}. ' +
+            `Return up to ${MAX_RANKED_OPPORTUNITIES} candidates, best fit first -- fewer (even zero) is correct if most of the list is a genuine stretch or mismatch; never pad with weak fits just to reach the count. ` +
+            "fit: 'strong' means this role is close to what they're already evidenced-ready for; 'good' means a believable next step with some transferable gap; 'possible' means plausible but a real stretch worth surfacing anyway (not a wild guess). " +
+            "reason: one sentence, written directly to the person ('your...'), citing the SPECIFIC experience/role from their profile that makes this job worth a look -- concrete and checkable, never generic career-coach filler like 'this could be a great opportunity for growth'. " +
+            "Judge on: relevant experience level and seniority (don't surface something wildly over- or under-qualified), function and industry transferability (a plausible pivot is fine, an unrelated field is not), and whether the profile actually supports the fit. " +
+            "Only use ids exactly as given in the [id] tags -- never invent an id, never renumber.",
+        },
+        { role: "user", content: `PERSON'S PROFILE:\n${profileText}\n\nCANDIDATE JOBS:\n${listing}` },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.ranked)) return null;
+
+    const validIds = new Set(pool.map((c) => c.id));
+    const ranked: RankedOpportunity[] = [];
+    for (const item of parsed.ranked) {
+      if (
+        item &&
+        typeof item === "object" &&
+        typeof (item as { id?: unknown }).id === "string" &&
+        validIds.has((item as { id: string }).id) &&
+        ["strong", "good", "possible"].includes((item as { fit?: unknown }).fit as string) &&
+        typeof (item as { reason?: unknown }).reason === "string"
+      ) {
+        ranked.push({
+          id: (item as { id: string }).id,
+          fit: (item as { fit: RankedOpportunity["fit"] }).fit,
+          reason: (item as { reason: string }).reason.trim().slice(0, 300),
+        });
+      }
+      if (ranked.length >= MAX_RANKED_OPPORTUNITIES) break;
+    }
+    return ranked;
+  } catch (err) {
+    console.error("rankOpportunities failed:", err);
+    Sentry.captureException(err);
+    return null;
+  }
+}
+
 export type DocumentStorySegment = { title: string; content: string };
 
 // A long uploaded document (resume, career journal, self-review export,

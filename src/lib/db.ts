@@ -726,6 +726,78 @@ function migrate(db: DatabaseSync) {
       error TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_story_batch_items_batch ON story_batch_items(batch_id, ordinal);
+
+    -- The Opportunities tab's shared job pool (see lib/jooble.ts and
+    -- app/api/opportunities/refresh-pool/run) -- fetched centrally for a
+    -- fixed grid of functions x Indian cities, NOT per-user, specifically
+    -- to stay inside Jooble's free-tier lifetime request cap. One row here
+    -- can be matched against every user; refresh-pool/run upserts on
+    -- jooble_id + last_seen_at so a job that's still live just gets its
+    -- timestamp bumped rather than duplicated, and pruneStaleJobPostings
+    -- (lib/repo/jobPostings.ts) drops rows that stop showing up in fresh
+    -- fetches (the job's gone/filled at the source).
+    CREATE TABLE IF NOT EXISTS job_postings (
+      id TEXT PRIMARY KEY,
+      jooble_id TEXT NOT NULL UNIQUE,
+      title TEXT NOT NULL,
+      company TEXT,
+      location TEXT,
+      snippet TEXT,
+      salary TEXT,
+      source_url TEXT NOT NULL,
+      -- Which (function, city) grid search this row was fetched from --
+      -- see FUNCTION_QUERIES/CITY_QUERIES in the refresh-pool route. Purely
+      -- informational (helps debug why a given job showed up), never used
+      -- as a hard filter -- matching is by actual title/snippet content.
+      function_tag TEXT,
+      city_tag TEXT,
+      posted_date TEXT,
+      fetched_at TEXT NOT NULL,
+      last_seen_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_job_postings_last_seen ON job_postings(last_seen_at);
+
+    -- Cached, ranked Opportunities for one user (see lib/opportunities.ts).
+    -- Recomputing the AI ranking on every tab open would be both slow and
+    -- needlessly expensive -- this is the "user_opportunity_recommendations"
+    -- cache from the product brief: generated once, reused until something
+    -- that would actually change the ranking happens (new memories past a
+    -- threshold, a new/refreshed suggested_roles row, or the cache going
+    -- stale past OPPORTUNITIES_CACHE_MAX_AGE_DAYS -- see opportunities.ts).
+    -- personalized = 0 means this was the generic (not-yet-personalized)
+    -- fallback list shown to a user under the suggested_roles memory
+    -- threshold, not a real ranking -- kept separate from a genuine
+    -- personalized miss so the UI's "add memories to personalize" nudge and
+    -- the cache-staleness check can both tell the two apart.
+    CREATE TABLE IF NOT EXISTS user_opportunities (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      job_posting_id TEXT NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
+      rank INTEGER NOT NULL,
+      fit TEXT, -- 'strong' | 'good' | 'possible' -- see rankOpportunities in lib/ai.ts
+      reason TEXT, -- one-line "why this fits", shown on the card
+      personalized INTEGER NOT NULL DEFAULT 0,
+      memory_count_at_generation INTEGER NOT NULL,
+      generated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_user_opportunities_user ON user_opportunities(user_id, generated_at);
+
+    -- One row per thumbs up/down on an Opportunities card (see
+    -- POST /api/opportunities/[jobId]/feedback). Feedback captures career
+    -- INTENT ("where do you want to go") which memories alone can't --
+    -- kept as its own append-only log (not just a column on
+    -- user_opportunities) so re-ranking never loses history, and so the
+    -- same job can be re-shown and re-judged later without losing the
+    -- earlier verdict.
+    CREATE TABLE IF NOT EXISTS opportunity_feedback (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      job_posting_id TEXT NOT NULL REFERENCES job_postings(id) ON DELETE CASCADE,
+      feedback TEXT NOT NULL, -- 'relevant' | 'not_for_me'
+      reason TEXT, -- optional: 'wrong_role' | 'wrong_industry' | 'wrong_location' | 'too_senior' | 'too_junior' | 'not_interested'
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_opportunity_feedback_user ON opportunity_feedback(user_id, job_posting_id);
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

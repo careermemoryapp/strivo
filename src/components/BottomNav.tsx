@@ -2,16 +2,21 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, MessageSquare, Brain, Mic } from "lucide-react";
+import { Home, MessageSquare, Brain, Briefcase, Mic } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 // tourId values are read by HomeTour.tsx (document.querySelector
 // (`[data-tour-id="..."]`)) to find each item's DOM node to spotlight --
 // keep these in sync with HomeTour's NAV_TOUR_STEPS if either changes.
+// Opportunities (MVP, see app/(app)/opportunities) is deliberately placed
+// before Record rather than at the very end -- Record is the app's
+// existing primary action and stays last; Opportunities is the new,
+// secondary destination slotting in ahead of it.
 const ITEMS = [
   { href: "/home", label: "Home", icon: Home, tourId: "nav-home" },
   { href: "/chats", label: "Chats", icon: MessageSquare, tourId: "nav-chats" },
   { href: "/memories", label: "Memories", icon: Brain, tourId: "nav-memories" },
+  { href: "/opportunities", label: "Jobs", icon: Briefcase, tourId: "nav-opportunities" },
   { href: "/record", label: "Record", icon: Mic, tourId: "nav-record" },
 ];
 
