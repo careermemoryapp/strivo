@@ -419,6 +419,17 @@ export default function AdminDashboardPage() {
   const [oppResult, setOppResult] = useState<string | null>(null);
   const [oppError, setOppError] = useState<string | null>(null);
   const [confirmPurgePool, setConfirmPurgePool] = useState(false);
+  // "Test resolver" -- a 1-Adzuna-call probe, separate from oppResult/
+  // oppError above so it can't stomp on (or be stomped on by) a real
+  // Purge/Refresh's own result while both are visible at once. See
+  // /api/admin/opportunities-test-resolve's own comment for why this
+  // exists instead of just running a real chunk to check.
+  const [oppTesting, setOppTesting] = useState(false);
+  const [oppTestResult, setOppTestResult] = useState<{
+    queried: number;
+    results: { title: string; company: string; ok: boolean; finalUrl: string | null; reason: string | null; domain: string | null }[];
+  } | null>(null);
+  const [oppTestError, setOppTestError] = useState<string | null>(null);
   const [oppUsage, setOppUsage] = useState<{
     poolSize: number;
     adzunaUsage: { callsThisMonth: number; callsToday: number; monthlyLimit: number; dailyLimit: number };
@@ -498,6 +509,25 @@ export default function AdminDashboardPage() {
       loadOpportunitiesStatus();
     } finally {
       setOppRefreshing(false);
+    }
+  }, [handleUnauthorized, loadOpportunitiesStatus]);
+
+  const runOpportunitiesTestResolve = useCallback(async () => {
+    setOppTesting(true);
+    setOppTestError(null);
+    try {
+      const res = await fetch("/api/admin/opportunities-test-resolve", { method: "POST" });
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || "");
+      }
+      setOppTestResult(await res.json());
+      loadOpportunitiesStatus(); // this used 1 real Adzuna call -- reflect it in the counters above
+    } catch (err) {
+      setOppTestError(err instanceof Error && err.message ? err.message : "Couldn't run the test. Try again.");
+    } finally {
+      setOppTesting(false);
     }
   }, [handleUnauthorized, loadOpportunitiesStatus]);
 
@@ -1304,14 +1334,41 @@ export default function AdminDashboardPage() {
               <Button className="!py-2 !px-3 text-[13px]" loading={oppRefreshing} onClick={runOpportunitiesRefresh}>
                 Refresh job pool now (next chunk)
               </Button>
+              <Button variant="ghost" className="!py-2 !px-3 text-[13px]" loading={oppTesting} onClick={runOpportunitiesTestResolve}>
+                Test resolver (1 call)
+              </Button>
             </div>
             {oppError && <p className="mt-2 text-[13px] text-red-600">{oppError}</p>}
             {oppResult && <p className="mt-2 text-[12.5px] text-ink-soft">{oppResult}</p>}
+            {oppTestError && <p className="mt-2 text-[13px] text-red-600">{oppTestError}</p>}
+            {oppTestResult && (
+              <div className="mt-2 space-y-1.5">
+                <p className="text-[12.5px] text-ink-soft">
+                  Test query used 1 Adzuna call · {oppTestResult.results.length} of {oppTestResult.queried} results checked:
+                </p>
+                {oppTestResult.results.map((r, i) => (
+                  <div key={i} className="rounded-[10px] border border-[#f5f2fa] p-2 text-[12px]">
+                    <span className="font-semibold text-ink">{r.title}</span>
+                    <span className="text-ink-faint"> — {r.company}</span>
+                    <br />
+                    {r.ok ? (
+                      <span className="text-emerald-700">✓ resolved to {r.finalUrl}</span>
+                    ) : (
+                      <span className="text-red-600">
+                        ✗ {r.reason === "aggregator" ? `landed on a denylisted domain (${r.domain})` : "couldn't resolve (network/timeout)"}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
             <p className="mt-3 text-[11px] text-ink-faint">
               Purge only once, to clear out job listings saved before company-page-only filtering existed (they&apos;ll
               still show old redirect/portal links until purged and re-fetched). After a purge, the pool rebuilds
-              gradually as chunks run — either click Refresh five times in a row (once per chunk, a minute or two
-              apart is safest) or just let the automated schedule catch it over its next couple of run-days.
+              gradually as chunks run — one click a day at most (each is 240 calls, close to the 250/day cap on its
+              own), or just let the automated schedule catch it over its next couple of run-days. Use &quot;Test
+              resolver&quot; instead of a real click to check whether something&apos;s working without spending a
+              chunk&apos;s budget.
             </p>
           </div>
         </section>
