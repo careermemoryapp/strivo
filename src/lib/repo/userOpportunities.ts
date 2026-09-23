@@ -131,3 +131,59 @@ export function listFeedbackedJobIds(userId: string): Set<string> {
   }[];
   return new Set(rows.map((r) => r.job_posting_id));
 }
+
+export type OpportunityFeedbackStats = {
+  relevant: number; // 👍 "Fit" taps, all-time
+  notForMe: number; // 👎 "Not a fit" taps, all-time
+  total: number;
+  // Same two counts, but only feedback recorded in the last 7 days -- so
+  // the admin dashboard can show a recent pulse alongside the all-time
+  // total, not just a number that only ever grows.
+  relevantLast7Days: number;
+  notForMeLast7Days: number;
+  // Breakdown of WHY, for the not-for-me side only (see REASONS in
+  // app/api/opportunities/[jobId]/feedback/route.ts -- reason is always
+  // null on a "relevant" tap, the UI never asks why something's a good
+  // fit). Sorted most-common first; a founder glancing at this can see at
+  // a glance whether rejections are mostly "wrong location" vs "wrong
+  // seniority" etc., which a bare count can't show.
+  notForMeReasons: { reason: string; count: number }[];
+};
+
+// Read-only aggregate for the admin dashboard (see
+// app/api/admin/opportunities-feedback-stats/route.ts) -- a direct founder
+// ask, after shipping the 👍/👎 buttons with no way to see how many of each
+// had actually come in without querying the database by hand.
+export function getOpportunityFeedbackStats(): OpportunityFeedbackStats {
+  const db = getDb();
+  const byFeedback = db.prepare(`SELECT feedback, COUNT(*) as c FROM opportunity_feedback GROUP BY feedback`).all() as {
+    feedback: string;
+    c: number;
+  }[];
+  const relevant = byFeedback.find((r) => r.feedback === "relevant")?.c ?? 0;
+  const notForMe = byFeedback.find((r) => r.feedback === "not_for_me")?.c ?? 0;
+
+  const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const byFeedbackRecent = db
+    .prepare(`SELECT feedback, COUNT(*) as c FROM opportunity_feedback WHERE created_at >= ? GROUP BY feedback`)
+    .all(cutoff) as { feedback: string; c: number }[];
+  const relevantLast7Days = byFeedbackRecent.find((r) => r.feedback === "relevant")?.c ?? 0;
+  const notForMeLast7Days = byFeedbackRecent.find((r) => r.feedback === "not_for_me")?.c ?? 0;
+
+  const reasonRows = db
+    .prepare(
+      `SELECT reason, COUNT(*) as c FROM opportunity_feedback
+        WHERE feedback = 'not_for_me' AND reason IS NOT NULL
+        GROUP BY reason ORDER BY c DESC`
+    )
+    .all() as { reason: string; c: number }[];
+
+  return {
+    relevant,
+    notForMe,
+    total: relevant + notForMe,
+    relevantLast7Days,
+    notForMeLast7Days,
+    notForMeReasons: reasonRows.map((r) => ({ reason: r.reason, count: r.c })),
+  };
+}

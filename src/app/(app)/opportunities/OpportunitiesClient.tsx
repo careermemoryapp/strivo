@@ -3,7 +3,19 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Briefcase, ThumbsUp, ThumbsDown, ExternalLink, Lock, ShieldCheck, SlidersHorizontal } from "lucide-react";
+import {
+  Briefcase,
+  ThumbsUp,
+  ThumbsDown,
+  ExternalLink,
+  Lock,
+  ShieldCheck,
+  SlidersHorizontal,
+  MapPin,
+  Clock3,
+  Sparkles,
+  CheckCircle2,
+} from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -38,10 +50,18 @@ type OpportunitiesResponse = {
   opportunities: OpportunityCard[];
 };
 
-const FIT_LABEL: Record<NonNullable<OpportunityCard["fit"]>, string> = {
-  strong: "Strong fit",
-  good: "Good fit",
-  possible: "Worth exploring",
+// Icon + color per fit level -- strong keeps the brand-primary treatment
+// (Strivo's own signature "top pick" color elsewhere in the app), good
+// moved from an ad hoc amber to the shared --color-success token (green
+// reads as unambiguously positive, where amber read more like a caution),
+// and possible stays the neutral ink-soft grey it always was.
+const FIT_CONFIG: Record<
+  NonNullable<OpportunityCard["fit"]>,
+  { label: string; icon: typeof Sparkles | null; badgeClass: string }
+> = {
+  strong: { label: "Strong fit", icon: Sparkles, badgeClass: "bg-brand-primary-soft text-brand-primary" },
+  good: { label: "Good fit", icon: CheckCircle2, badgeClass: "bg-success/10 text-success" },
+  possible: { label: "Worth exploring", icon: null, badgeClass: "bg-ink-soft/10 text-ink-soft" },
 };
 
 export function OpportunitiesClient() {
@@ -51,9 +71,17 @@ export function OpportunitiesClient() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   // Local, session-only -- once you've reacted to a card it disappears
-  // from this render immediately rather than waiting on a re-fetch/re-rank,
-  // same "optimistic local removal" pattern as MemoryCard's delete.
+  // from this render shortly after (see reactingIds/REACT_TRANSITION_MS
+  // below) rather than waiting on a re-fetch/re-rank, same "optimistic
+  // local removal" pattern as MemoryCard's delete.
   const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
+  // Cards in this set render with the fade/slide-out transition below --
+  // populated the instant a thumb is tapped, then the card actually leaves
+  // `visible` (dismissedIds) once that transition has had time to play.
+  // Purely cosmetic -- the feedback write itself (see sendFeedback) doesn't
+  // wait on this.
+  const [reactingIds, setReactingIds] = useState<Set<string>>(new Set());
+  const REACT_TRANSITION_MS = 220;
 
   // The "tell us what you're looking for" form shown on the locked state
   // (see the !data.personalized block below) -- seeded from whatever's
@@ -123,20 +151,26 @@ export function OpportunitiesClient() {
     return () => clearTimeout(t);
   }, []);
 
-  async function sendFeedback(jobId: string, feedback: "relevant" | "not_for_me") {
-    setDismissedIds((prev) => new Set(prev).add(jobId));
-    try {
-      await fetch(`/api/opportunities/${jobId}/feedback`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ feedback }),
-      });
-    } catch {
-      // Best-effort -- the card already left the local list either way,
-      // and a failed feedback write just means this one job doesn't get
-      // excluded from a future ranking pass. Not worth surfacing an error
-      // for a thumbs-up/down tap.
-    }
+  function sendFeedback(jobId: string, feedback: "relevant" | "not_for_me") {
+    setReactingIds((prev) => new Set(prev).add(jobId));
+    // Fire-and-forget, not awaited -- the card's own removal (below) is on
+    // a fixed local timer, not gated on this request completing.
+    fetch(`/api/opportunities/${jobId}/feedback`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ feedback }),
+    }).catch(() => {
+      // Best-effort -- the card leaves the local list either way, and a
+      // failed feedback write just means this one job doesn't get excluded
+      // from a future ranking pass. Not worth surfacing an error for a
+      // thumbs-up/down tap.
+    });
+    // Let the fade/slide-out transition actually play before the card
+    // leaves `visible` -- an instant removal here reads as the card just
+    // vanishing rather than reacting to the tap.
+    setTimeout(() => {
+      setDismissedIds((prev) => new Set(prev).add(jobId));
+    }, REACT_TRANSITION_MS);
   }
 
   const visible = data?.opportunities.filter((o) => !dismissedIds.has(o.id)) ?? [];
@@ -308,73 +342,99 @@ export function OpportunitiesClient() {
 
         {!loading &&
           data?.personalized &&
-          visible.map((opp) => (
-            <Card key={opp.id}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="font-semibold text-ink leading-snug">{opp.title}</p>
-                  <p className="mt-0.5 text-[13px] text-ink-soft">
-                    {[
-                      opp.company,
-                      opp.location,
-                      // Adzuna's own "created" timestamp (see lib/adzuna.ts),
-                      // not a distinct posted-date field -- close enough for
-                      // "how fresh is this listing" at a glance. Guarded
-                      // against an unparseable/missing value rather than
-                      // trusting every upstream row to have a clean ISO
-                      // string.
-                      opp.postedDate && !isNaN(new Date(opp.postedDate).getTime())
-                        ? formatDistanceToNowStrict(new Date(opp.postedDate), { addSuffix: true })
-                        : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </p>
-                </div>
-                {opp.fit && (
-                  <span
-                    className={cn(
-                      "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                      opp.fit === "strong" && "bg-brand-primary-soft text-brand-primary",
-                      opp.fit === "good" && "bg-amber-50 text-amber-700",
-                      opp.fit === "possible" && "bg-ink-soft/10 text-ink-soft"
-                    )}
-                  >
-                    {FIT_LABEL[opp.fit]}
-                  </span>
+          visible.map((opp, i) => {
+            const fitCfg = opp.fit ? FIT_CONFIG[opp.fit] : null;
+            const FitIcon = fitCfg?.icon ?? null;
+            const isRecent = opp.postedDate && !isNaN(new Date(opp.postedDate).getTime());
+            const reacting = reactingIds.has(opp.id);
+            return (
+              <Card
+                key={opp.id}
+                className={cn(
+                  // fade-in-up is the same entrance the rest of the app
+                  // already uses for "this just appeared" moments (see
+                  // globals.css) -- staggered per card (capped at 8 cards'
+                  // worth of delay) so the list reads as filling in rather
+                  // than popping in all at once. The opacity/scale pair on
+                  // `reacting` is the exit half of the same idea: a tap
+                  // reads as the card visibly leaving, not vanishing.
+                  "animate-fade-in-up transition-all duration-200 ease-out",
+                  reacting && "opacity-0 scale-95"
                 )}
-              </div>
-
-              {opp.reason && <p className="mt-2 text-[13px] text-ink-soft leading-relaxed">{opp.reason}</p>}
-
-              <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-                <div className="flex items-center gap-1">
-                  <button
-                    aria-label="Relevant"
-                    onClick={() => sendFeedback(opp.id, "relevant")}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-brand-primary-soft hover:text-brand-primary transition"
-                  >
-                    <ThumbsUp size={16} />
-                  </button>
-                  <button
-                    aria-label="Not for me"
-                    onClick={() => sendFeedback(opp.id, "not_for_me")}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-ink-soft hover:bg-red-50 hover:text-red-600 transition"
-                  >
-                    <ThumbsDown size={16} />
-                  </button>
+                style={{ animationDelay: `${Math.min(i, 8) * 60}ms` }}
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary text-[16px] font-bold">
+                    {(opp.company?.trim()?.[0] ?? opp.title.trim()[0] ?? "?").toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="min-w-0 font-semibold text-ink leading-snug">{opp.title}</p>
+                      {fitCfg && (
+                        <span
+                          className={cn(
+                            "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                            fitCfg.badgeClass
+                          )}
+                        >
+                          {FitIcon && <FitIcon size={12} />}
+                          {fitCfg.label}
+                        </span>
+                      )}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-ink-soft">
+                      {opp.company && <span className="font-medium">{opp.company}</span>}
+                      {opp.location && (
+                        <span className="inline-flex items-center gap-1">
+                          <MapPin size={12} className="text-ink-faint" />
+                          {opp.location}
+                        </span>
+                      )}
+                      {isRecent && (
+                        <span className="inline-flex items-center gap-1">
+                          <Clock3 size={12} className="text-ink-faint" />
+                          {formatDistanceToNowStrict(new Date(opp.postedDate!), { addSuffix: true })}
+                        </span>
+                      )}
+                    </div>
+                  </div>
                 </div>
-                <a
-                  href={opp.sourceUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 text-[13px] font-semibold text-brand-primary"
-                >
-                  Apply <ExternalLink size={14} />
-                </a>
-              </div>
-            </Card>
-          ))}
+
+                {opp.reason && <p className="mt-2.5 text-[13px] text-ink-soft leading-relaxed">{opp.reason}</p>}
+
+                <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      aria-label="Fit"
+                      onClick={() => sendFeedback(opp.id, "relevant")}
+                      disabled={reacting}
+                      className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-success/40 hover:bg-success/10 hover:text-success active:scale-95 disabled:pointer-events-none"
+                    >
+                      <ThumbsUp size={14} />
+                      Fit
+                    </button>
+                    <button
+                      aria-label="Not a fit"
+                      onClick={() => sendFeedback(opp.id, "not_for_me")}
+                      disabled={reacting}
+                      className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-95 disabled:pointer-events-none"
+                    >
+                      <ThumbsDown size={14} />
+                      Not a fit
+                    </button>
+                  </div>
+                  <a
+                    href={opp.sourceUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 rounded-input bg-gradient-brand px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm active:scale-95 transition"
+                  >
+                    Apply <ExternalLink size={13} />
+                  </a>
+                </div>
+              </Card>
+            );
+          })}
       </div>
     </div>
   );

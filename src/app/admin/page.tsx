@@ -16,6 +16,9 @@ import {
   Power,
   ChevronLeft,
   ChevronRight,
+  ThumbsUp,
+  ThumbsDown,
+  RefreshCw,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import {
@@ -455,6 +458,14 @@ export default function AdminDashboardPage() {
     poolSize: number;
     adzunaUsage: { callsThisMonth: number; callsToday: number; monthlyLimit: number; dailyLimit: number };
   } | null>(null);
+  const [oppFeedbackStats, setOppFeedbackStats] = useState<{
+    relevant: number;
+    notForMe: number;
+    total: number;
+    relevantLast7Days: number;
+    notForMeLast7Days: number;
+    notForMeReasons: { reason: string; count: number }[];
+  } | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     router.replace("/admin/login");
@@ -472,14 +483,29 @@ export default function AdminDashboardPage() {
     }
   }, [handleUnauthorized]);
 
+  const loadOpportunityFeedbackStats = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/opportunities-feedback-stats");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return;
+      setOppFeedbackStats(await res.json());
+    } catch {
+      // Best-effort, same as loadOpportunitiesStatus above -- worst case
+      // the founder just doesn't see the feedback counts this load.
+    }
+  }, [handleUnauthorized]);
+
   useEffect(() => {
     // Deferred via setTimeout, not called directly -- same pattern as
     // OpportunitiesClient's own fetch-on-mount, which keeps the actual
     // setState-triggering call out of the effect's synchronous body (see
     // react-hooks/set-state-in-effect).
-    const t = setTimeout(loadOpportunitiesStatus, 0);
+    const t = setTimeout(() => {
+      loadOpportunitiesStatus();
+      loadOpportunityFeedbackStats();
+    }, 0);
     return () => clearTimeout(t);
-  }, [loadOpportunitiesStatus]);
+  }, [loadOpportunitiesStatus, loadOpportunityFeedbackStats]);
 
   const runOpportunitiesPurge = useCallback(async () => {
     setOppPurging(true);
@@ -1437,6 +1463,65 @@ export default function AdminDashboardPage() {
               own browser isn&apos;t blocked the way this server is — but Strivo can no longer guarantee every job
               leads straight to the employer&apos;s own site instead of a marketplace listing.
             </p>
+
+            {/* 👍/👎 totals from the Opportunities tab's Fit/Not a fit
+                buttons -- see getOpportunityFeedbackStats in
+                lib/repo/userOpportunities.ts. Loaded on mount alongside the
+                usage counter above; the refresh icon just re-pulls it
+                without a full page reload, since new taps can land while
+                this page is sitting open. */}
+            <div className="mt-6 border-t border-border pt-5">
+              <div className="flex items-center justify-between">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Opportunity feedback</p>
+                <button
+                  onClick={loadOpportunityFeedbackStats}
+                  aria-label="Refresh feedback counts"
+                  className="flex h-6 w-6 items-center justify-center rounded-full text-ink-faint hover:bg-bg hover:text-ink transition"
+                >
+                  <RefreshCw size={13} />
+                </button>
+              </div>
+              {oppFeedbackStats ? (
+                <div className="mt-2">
+                  <div className="flex flex-wrap gap-2">
+                    <div className="flex items-center gap-2 rounded-[12px] border border-border bg-success/5 px-3 py-2">
+                      <ThumbsUp size={15} className="text-success" />
+                      <div>
+                        <p className="text-[15px] font-bold leading-none text-ink">{oppFeedbackStats.relevant}</p>
+                        <p className="mt-1 text-[11px] text-ink-faint">Fit · {oppFeedbackStats.relevantLast7Days} in last 7 days</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-[12px] border border-border bg-red-50/60 px-3 py-2">
+                      <ThumbsDown size={15} className="text-red-500" />
+                      <div>
+                        <p className="text-[15px] font-bold leading-none text-ink">{oppFeedbackStats.notForMe}</p>
+                        <p className="mt-1 text-[11px] text-ink-faint">Not a fit · {oppFeedbackStats.notForMeLast7Days} in last 7 days</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-[12px] border border-border px-3 py-2">
+                      <div>
+                        <p className="text-[15px] font-bold leading-none text-ink">{oppFeedbackStats.total}</p>
+                        <p className="mt-1 text-[11px] text-ink-faint">Total taps, all time</p>
+                      </div>
+                    </div>
+                  </div>
+                  {oppFeedbackStats.notForMeReasons.length > 0 && (
+                    <div className="mt-2.5 flex flex-wrap gap-1.5">
+                      {oppFeedbackStats.notForMeReasons.map((r) => (
+                        <span
+                          key={r.reason}
+                          className="rounded-pill border border-border bg-bg px-2 py-0.5 text-[11px] text-ink-soft"
+                        >
+                          {r.reason.replace(/_/g, " ")}: {r.count}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="mt-2 text-[12.5px] text-ink-faint">Loading…</p>
+              )}
+            </div>
           </div>
         </section>
 
