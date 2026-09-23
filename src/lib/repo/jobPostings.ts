@@ -81,7 +81,20 @@ export function upsertJobPosting(job: AdzunaJob, functionTag: string, cityTag: s
 // STALE_AFTER_DAYS. Deliberately no per-user filtering here (that's
 // lib/opportunities.ts's job); this is the raw candidate set matching
 // draws from.
-const STALE_AFTER_DAYS = 10;
+//
+// Sized for the refresh-pool cadence, not a fixed "how old is too old"
+// call -- that's a SEPARATE, per-job freshness check (see the 30-day
+// filter in lib/opportunities.ts, driven by posted_date) that decides what
+// a USER sees. This constant only decides what stays in the raw pool at
+// all. refresh-pool/run now runs once a MONTH (see the comment on
+// FUNCTIONS in that route), so this has to comfortably outlive a month --
+// a value close to 30 would silently empty the entire pool for days at the
+// end of every cycle, before the next run's upserts land (found as a real
+// bug: this was left at 10 from when refresh ran daily/weekly, so for most
+// of a month listActiveJobPostings/countActiveJobPostings were returning
+// nothing at all). 40 gives a ~10-day cushion for a late cron fire or a
+// skipped manual run without silently going blank.
+const STALE_AFTER_DAYS = 40;
 
 export function listActiveJobPostings(limit = 500): JobPosting[] {
   const db = getDb();
@@ -105,6 +118,30 @@ export function pruneStaleJobPostings(): number {
   const db = getDb();
   const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const result = db.prepare(`DELETE FROM job_postings WHERE last_seen_at < ?`).run(cutoff);
+  return Number(result.changes);
+}
+
+// Wipes the ENTIRE pool -- a one-time cleanup lever, not something a
+// normal refresh ever calls. Exists because the pool that existed before
+// the apply-link resolver (see lib/applyLinkResolver.ts) and the
+// aggregator denylist were wired in is stuck bad: upsertJobPosting
+// deliberately never overwrites source_url for a job whose external_id it
+// already knows (see that function's own comment -- a resolved link is
+// meant to be immutable), so an ordinary refresh-pool run leaves every
+// pre-existing row's raw/unresolved Adzuna redirect (or straight LinkedIn/
+// Naukri/etc. link) in place forever; only a genuinely NEW external_id
+// ever gets resolved. Purging first makes the next refresh-pool run treat
+// the whole pool as new again, so everything currently in it gets
+// re-fetched, resolved, and filtered through the denylist properly.
+// Cascades to user_opportunities and opportunity_feedback (both declared
+// ON DELETE CASCADE against job_postings.id in lib/db.ts), so every user's
+// cached ranked list is cleared too -- the next GET /api/opportunities for
+// anyone recomputes from scratch once the pool is rebuilt. Triggered from
+// the admin dashboard (see /api/admin/opportunities-purge), never on a
+// schedule.
+export function purgeAllJobPostings(): number {
+  const db = getDb();
+  const result = db.prepare(`DELETE FROM job_postings`).run();
   return Number(result.changes);
 }
 

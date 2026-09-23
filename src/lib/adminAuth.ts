@@ -180,10 +180,14 @@ export function checkEngagementNudgeSecret(secret: string | null): boolean {
 // onto growth-narrative/run -- this one burns real, budget-capped Adzuna
 // API calls (see ADZUNA_APP_ID's comment in .env.example) every time it
 // fires. Unlike the earlier Jooble integration this replaced, Adzuna's
-// free tier renews monthly rather than being a lifetime cap, so this IS
-// meant to run on a daily crontab entry (see the comment on FUNCTIONS in
-// that route). Checked via a request header
-// (`x-opportunities-refresh-secret`).
+// free tier renews monthly rather than being a lifetime cap; this route is
+// meant to run on a MONTHLY crontab entry (see the comment on FUNCTIONS in
+// that route -- the query grid is sized to just fit inside one month's
+// budget). Checked via a request header (`x-opportunities-refresh-secret`)
+// OR an authed admin session (see isAdminAuthed above) -- the admin
+// dashboard's Opportunities section (admin/page.tsx) triggers it straight
+// from the founder's own logged-in browser session, no header secret
+// needed at all.
 export function checkOpportunitiesRefreshSecret(secret: string | null): boolean {
   const expected = process.env.OPPORTUNITIES_REFRESH_SECRET;
   if (!expected || !secret) return false;

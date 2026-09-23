@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNowStrict } from "date-fns";
-import { Briefcase, ThumbsUp, ThumbsDown, ExternalLink, Lock, ShieldCheck } from "lucide-react";
+import { Briefcase, ThumbsUp, ThumbsDown, ExternalLink, Lock, ShieldCheck, SlidersHorizontal } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
 import { NotificationBell } from "@/components/NotificationBell";
@@ -64,6 +64,12 @@ export function OpportunitiesClient() {
   const [prefIndustry, setPrefIndustry] = useState("");
   const [savingPrefs, setSavingPrefs] = useState(false);
   const [prefsError, setPrefsError] = useState<string | null>(null);
+  // Same form, shown collapsed once someone's already personalized -- a
+  // direct founder ask: people who already see matches should still be
+  // able to change city/function/industry (e.g. relocating, switching
+  // industries) rather than that only being possible from the locked
+  // state's version of this form.
+  const [showEditPrefs, setShowEditPrefs] = useState(false);
 
   async function load() {
     setError(null);
@@ -238,6 +244,58 @@ export function OpportunitiesClient() {
               </Button>
             </div>
           </Card>
+        )}
+
+        {/* Personalized users can still open the same city/function/
+            industry form the locked state shows -- collapsed by default so
+            it doesn't compete with the job list, but always reachable in
+            case what Strivo has inferred (from memories or an earlier
+            answer here) isn't right anymore. */}
+        {!loading && !error && data?.personalized && (
+          <div>
+            <button
+              onClick={() => setShowEditPrefs((v) => !v)}
+              className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-soft"
+            >
+              <SlidersHorizontal size={13} />
+              {showEditPrefs ? "Hide search settings" : "Change city, role, or industry"}
+            </button>
+            {showEditPrefs && (
+              <Card className="mt-2">
+                <p className="text-[13px] text-ink-soft">
+                  Point Strivo at a different city, role, or industry — this replaces what it&apos;s picked up from
+                  your memories or an earlier answer here.
+                </p>
+                <div className="mt-3 space-y-3">
+                  <TextField label="City" placeholder="e.g. Bengaluru" value={prefCity} onChange={(e) => setPrefCity(e.target.value)} />
+                  <TextField
+                    label="Function / role"
+                    placeholder="e.g. Product Manager"
+                    value={prefFunction}
+                    onChange={(e) => setPrefFunction(e.target.value)}
+                  />
+                  <TextField
+                    label="Industry"
+                    placeholder="e.g. Automotive"
+                    value={prefIndustry}
+                    onChange={(e) => setPrefIndustry(e.target.value)}
+                  />
+                </div>
+                {prefsError && <p className="mt-2 text-[13px] text-red-600">{prefsError}</p>}
+                <Button
+                  className="mt-3 !py-2 !px-4 text-[13px]"
+                  loading={savingPrefs}
+                  disabled={!prefCity.trim() && !prefFunction.trim() && !prefIndustry.trim()}
+                  onClick={async () => {
+                    await savePreferences();
+                    setShowEditPrefs(false);
+                  }}
+                >
+                  Update my search
+                </Button>
+              </Card>
+            )}
+          </div>
         )}
 
         {!loading && !error && data?.personalized && visible.length === 0 && (

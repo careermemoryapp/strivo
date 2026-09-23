@@ -65,8 +65,18 @@ export type OpportunitiesResult = {
   opportunities: OpportunityCard[];
 };
 
-const TARGET_COUNT = 22; // "20-25" -- see the product brief
+const TARGET_COUNT = 25; // direct founder call: "at least 25" -- was 22
 const CACHE_MAX_AGE_DAYS = 3;
+// A job shown to a user must have been posted within this many days --
+// separate from STALE_AFTER_DAYS in lib/repo/jobPostings.ts, which decides
+// how long a row stays in the raw pool at all (sized for the monthly
+// refresh cadence, not for "is this too old to show someone"). Direct
+// founder call: nothing older than about a month should ever reach a
+// user's list. Checked against job_postings.posted_date (Adzuna's own
+// "created" timestamp, set once at first insert and never overwritten --
+// see upsertJobPosting -- so this age genuinely reflects the listing's
+// real age, not just when we last re-saw it).
+const MAX_JOB_AGE_DAYS = 30;
 // Re-rank once at least this many NEW memories have landed since the cache
 // was generated, even if it isn't stale by age yet -- new evidence should
 // visibly change the list, not sit unused until the next scheduled refresh.
@@ -178,6 +188,18 @@ function buildProfileText(
     : "No career evidence recorded yet beyond what they stated directly above.";
 }
 
+// Whether a posting is recent enough to show at all. A missing/unparseable
+// posted_date is treated as "can't vouch for this one" and excluded rather
+// than assumed recent -- Adzuna sends a `created` timestamp on essentially
+// every real result (see lib/adzuna.ts), so this should only ever catch a
+// genuinely malformed row.
+function isRecentEnough(job: JobPosting): boolean {
+  if (!job.posted_date) return false;
+  const postedMs = new Date(job.posted_date).getTime();
+  if (Number.isNaN(postedMs)) return false;
+  return Date.now() - postedMs <= MAX_JOB_AGE_DAYS * 24 * 60 * 60 * 1000;
+}
+
 function isCacheFresh(
   cache: ReturnType<typeof getCachedOpportunities>,
   memoryCount: number,
@@ -236,7 +258,11 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
     return { personalized: false, memoryCount, memoriesNeeded, statedPreferences: prefs, opportunities: [] };
   }
 
-  const pool = listActiveJobPostings();
+  // Filtered to postings within MAX_JOB_AGE_DAYS -- see isRecentEnough's
+  // comment. Applied here, before the "pool is empty" check below, so a
+  // pool that's technically non-empty but entirely stale reads the same
+  // as a genuinely empty one rather than silently ranking old listings.
+  const pool = listActiveJobPostings().filter(isRecentEnough);
   const excludeIds = listFeedbackedJobIds(userId);
 
   if (pool.length === 0) {

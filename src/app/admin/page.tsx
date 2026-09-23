@@ -29,6 +29,7 @@ import {
   Legend,
 } from "recharts";
 import { LogoMark } from "@/components/Logo";
+import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -401,9 +402,59 @@ export default function AdminDashboardPage() {
   const [featureFlagsError, setFeatureFlagsError] = useState(false);
   const [togglingFlag, setTogglingFlag] = useState<string | null>(null);
 
+  // Opportunities job pool controls -- manually triggered (no auto-load),
+  // unlike the sections above. "Purge" wipes job_postings outright (see
+  // purgeAllJobPostings' comment for why that's needed -- an ordinary
+  // refresh alone can never fix a job whose apply link was saved before
+  // the resolver/denylist existed) and "Refresh" POSTs straight to the
+  // same route the monthly cron hits (/api/opportunities/refresh-pool/run)
+  // -- reachable here with no header secret at all since this request
+  // carries the admin's own session cookie (see isAdminAuthed in
+  // lib/adminAuth.ts).
+  const [oppPurging, setOppPurging] = useState(false);
+  const [oppRefreshing, setOppRefreshing] = useState(false);
+  const [oppResult, setOppResult] = useState<string | null>(null);
+  const [oppError, setOppError] = useState<string | null>(null);
+  const [confirmPurgePool, setConfirmPurgePool] = useState(false);
+
   const handleUnauthorized = useCallback(() => {
     router.replace("/admin/login");
   }, [router]);
+
+  const runOpportunitiesPurge = useCallback(async () => {
+    setOppPurging(true);
+    setOppError(null);
+    try {
+      const res = await fetch("/api/admin/opportunities-purge", { method: "POST" });
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) throw new Error();
+      const json = (await res.json()) as { removed: number };
+      setOppResult(`Purged ${json.removed} old job posting${json.removed === 1 ? "" : "s"}. Now click "Refresh job pool now" to rebuild it.`);
+    } catch {
+      setOppError("Couldn't purge the job pool. Try again.");
+    } finally {
+      setOppPurging(false);
+      setConfirmPurgePool(false);
+    }
+  }, [handleUnauthorized]);
+
+  const runOpportunitiesRefresh = useCallback(async () => {
+    setOppRefreshing(true);
+    setOppError(null);
+    try {
+      const res = await fetch("/api/opportunities/refresh-pool/run", { method: "POST" });
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) throw new Error();
+      const json = await res.json();
+      setOppResult(
+        `Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Filtered out (portal/unresolved): ${json.filteredOut} · Pool size: ${json.poolSize}`
+      );
+    } catch {
+      setOppError("Couldn't run the refresh. It may still be running in the background -- check back in a few minutes.");
+    } finally {
+      setOppRefreshing(false);
+    }
+  }, [handleUnauthorized]);
 
   const loadMetrics = useCallback(async () => {
     const res = await fetch("/api/admin/metrics");
@@ -1168,6 +1219,32 @@ export default function AdminDashboardPage() {
                 </div>
               </>
             )}
+          </div>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Opportunities job pool</p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            <p className="text-[13px] text-ink-soft">
+              Rebuilds the shared job pool behind the Opportunities tab. Refresh calls Adzuna across the full
+              city × function grid (see the comment on FUNCTIONS in refresh-pool/run) and can take several
+              minutes to finish — the button will stay in a loading state until it responds.
+            </p>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button variant="ghost" className="!py-2 !px-3 text-[13px]" loading={oppPurging} onClick={() => setConfirmPurgePool(true)}>
+                Purge job pool
+              </Button>
+              <Button className="!py-2 !px-3 text-[13px]" loading={oppRefreshing} onClick={runOpportunitiesRefresh}>
+                Refresh job pool now
+              </Button>
+            </div>
+            {oppError && <p className="mt-2 text-[13px] text-red-600">{oppError}</p>}
+            {oppResult && <p className="mt-2 text-[12.5px] text-ink-soft">{oppResult}</p>}
+            <p className="mt-3 text-[11px] text-ink-faint">
+              Purge only once, to clear out job listings saved before company-page-only filtering existed (they&apos;ll
+              still show old redirect/portal links until purged and re-fetched) — then click Refresh. After that,
+              Refresh alone is all a normal monthly run needs.
+            </p>
           </div>
         </section>
 
@@ -2200,6 +2277,16 @@ export default function AdminDashboardPage() {
         loading={templateActionId === confirmDeleteTemplateId && templateActionId !== null}
         onConfirm={() => confirmDeleteTemplateId && handleDeleteTemplate(confirmDeleteTemplateId)}
         onCancel={() => setConfirmDeleteTemplateId(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmPurgePool}
+        title="Purge the entire job pool?"
+        description="Every saved job listing is deleted, along with everyone's cached Opportunities list. The next Refresh rebuilds it from scratch through the company-page-only filter. Use this once, not on a normal schedule."
+        confirmLabel="Purge"
+        loading={oppPurging}
+        onConfirm={runOpportunitiesPurge}
+        onCancel={() => setConfirmPurgePool(false)}
       />
     </div>
   );

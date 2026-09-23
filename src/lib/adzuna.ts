@@ -6,8 +6,10 @@
 // history / lib/jooble.ts, now unused): Jooble's free tier was a
 // 500-request LIFETIME cap and its India endpoint started returning
 // Cloudflare bot-challenge pages from this app's server IP. Adzuna's free
-// tier renews MONTHLY (2,500 requests/month as of writing -- see
-// ADZUNA_APP_ID's comment in .env.example) and uses a single API with a
+// tier renews MONTHLY (1,000 requests/month as of writing -- confirmed
+// against Adzuna's own pricing page; an earlier note here said 2,500,
+// which was wrong -- see ADZUNA_APP_ID's comment in .env.example) and uses
+// a single API with a
 // country-code URL segment, which also fits this product's "India first,
 // other countries later" roadmap better than Jooble's one-key-per-country
 // design would have.
