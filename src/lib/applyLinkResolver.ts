@@ -1,16 +1,27 @@
-// Server-only. Resolves an Adzuna `redirect_url` (an Adzuna-hosted
-// click-tracking link, never the real destination) down to wherever it
-// actually lands, and decides whether that's worth showing at all.
+// Server-only. Best-effort: tries to resolve an Adzuna `redirect_url` (an
+// Adzuna-hosted click-tracking link, never the real destination) down to
+// wherever it actually lands, so refresh-pool/run can show a verified
+// employer/ATS link when it can. When it can't, the caller no longer drops
+// the job -- see the long history below for why, and refresh-pool/run's
+// own comment on its resolution loop for the current behavior.
 //
 // Why this exists: the founder's own testing found that most Adzuna
 // results ultimately point at a marketplace listing (LinkedIn, Naukri,
 // Indeed...) whose "apply" flow requires a separate account/profile on
-// that site and, per direct feedback, often just doesn't work. The product
-// call is to only keep postings that resolve to the employer's own
-// application flow -- either their own domain, or a standard hiring
-// platform (Greenhouse, Lever, Workday, etc.) that presents as the
-// company's own careers page even though it's hosted elsewhere. Anything
-// that resolves to a marketplace/aggregator domain is dropped.
+// that site and, per direct feedback, often just doesn't work. The
+// original product call was to only keep postings that resolve to the
+// employer's own application flow -- either their own domain, or a
+// standard hiring platform (Greenhouse, Lever, Workday, etc.) that
+// presents as the company's own careers page even though it's hosted
+// elsewhere -- and drop anything that resolves to a marketplace/aggregator
+// domain instead.
+//
+// That worked until Adzuna started blocking this server's own attempts to
+// follow its redirect_url at all (see the long investigation below), at
+// which point "drop anything we can't verify" started dropping 100% of new
+// postings -- not because they were portal listings, but because this
+// server can no longer check. The fix that shipped (see below) makes
+// resolution best-effort instead of a hard gate.
 //
 // This ONLY runs once per NEW job (see the external_id existence check in
 // app/api/opportunities/refresh-pool/run) -- an already-known job's
@@ -18,23 +29,53 @@
 // lib/repo/jobPostings.ts), so a user's own opportunity list never triggers
 // this, and a weekly refresh only ever resolves genuinely new postings.
 //
-// Uses `impit` (github.com/apify/impit), not Node's built-in fetch, to
-// actually follow Adzuna's redirect_url. Found the hard way, via the admin
-// dashboard's "Test resolver" probe: Adzuna's click-tracking endpoint does
-// TLS fingerprinting on top of whatever User-Agent header a request sends
-// -- Node's fetch (undici) has a TLS handshake signature that doesn't match
-// a real Chrome browser no matter what headers are set, so instead of
-// redirecting, Adzuna served back an HTTP 200 "Access Denied" page still on
-// adzuna.in -- which then matched AGGREGATOR_DOMAINS below and every single
-// job got silently dropped as if it were a portal listing. impit is a
-// native module (prebuilt binaries, no compiler needed on deploy) that
-// genuinely impersonates a real browser's TLS handshake, not just its
-// headers -- see impitClient below. Direct founder call after seeing this
-// explained: worth the new dependency to keep the "never job portals"
-// promise intact, over either dropping server-side verification (would
-// let some jobs slip through to LinkedIn/Naukri again) or running a real
-// headless browser per resolution (too heavy for this server's limited
-// RAM at this concurrency).
+// THE INVESTIGATION (for whoever touches this next): a post-purge chunk
+// refresh filtered out 100% of 150 resolutions with nothing to explain
+// why. Root-caused via the admin dashboard's "Test resolver" probe, in
+// stages:
+//   1. Node's built-in fetch (undici) has a TLS handshake signature that
+//      doesn't match a real Chrome browser, no matter what headers are
+//      set -- Adzuna's click-tracking endpoint does TLS fingerprinting on
+//      top of headers, so instead of redirecting, it served back a page
+//      still on adzuna.in -- which then matched AGGREGATOR_DOMAINS below
+//      and every job got silently dropped as if it were a portal listing.
+//   2. Switched to `impit` (github.com/apify/impit) for genuine Chrome TLS
+//      impersonation (prebuilt native binaries, no compiler needed on
+//      deploy) -- a real fix for TLS fingerprinting in general, and the
+//      textbook one (confirmed by outside research into this exact
+//      failure mode). Didn't fix THIS block: still 100% denied afterward.
+//   3. A raw diagnostic (debugResolveFinalUrl, now folded into
+//      debugResolveFinalUrlVariants below) showed the real response: HTTP
+//      403 (not the 200 originally suspected), no cf-ray/cf-mitigated
+//      header (so NOT a Cloudflare interstitial -- this is Adzuna's own
+//      "Access Denied" page, assets served from their own
+//      zunastatic-abf.kxcdn.com), and a full stack of fresh Adzuna session
+//      cookies handed back on every single attempt regardless.
+//   4. Three variants tested at once -- plain, with a Referer header
+//      pointing at adzuna.in, and with a Referer plus a cookie picked up
+//      from actually visiting adzuna.in's homepage first -- came back
+//      byte-for-byte identical. Ruled out "missing request provenance" as
+//      the cause; left IP/ASN-level reputation (this server's EC2 IP
+//      flagged as automated/datacenter traffic, independent of what the
+//      request itself looks like) as the remaining explanation -- echoing
+//      this file's own note on mapWithConcurrency about the earlier
+//      Jooble/Cloudflare incident.
+//   5. Direct founder call after seeing this evidence: a real person's own
+//      browser, on their own device, doesn't share this server's IP or
+//      this problem -- so stop trying to gate on server-side verification
+//      (which by this point could no longer succeed for ANY Adzuna
+//      redirect_url from this server) and let the person's own browser
+//      follow the link when they tap Apply instead. Chosen over paying for
+//      a residential-IP proxy service just for this verification step
+//      (real fix for the "never show portals" promise, but a new ongoing
+//      cost and vendor dependency) and over a real headless browser (was
+//      already ruled out for RAM reasons, and wouldn't have helped anyway
+//      -- it would run from this same flagged IP).
+//
+// Net effect: resolveDirectApplyUrl/resolveFinalUrl below are still tried
+// first on every new job (cheap, and self-heals for free if Adzuna's block
+// or this server's IP reputation ever changes), but a failure no longer
+// means "drop this job" -- see refresh-pool/run for what happens instead.
 
 import { Impit } from "impit";
 

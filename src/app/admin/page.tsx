@@ -506,22 +506,25 @@ export default function AdminDashboardPage() {
       if (res.status === 401) return handleUnauthorized();
       if (!res.ok) throw new Error();
       const json = await res.json();
-      // Breakdown of WHY anything was filtered out, not just how many --
-      // added after a run that filtered out 100% of resolutions with
-      // nothing to explain it beyond a single opaque count. "unresolved"
-      // means the fetch itself failed/timed out; "aggregator" means it
-      // resolved fine but landed on a denylisted domain -- topAggregatorDomains
-      // names exactly which ones, most-hit first, so "everything's
-      // bouncing back to adzuna.in" is visible at a glance instead of
-      // looking identical to "these were genuinely all portal listings".
-      const filterBreakdown =
-        json.filteredOut > 0
-          ? ` [unresolved: ${json.unresolvedCount ?? "?"}, aggregator: ${json.aggregatorCount ?? "?"}${
+      // Every new job is shown now, one of two ways (see refresh-pool/run's
+      // own comment for the full history of why) -- resolvedDirectCount
+      // got a verified employer/ATS link; rawRedirectCount is shown with
+      // Adzuna's own redirect link instead, for the person's own browser
+      // to follow. The breakdown below only describes WHY resolution
+      // didn't verify a link for the rawRedirectCount jobs where it was
+      // actually attempted (not the ones skipped past the per-run cap):
+      // "unresolved" means the fetch itself failed/timed out; "aggregator"
+      // means it resolved fine but landed on a denylisted domain --
+      // topAggregatorDomains names exactly which ones, most-hit first (in
+      // practice, almost always adzuna.in itself -- see applyLinkResolver.ts).
+      const rawBreakdown =
+        json.rawRedirectCount > 0
+          ? ` [of which unresolved: ${json.unresolvedCount ?? "?"}, aggregator: ${json.aggregatorCount ?? "?"}${
               json.topAggregatorDomains?.length ? " -- " + json.topAggregatorDomains.join(", ") : ""
             }]`
           : "";
       setOppResult(
-        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Filtered out (portal/unresolved): ${json.filteredOut}${filterBreakdown} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
+        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Verified direct link: ${json.resolvedDirectCount} · Shown via Adzuna's own redirect link: ${json.rawRedirectCount}${rawBreakdown} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
       );
       if (json.adzunaUsage) setOppUsage({ poolSize: json.poolSize, adzunaUsage: json.adzunaUsage });
     } catch {
@@ -1422,7 +1425,12 @@ export default function AdminDashboardPage() {
               gradually as chunks run — one click a day at most (each is 240 calls, close to the 250/day cap on its
               own), or just let the automated schedule catch it over its next couple of run-days. Use &quot;Test
               resolver&quot; instead of a real click to check whether something&apos;s working without spending a
-              chunk&apos;s budget.
+              chunk&apos;s budget. Note: Adzuna blocks this server&apos;s own attempts to verify where a job&apos;s
+              apply link leads (confirmed — not fixable from here, see &quot;Shown via Adzuna&apos;s own redirect
+              link&quot; in each refresh&apos;s result above), so most new postings now show Adzuna&apos;s own
+              redirect link rather than a verified employer page. It still works when a person clicks Apply — their
+              own browser isn&apos;t blocked the way this server is — but Strivo can no longer guarantee every job
+              leads straight to the employer&apos;s own site instead of a marketplace listing.
             </p>
           </div>
         </section>

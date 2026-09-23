@@ -181,17 +181,22 @@ export async function POST(req: Request) {
   let queriesFailed = 0;
   let jobsUpserted = 0; // includes both brand-new and already-known (refreshed) postings
   let jobsNew = 0;
-  // Dropped after resolution -- either the redirect wouldn't resolve within
-  // the timeout, or it resolved to a marketplace/aggregator domain (see
-  // resolveDirectApplyUrl's own comment for why those two collapse into one
-  // outcome: both mean "don't show this").
-  let filteredOut = 0;
-  let filteredCapped = 0; // new posting, but this run already hit MAX_RESOLUTIONS_PER_RUN
-  // Breakdown of WHY filteredOut jobs got dropped -- see
-  // ApplyUrlResolution's own comment in lib/applyLinkResolver.ts for why
-  // this exists. unresolved = fetch itself failed/timed out; aggregator =
-  // resolved fine but landed on a denylisted domain (see
-  // aggregatorDomainCounts for exactly which ones).
+  // A new posting is now ALWAYS shown, one of two ways -- see the
+  // resolution loop below for why jobs are no longer dropped:
+  // resolvedDirectCount = server-side resolution actually succeeded (a
+  // verified employer/ATS page); rawRedirectCount = it didn't (or wasn't
+  // attempted, past MAX_RESOLUTIONS_PER_RUN), so the job is shown with
+  // Adzuna's own redirect link as-is, for the person's own browser to
+  // follow when they click Apply.
+  let resolvedDirectCount = 0;
+  let rawRedirectCount = 0;
+  // Breakdown of WHY a resolution attempt (not every rawRedirectCount job
+  // -- only the ones actually attempted, see toResolve below) didn't
+  // return a verified URL -- see ApplyUrlResolution's own comment in
+  // lib/applyLinkResolver.ts. unresolved = fetch itself failed/timed out;
+  // aggregator = resolved fine but landed on a denylisted domain (see
+  // aggregatorDomainCounts for exactly which ones -- in practice, almost
+  // always adzuna.in itself; see this file's own history below).
   let unresolvedCount = 0;
   let aggregatorCount = 0;
   const aggregatorDomainCounts = new Map<string, number>();
@@ -234,25 +239,63 @@ export async function POST(req: Request) {
     }
 
     const toResolve = fresh.slice(0, Math.max(0, MAX_RESOLUTIONS_PER_RUN - resolutionsUsed));
-    filteredCapped += fresh.length - toResolve.length;
+    const skippedByCap = fresh.slice(toResolve.length); // still shown -- see below, just without a resolution attempt
     resolutionsUsed += toResolve.length;
 
+    // Every fresh job gets shown one way or another -- see this file's own
+    // history for why. Confirmed via the admin dashboard's "Test resolver"
+    // probe (three ways: plain, with a Referer header, with a Referer +
+    // session cookie picked up from adzuna.in's own homepage) that Adzuna
+    // blocks THIS SERVER's attempts to follow its own redirect_url with an
+    // identical 403 "Access Denied" every time, regardless of how the
+    // request is dressed up -- even genuine Chrome TLS impersonation
+    // (impit) didn't get through. That points at something about this
+    // server itself (most likely its IP) rather than anything fixable in
+    // the request. A real person's own browser, on their own device,
+    // doesn't share that problem -- so per a direct founder call, made
+    // after seeing this evidence, a job whose link can't be verified
+    // server-side is no longer dropped. It's shown with Adzuna's own
+    // redirect link, same as one that DID resolve, and the person's own
+    // browser follows it when they tap Apply. The one thing this gives up:
+    // Strivo can no longer GUARANTEE every job leads straight to the
+    // employer's own page -- occasionally that redirect could still land
+    // on a marketplace/portal listing, same as it always did before the
+    // company-page-only filtering existed. resolveDirectApplyUrl is still
+    // attempted first (below) because it costs little and self-heals for
+    // free if Adzuna's behavior, or this server's IP reputation, ever
+    // changes -- when it does succeed, that verified direct URL is what
+    // gets shown instead of the raw redirect.
     await mapWithConcurrency(toResolve, RESOLVE_CONCURRENCY, async (job) => {
       const outcome = await resolveDirectApplyUrl(job.link);
-      if (!outcome.url) {
-        filteredOut++;
+      if (outcome.url) {
+        upsertJobPosting({ ...job, link: outcome.url }, cell.fn, cell.city);
+        resolvedDirectCount++;
+      } else {
+        upsertJobPosting(job, cell.fn, cell.city);
+        rawRedirectCount++;
         if (outcome.reason === "aggregator") {
           aggregatorCount++;
           aggregatorDomainCounts.set(outcome.domain, (aggregatorDomainCounts.get(outcome.domain) ?? 0) + 1);
         } else {
           unresolvedCount++;
         }
-        return;
       }
-      upsertJobPosting({ ...job, link: outcome.url }, cell.fn, cell.city);
       jobsUpserted++;
       jobsNew++;
     });
+
+    // Past MAX_RESOLUTIONS_PER_RUN -- shown too, just without spending an
+    // outbound resolution request on them this run (that cap exists to
+    // bound how many simultaneous requests hit third-party sites in one
+    // invocation, not to gate whether a job appears -- see this file's top
+    // comment on RESOLVE_CONCURRENCY and the earlier Jooble/Cloudflare
+    // incident it references).
+    for (const job of skippedByCap) {
+      upsertJobPosting(job, cell.fn, cell.city);
+      rawRedirectCount++;
+      jobsUpserted++;
+      jobsNew++;
+    }
   }
 
   const removed = pruneStaleJobPostings();
@@ -267,19 +310,21 @@ export async function POST(req: Request) {
     queriesFailed,
     jobsUpserted,
     jobsNew,
-    filteredOut,
-    // The breakdown behind filteredOut -- see the counters' own comments
-    // above. topAggregatorDomains is sorted by count, most-hit first, so
-    // "everything landed back on adzuna.in" (the resolver never actually
-    // reaching a real HTTP redirect) is immediately visible instead of
-    // looking identical to "these 150 genuinely were portal listings".
+    // Every new job is shown now -- resolvedDirectCount got a verified
+    // employer/ATS URL from resolution; rawRedirectCount is shown with
+    // Adzuna's own redirect link instead (resolution failed, or was
+    // skipped past MAX_RESOLUTIONS_PER_RUN -- see the resolution loop's
+    // own comment for why). unresolvedCount/aggregatorCount/
+    // topAggregatorDomains only describe the rawRedirectCount jobs where
+    // resolution was actually attempted, not the ones skipped by the cap.
+    resolvedDirectCount,
+    rawRedirectCount,
     unresolvedCount,
     aggregatorCount,
     topAggregatorDomains: Array.from(aggregatorDomainCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)
       .map(([domain, count]) => `${domain} (${count})`),
-    filteredCapped,
     staleRemoved: removed,
     poolSize: countActiveJobPostings(),
     adzunaUsage: getAdzunaUsage(),
