@@ -17,8 +17,46 @@
 // source_url is immutable once set (see the ON CONFLICT clause in
 // lib/repo/jobPostings.ts), so a user's own opportunity list never triggers
 // this, and a weekly refresh only ever resolves genuinely new postings.
+//
+// Uses `impit` (github.com/apify/impit), not Node's built-in fetch, to
+// actually follow Adzuna's redirect_url. Found the hard way, via the admin
+// dashboard's "Test resolver" probe: Adzuna's click-tracking endpoint does
+// TLS fingerprinting on top of whatever User-Agent header a request sends
+// -- Node's fetch (undici) has a TLS handshake signature that doesn't match
+// a real Chrome browser no matter what headers are set, so instead of
+// redirecting, Adzuna served back an HTTP 200 "Access Denied" page still on
+// adzuna.in -- which then matched AGGREGATOR_DOMAINS below and every single
+// job got silently dropped as if it were a portal listing. impit is a
+// native module (prebuilt binaries, no compiler needed on deploy) that
+// genuinely impersonates a real browser's TLS handshake, not just its
+// headers -- see impitClient below. Direct founder call after seeing this
+// explained: worth the new dependency to keep the "never job portals"
+// promise intact, over either dropping server-side verification (would
+// let some jobs slip through to LinkedIn/Naukri again) or running a real
+// headless browser per resolution (too heavy for this server's limited
+// RAM at this concurrency).
+
+import { Impit } from "impit";
 
 const RESOLVE_TIMEOUT_MS = 6000;
+
+// One shared instance -- reused (not re-created) across every resolution
+// in a refresh-pool run, matching impit's own guidance that one Impit
+// instance's connection pool is meant to be reused across requests.
+// vanillaFallback: true means a site that doesn't recognize the Chrome
+// impersonation degrades to a plain request instead of hard-failing --
+// this only ever needs to WORK, no reason to let an edge case throw.
+// Deliberately no manual User-Agent header here (unlike the old fetch-based
+// version) -- impit's `browser: "chrome"` sets a full, internally-consistent
+// set of impersonation headers to match its TLS fingerprint, and setting
+// our own User-Agent would override just that one header, right back into
+// the same header/fingerprint mismatch this whole change exists to fix.
+const impitClient = new Impit({
+  browser: "chrome",
+  vanillaFallback: true,
+  followRedirects: true,
+  timeout: RESOLVE_TIMEOUT_MS,
+});
 
 // Job marketplaces / aggregators to exclude -- matched by hostname suffix,
 // so "www.linkedin.com" and "in.linkedin.com" both match "linkedin.com".
@@ -88,27 +126,22 @@ export function isAggregatorDomain(url: string): boolean {
 // immediately to free the connection instead of buffering a full HTML page
 // per job.
 export async function resolveFinalUrl(url: string): Promise<string | null> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS);
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      redirect: "follow",
-      signal: controller.signal,
-      headers: {
-        "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-      },
-    });
+    const res = await impitClient.fetch(url, { method: "GET", redirect: "follow" });
     // Free the connection without buffering the body -- we only need the
-    // final URL, not the page content.
+    // final URL (res.url -- impit resolves this to the post-redirect
+    // address the same way the Fetch API does), not the page content.
+    // impit's response body is a standard ReadableStream, same cancel()
+    // contract as the fetch-based version this replaced.
     res.body?.cancel().catch(() => {});
     if (!res.url) return null;
     return res.url;
   } catch {
+    // Covers a timeout (impitClient's own `timeout` option above), a
+    // network failure, or any other transport-level error impit throws --
+    // same fail-closed contract as before (caller treats this identically
+    // to "resolved but it's a portal").
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 
