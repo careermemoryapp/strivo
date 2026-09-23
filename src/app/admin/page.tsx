@@ -434,7 +434,8 @@ export default function AdminDashboardPage() {
   };
   const [oppTestResult, setOppTestResult] = useState<{
     queried: number;
-    results: { title: string; company: string; ok: boolean; finalUrl: string | null; reason: string | null; domain: string | null }[];
+    poolSizeAfter?: number;
+    results: { title: string; company: string; ok: boolean; finalUrl: string | null; reason: string | null; domain: string | null; saved: boolean }[];
     // Raw look at whatever the FIRST sample job's redirect actually
     // returned, tried three ways -- plain / with a Referer header / with a
     // Referer plus a cookie picked up from Adzuna's own homepage first --
@@ -1367,7 +1368,8 @@ export default function AdminDashboardPage() {
             {oppTestResult && (
               <div className="mt-2 space-y-1.5">
                 <p className="text-[12.5px] text-ink-soft">
-                  Test query used 1 Adzuna call · {oppTestResult.results.length} of {oppTestResult.queried} results checked:
+                  Test query used 1 Adzuna call · {oppTestResult.results.length} of {oppTestResult.queried} results checked
+                  and saved to the pool{oppTestResult.poolSizeAfter != null ? ` · Pool size now: ${oppTestResult.poolSizeAfter}` : ""}:
                 </p>
                 {oppTestResult.results.map((r, i) => (
                   <div key={i} className="rounded-[10px] border border-[#f5f2fa] p-2 text-[12px]">
@@ -1377,10 +1379,13 @@ export default function AdminDashboardPage() {
                     {r.ok ? (
                       <span className="text-emerald-700">✓ resolved to {r.finalUrl}</span>
                     ) : (
-                      <span className="text-red-600">
-                        ✗ {r.reason === "aggregator" ? `landed on a denylisted domain (${r.domain})` : "couldn't resolve (network/timeout)"}
+                      <span className="text-amber-700">
+                        ⚠ {r.reason === "aggregator" ? `landed on a denylisted domain (${r.domain})` : "couldn't resolve (network/timeout)"} —
+                        saved with Adzuna&apos;s own redirect link instead
                       </span>
                     )}
+                    <br />
+                    <span className="text-ink-faint">{r.saved ? "Newly saved to job_postings" : "Already in job_postings — last_seen_at bumped"}</span>
                   </div>
                 ))}
                 {oppTestResult.debug && (
