@@ -68,17 +68,29 @@ const FIT_CONFIG: Record<
 // entrance-animation state -- see the `entered` comment below for why that
 // turned out to matter. `onFeedback` is the parent's sendFeedback, passed
 // through rather than duplicated here since the parent also owns
-// reactingIds/dismissedIds (the removal timer needs to survive this card
-// unmounting from `visible`, which a card-local timer wouldn't).
+// feedbackGiven (it has to survive this one card re-sorting to a different
+// position in the list, which a card-local state wouldn't).
+//
+// `feedback` used to be a boolean `reacting` that made the card fade out
+// and get removed from the list entirely a moment after either button was
+// tapped. Founder feedback after using it for real: the 5 test jobs in the
+// pool were all genuinely relevant, and having a "Fit" tap make the card
+// vanish just like a "Not a fit" tap did was actively wrong -- liking
+// something shouldn't lose it. Tapping Not a fit shouldn't lose it either,
+// just deprioritize it. So neither tap removes a card anymore; only a
+// "not a fit" tap sinks it to the bottom of the list (see sortedVisible in
+// the parent) and swaps its buttons for a static marker below, so it's
+// still fully visible/readable (and still has an Apply link) but reads as
+// "already judged, out of the way" rather than "gone."
 function OpportunityCardItem({
   opp,
   index,
-  reacting,
+  feedback,
   onFeedback,
 }: {
   opp: OpportunityCard;
   index: number;
-  reacting: boolean;
+  feedback: "relevant" | "not_for_me" | null;
   onFeedback: (jobId: string, feedback: "relevant" | "not_for_me") => void;
 }) {
   const [shown, setShown] = useState(false);
@@ -92,42 +104,34 @@ function OpportunityCardItem({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  // First attempt at this used globals.css's shared `animate-fade-in-up`
-  // (a CSS @keyframes *animation*) for the entrance, stripped via
-  // onAnimationEnd once it finished, so the exit transition below could
-  // take over cleanly -- a finished animation with fill-mode "both" holds
-  // its own end-state opacity/transform at a cascade priority ABOVE an
-  // ordinary utility class targeting the same properties, for as long as
-  // the animation class stays on the element. That fix only half-worked:
-  // tapping Fit/Not a fit BEFORE the entrance animation had finished (very
-  // easy to do -- the whole point of the stagger is some cards are still
-  // mid-entrance when the list first renders) put `reacting`'s opacity-0
-  // in a straight fight with the still-live entrance animation's opacity,
-  // and the animation won every time, so the card visibly did nothing
-  // right up until it hit `dismissedIds` and was yanked from the DOM --
-  // exactly the bug this is fixing, just gated on timing instead of always.
+  // Entrance only now -- built on a plain CSS *transition* (not the
+  // globals.css `animate-fade-in-up` @keyframes animation this used
+  // originally) so it can never lose a cascade-priority fight against
+  // another class touching the same properties, the bug that motivated the
+  // switch in the first place. `shown` flips true one animation frame
+  // after mount (not the same tick -- see the effect above) so the browser
+  // actually paints the initial hidden state before transitioning away
+  // from it.
   //
-  // Rebuilt on plain CSS *transitions* instead, for both entrance AND
-  // exit: transitioning properties always take cascade priority over an
-  // animation's, so there's no fight to lose regardless of when a tap
-  // lands. `shown` flips true one animation frame after mount (not on the
-  // same tick -- see the effect above) so the browser actually paints the
-  // initial hidden state before transitioning away from it; `reacting`
-  // simply overrides `shown`'s classes with the exit ones the instant a
-  // thumb is tapped, whatever phase the card was in.
+  // There's no exit transition anymore -- see the comment above this
+  // component for why a feedback tap no longer removes the card at all.
+  // A "not a fit" tap does dim the card in place (below) once it's
+  // resorted to the bottom of the list; that's a plain opacity/grayscale
+  // swap on the same transition, not a separate animated phase.
   const fitCfg = opp.fit ? FIT_CONFIG[opp.fit] : null;
   const FitIcon = fitCfg?.icon ?? null;
   const isRecent = opp.postedDate && !isNaN(new Date(opp.postedDate).getTime());
-  const phaseClass = reacting
-    ? "opacity-0 scale-95 translate-y-0 duration-200"
-    : shown
-      ? "opacity-100 scale-100 translate-y-0 duration-500"
-      : "opacity-0 scale-100 translate-y-2 duration-500";
+  const dimmed = feedback === "not_for_me";
+  const phaseClass = !shown
+    ? "opacity-0 scale-100 translate-y-2 duration-500"
+    : dimmed
+      ? "opacity-60 scale-100 translate-y-0 duration-300"
+      : "opacity-100 scale-100 translate-y-0 duration-500";
 
   return (
     <Card
-      className={cn("transition-all ease-out", phaseClass)}
-      style={!shown && !reacting ? { transitionDelay: `${Math.min(index, 8) * 60}ms` } : undefined}
+      className={cn("transition-all ease-out", phaseClass, dimmed && "grayscale")}
+      style={!shown ? { transitionDelay: `${Math.min(index, 8) * 60}ms` } : undefined}
     >
       <div className="flex items-start gap-3">
         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary text-[16px] font-bold">
@@ -169,26 +173,40 @@ function OpportunityCardItem({
       {opp.reason && <p className="mt-2.5 text-[13px] text-ink-soft leading-relaxed">{opp.reason}</p>}
 
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
-        <div className="flex items-center gap-1.5">
-          <button
-            aria-label="Fit"
-            onClick={() => onFeedback(opp.id, "relevant")}
-            disabled={reacting}
-            className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-success/40 hover:bg-success/10 hover:text-success active:scale-95 disabled:pointer-events-none"
-          >
-            <ThumbsUp size={14} />
-            Fit
-          </button>
-          <button
-            aria-label="Not a fit"
-            onClick={() => onFeedback(opp.id, "not_for_me")}
-            disabled={reacting}
-            className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-95 disabled:pointer-events-none"
-          >
+        {/* Once feedback is given, the buttons are replaced by a static
+            marker rather than staying clickable-but-disabled -- a direct
+            founder ask, so a card that's been judged reads as settled
+            (and can't be double-tapped) instead of looking broken. */}
+        {feedback === "not_for_me" ? (
+          <span className="flex items-center gap-1.5 rounded-pill bg-ink-soft/10 px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft">
             <ThumbsDown size={14} />
-            Not a fit
-          </button>
-        </div>
+            Marked not a fit
+          </span>
+        ) : feedback === "relevant" ? (
+          <span className="flex items-center gap-1.5 rounded-pill bg-success/10 px-3 py-1.5 text-[12.5px] font-semibold text-success">
+            <ThumbsUp size={14} />
+            Marked fit
+          </span>
+        ) : (
+          <div className="flex items-center gap-1.5">
+            <button
+              aria-label="Fit"
+              onClick={() => onFeedback(opp.id, "relevant")}
+              className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-success/40 hover:bg-success/10 hover:text-success active:scale-95"
+            >
+              <ThumbsUp size={14} />
+              Fit
+            </button>
+            <button
+              aria-label="Not a fit"
+              onClick={() => onFeedback(opp.id, "not_for_me")}
+              className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12.5px] font-semibold text-ink-soft transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 active:scale-95"
+            >
+              <ThumbsDown size={14} />
+              Not a fit
+            </button>
+          </div>
+        )}
         <a
           href={opp.sourceUrl}
           target="_blank"
@@ -208,18 +226,13 @@ export function OpportunitiesClient() {
   const [data, setData] = useState<OpportunitiesResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  // Local, session-only -- once you've reacted to a card it disappears
-  // from this render shortly after (see reactingIds/REACT_TRANSITION_MS
-  // below) rather than waiting on a re-fetch/re-rank, same "optimistic
-  // local removal" pattern as MemoryCard's delete.
-  const [dismissedIds, setDismissedIds] = useState<Set<string>>(new Set());
-  // Cards in this set render with the fade/slide-out transition below --
-  // populated the instant a thumb is tapped, then the card actually leaves
-  // `visible` (dismissedIds) once that transition has had time to play.
-  // Purely cosmetic -- the feedback write itself (see sendFeedback) doesn't
-  // wait on this.
-  const [reactingIds, setReactingIds] = useState<Set<string>>(new Set());
-  const REACT_TRANSITION_MS = 220;
+  // Local, session-only record of which job a Fit/Not-a-fit tap was given
+  // on and which way -- NOT a removal list. A card whose feedback is
+  // "not_for_me" sinks to the bottom of the list (see sortedVisible below)
+  // and renders dimmed; "relevant" just marks the card in place. Neither
+  // removes it from view -- see the comment above OpportunityCardItem for
+  // why that changed from the original "swipe to dismiss" design.
+  const [feedbackGiven, setFeedbackGiven] = useState<Record<string, "relevant" | "not_for_me">>({});
 
   // The "tell us what you're looking for" form shown on the locked state
   // (see the !data.personalized block below) -- seeded from whatever's
@@ -290,28 +303,32 @@ export function OpportunitiesClient() {
   }, []);
 
   function sendFeedback(jobId: string, feedback: "relevant" | "not_for_me") {
-    setReactingIds((prev) => new Set(prev).add(jobId));
-    // Fire-and-forget, not awaited -- the card's own removal (below) is on
-    // a fixed local timer, not gated on this request completing.
+    setFeedbackGiven((prev) => ({ ...prev, [jobId]: feedback }));
+    // Fire-and-forget, not awaited -- the card's own marker/re-sort above
+    // is purely local state, not gated on this request completing.
     fetch(`/api/opportunities/${jobId}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ feedback }),
     }).catch(() => {
-      // Best-effort -- the card leaves the local list either way, and a
+      // Best-effort -- the local marker/re-sort applies either way, and a
       // failed feedback write just means this one job doesn't get excluded
       // from a future ranking pass. Not worth surfacing an error for a
       // thumbs-up/down tap.
     });
-    // Let the fade/slide-out transition actually play before the card
-    // leaves `visible` -- an instant removal here reads as the card just
-    // vanishing rather than reacting to the tap.
-    setTimeout(() => {
-      setDismissedIds((prev) => new Set(prev).add(jobId));
-    }, REACT_TRANSITION_MS);
   }
 
-  const visible = data?.opportunities.filter((o) => !dismissedIds.has(o.id)) ?? [];
+  const visible = data?.opportunities ?? [];
+  // A "not a fit" tap deprioritizes rather than removes (see feedbackGiven
+  // above) -- sink those to the end of the list, everything else keeps its
+  // original rank order. Array.prototype.sort is stable in the JS engines
+  // this app ships to, so cards within each group (sunk vs. not) keep their
+  // relative order rather than jumping around on every tap.
+  const sortedVisible = [...visible].sort((a, b) => {
+    const aSunk = feedbackGiven[a.id] === "not_for_me" ? 1 : 0;
+    const bSunk = feedbackGiven[b.id] === "not_for_me" ? 1 : 0;
+    return aSunk - bSunk;
+  });
 
   return (
     <div className="pb-6">
@@ -480,8 +497,14 @@ export function OpportunitiesClient() {
 
         {!loading &&
           data?.personalized &&
-          visible.map((opp, i) => (
-            <OpportunityCardItem key={opp.id} opp={opp} index={i} reacting={reactingIds.has(opp.id)} onFeedback={sendFeedback} />
+          sortedVisible.map((opp, i) => (
+            <OpportunityCardItem
+              key={opp.id}
+              opp={opp}
+              index={i}
+              feedback={feedbackGiven[opp.id] ?? null}
+              onFeedback={sendFeedback}
+            />
           ))}
       </div>
     </div>
