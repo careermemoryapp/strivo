@@ -179,11 +179,11 @@ export function checkEngagementNudgeSecret(secret: string | null): boolean {
 // an existing automation's schedule the way suggested_roles was folded
 // onto growth-narrative/run -- this one burns real, budget-capped Adzuna
 // API calls (see ADZUNA_APP_ID's comment in .env.example) every time it
-// fires. Unlike the earlier Jooble integration this replaced, Adzuna's
-// free tier renews monthly rather than being a lifetime cap; this route is
-// meant to run on a MONTHLY crontab entry (see the comment on FUNCTIONS in
-// that route -- the query grid is sized to just fit inside one month's
-// budget). Checked via a request header (`x-opportunities-refresh-secret`)
+// fires. Each call only processes ONE CHUNK of the function grid (see
+// that route's own top comment for the exact math) -- the crontab entry
+// fires on 10 specific days a month, not once, to keep every invocation's
+// calls paced under Adzuna's daily/weekly limits as well as its monthly
+// one. Checked via a request header (`x-opportunities-refresh-secret`)
 // OR an authed admin session (see isAdminAuthed above) -- the admin
 // dashboard's Opportunities section (admin/page.tsx) triggers it straight
 // from the founder's own logged-in browser session, no header secret

@@ -402,24 +402,52 @@ export default function AdminDashboardPage() {
   const [featureFlagsError, setFeatureFlagsError] = useState(false);
   const [togglingFlag, setTogglingFlag] = useState<string | null>(null);
 
-  // Opportunities job pool controls -- manually triggered (no auto-load),
-  // unlike the sections above. "Purge" wipes job_postings outright (see
-  // purgeAllJobPostings' comment for why that's needed -- an ordinary
+  // Opportunities job pool controls. "Purge" wipes job_postings outright
+  // (see purgeAllJobPostings' comment for why that's needed -- an ordinary
   // refresh alone can never fix a job whose apply link was saved before
   // the resolver/denylist existed) and "Refresh" POSTs straight to the
   // same route the monthly cron hits (/api/opportunities/refresh-pool/run)
   // -- reachable here with no header secret at all since this request
   // carries the admin's own session cookie (see isAdminAuthed in
-  // lib/adminAuth.ts).
+  // lib/adminAuth.ts). oppUsage is this app's OWN tally of Adzuna calls
+  // made (see lib/repo/adzunaUsage.ts) -- Adzuna's API itself reports no
+  // remaining-quota figure, so this is the closest thing to a "calls left"
+  // counter available; loaded on mount (unlike Purge/Refresh, which are
+  // manually triggered) so it's visible before either button is touched.
   const [oppPurging, setOppPurging] = useState(false);
   const [oppRefreshing, setOppRefreshing] = useState(false);
   const [oppResult, setOppResult] = useState<string | null>(null);
   const [oppError, setOppError] = useState<string | null>(null);
   const [confirmPurgePool, setConfirmPurgePool] = useState(false);
+  const [oppUsage, setOppUsage] = useState<{
+    poolSize: number;
+    adzunaUsage: { callsThisMonth: number; callsToday: number; monthlyLimit: number; dailyLimit: number };
+  } | null>(null);
 
   const handleUnauthorized = useCallback(() => {
     router.replace("/admin/login");
   }, [router]);
+
+  const loadOpportunitiesStatus = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/opportunities-status");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return;
+      setOppUsage(await res.json());
+    } catch {
+      // Best-effort -- the two buttons below still work without this;
+      // worst case the founder just doesn't see the usage counter.
+    }
+  }, [handleUnauthorized]);
+
+  useEffect(() => {
+    // Deferred via setTimeout, not called directly -- same pattern as
+    // OpportunitiesClient's own fetch-on-mount, which keeps the actual
+    // setState-triggering call out of the effect's synchronous body (see
+    // react-hooks/set-state-in-effect).
+    const t = setTimeout(loadOpportunitiesStatus, 0);
+    return () => clearTimeout(t);
+  }, [loadOpportunitiesStatus]);
 
   const runOpportunitiesPurge = useCallback(async () => {
     setOppPurging(true);
@@ -429,14 +457,15 @@ export default function AdminDashboardPage() {
       if (res.status === 401) return handleUnauthorized();
       if (!res.ok) throw new Error();
       const json = (await res.json()) as { removed: number };
-      setOppResult(`Purged ${json.removed} old job posting${json.removed === 1 ? "" : "s"}. Now click "Refresh job pool now" to rebuild it.`);
+      setOppResult(`Purged ${json.removed} old job posting${json.removed === 1 ? "" : "s"}. Now click "Refresh job pool now" to rebuild the next chunk -- it takes several clicks (or the automated schedule) to fully repopulate, see below.`);
+      loadOpportunitiesStatus();
     } catch {
       setOppError("Couldn't purge the job pool. Try again.");
     } finally {
       setOppPurging(false);
       setConfirmPurgePool(false);
     }
-  }, [handleUnauthorized]);
+  }, [handleUnauthorized, loadOpportunitiesStatus]);
 
   const runOpportunitiesRefresh = useCallback(async () => {
     setOppRefreshing(true);
@@ -447,14 +476,16 @@ export default function AdminDashboardPage() {
       if (!res.ok) throw new Error();
       const json = await res.json();
       setOppResult(
-        `Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Filtered out (portal/unresolved): ${json.filteredOut} · Pool size: ${json.poolSize}`
+        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Filtered out (portal/unresolved): ${json.filteredOut} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
       );
+      if (json.adzunaUsage) setOppUsage({ poolSize: json.poolSize, adzunaUsage: json.adzunaUsage });
     } catch {
       setOppError("Couldn't run the refresh. It may still be running in the background -- check back in a few minutes.");
+      loadOpportunitiesStatus();
     } finally {
       setOppRefreshing(false);
     }
-  }, [handleUnauthorized]);
+  }, [handleUnauthorized, loadOpportunitiesStatus]);
 
   const loadMetrics = useCallback(async () => {
     const res = await fetch("/api/admin/metrics");
@@ -1225,25 +1256,48 @@ export default function AdminDashboardPage() {
         <section className="mb-8">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">Opportunities job pool</p>
           <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {oppUsage && (
+              <div className="mb-3 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                <div className="rounded-[12px] border border-[#f5f2fa] p-2.5">
+                  <p className="text-[11px] text-ink-faint">Adzuna calls this month</p>
+                  <p className="text-[13px] font-semibold text-ink">
+                    {oppUsage.adzunaUsage.callsThisMonth.toLocaleString()} / {oppUsage.adzunaUsage.monthlyLimit.toLocaleString()}
+                    <span className="ml-1.5 font-normal text-ink-faint">
+                      ({Math.max(0, oppUsage.adzunaUsage.monthlyLimit - oppUsage.adzunaUsage.callsThisMonth).toLocaleString()} left)
+                    </span>
+                  </p>
+                </div>
+                <div className="rounded-[12px] border border-[#f5f2fa] p-2.5">
+                  <p className="text-[11px] text-ink-faint">Adzuna calls today · Pool size</p>
+                  <p className="text-[13px] font-semibold text-ink">
+                    {oppUsage.adzunaUsage.callsToday.toLocaleString()} / {oppUsage.adzunaUsage.dailyLimit.toLocaleString()}
+                    <span className="ml-1.5 font-normal text-ink-faint">· {oppUsage.poolSize.toLocaleString()} jobs active</span>
+                  </p>
+                </div>
+              </div>
+            )}
             <p className="text-[13px] text-ink-soft">
-              Rebuilds the shared job pool behind the Opportunities tab. Refresh calls Adzuna across the full
-              city × function grid (see the comment on FUNCTIONS in refresh-pool/run) and can take several
-              minutes to finish — the button will stay in a loading state until it responds.
+              Rebuilds the shared job pool behind the Opportunities tab. Each click of Refresh runs ONE chunk —
+              16 functions × 15 cities = 240 calls — and remembers which chunk comes next, so five clicks make
+              one full pass over every function. This paces calls under Adzuna&apos;s daily and weekly limits, not
+              just the monthly one. The automated schedule (see the crontab entry) does this on its own, twice
+              a month; clicking here manually just runs whatever the next chunk happens to be.
             </p>
             <div className="mt-3 flex flex-wrap gap-2">
               <Button variant="ghost" className="!py-2 !px-3 text-[13px]" loading={oppPurging} onClick={() => setConfirmPurgePool(true)}>
                 Purge job pool
               </Button>
               <Button className="!py-2 !px-3 text-[13px]" loading={oppRefreshing} onClick={runOpportunitiesRefresh}>
-                Refresh job pool now
+                Refresh job pool now (next chunk)
               </Button>
             </div>
             {oppError && <p className="mt-2 text-[13px] text-red-600">{oppError}</p>}
             {oppResult && <p className="mt-2 text-[12.5px] text-ink-soft">{oppResult}</p>}
             <p className="mt-3 text-[11px] text-ink-faint">
               Purge only once, to clear out job listings saved before company-page-only filtering existed (they&apos;ll
-              still show old redirect/portal links until purged and re-fetched) — then click Refresh. After that,
-              Refresh alone is all a normal monthly run needs.
+              still show old redirect/portal links until purged and re-fetched). After a purge, the pool rebuilds
+              gradually as chunks run — either click Refresh five times in a row (once per chunk, a minute or two
+              apart is safest) or just let the automated schedule catch it over its next couple of run-days.
             </p>
           </div>
         </section>

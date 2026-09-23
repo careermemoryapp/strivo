@@ -824,6 +824,37 @@ function migrate(db: DatabaseSync) {
       industry TEXT,
       updated_at TEXT NOT NULL
     );
+
+    -- One row per Adzuna API call actually made (see recordAdzunaCall in
+    -- lib/repo/adzunaUsage.ts, called from refresh-pool/run). Exists only
+    -- because Adzuna's own API returns NO usage/quota-remaining information
+    -- anywhere (no response header, no separate usage endpoint -- confirmed
+    -- against developer.adzuna.com's docs) -- this is the ONLY way to show
+    -- "how many calls used this month" in the admin dashboard, by counting
+    -- our own requests rather than asking Adzuna. Deliberately just a
+    -- timestamp per row (no other columns) -- counts for "this month"/
+    -- "today" are computed by range-querying called_at, not maintained as a
+    -- running total, so there's nothing to keep in sync.
+    CREATE TABLE IF NOT EXISTS adzuna_api_calls (
+      id TEXT PRIMARY KEY,
+      called_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_adzuna_api_calls_called_at ON adzuna_api_calls(called_at);
+
+    -- Single-row cursor for the Opportunities refresh-pool route (see
+    -- lib/repo/refreshPoolState.ts and app/api/opportunities/refresh-pool/
+    -- run). A direct founder call: instead of one giant run covering every
+    -- function every time (975+ Adzuna calls in one shot -- more than
+    -- Adzuna's own 250/day and 1,000/week limits allow), each invocation
+    -- now processes just ONE chunk of the function list (16 functions x 15
+    -- cities = 240 calls) and this row remembers which chunk comes next.
+    -- Always exactly one row (id = 'opportunities') -- an UPSERT keyed on
+    -- id, never appended.
+    CREATE TABLE IF NOT EXISTS refresh_pool_state (
+      id TEXT PRIMARY KEY,
+      chunk_index INTEGER NOT NULL,
+      updated_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

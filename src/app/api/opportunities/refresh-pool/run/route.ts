@@ -4,31 +4,45 @@ import { adzunaConfigured, searchAdzunaJobs, type AdzunaJob } from "@/lib/adzuna
 import { resolveDirectApplyUrl, mapWithConcurrency } from "@/lib/applyLinkResolver";
 import { OPPORTUNITY_CITIES } from "@/lib/geo";
 import { upsertJobPosting, externalIdExists, pruneStaleJobPostings, countActiveJobPostings } from "@/lib/repo/jobPostings";
+import { recordAdzunaCall, getAdzunaUsage } from "@/lib/repo/adzunaUsage";
+import { getRefreshChunkIndex, advanceRefreshChunkIndex } from "@/lib/repo/refreshPoolState";
 
-// Fixed function x city grid -- the entire point of this being fixed
-// (rather than generated per-user) is staying comfortably inside Adzuna's
-// REAL free-tier cap: 1,000 calls/MONTH (confirmed against Adzuna's own
-// pricing page -- NOT 2,500, an earlier wrong figure in this file's
-// history). One page per cell, one run = FUNCTIONS.length *
-// OPPORTUNITY_CITIES.length = 975 calls. This route is meant to run on a
-// crontab entry ONCE A MONTH -- a direct founder call: job listings aren't
-// something people check for minute-to-minute freshness, they'd rather
-// have a much BROADER pool than a frequently-refreshed narrow one. 975 * 1
-// = 975/month, a 25-call buffer for manual runs. Still callable by hand
-// too, same as before.
+// Fixed function x city grid, PACED IN CHUNKS -- a direct founder call,
+// worked through with exact numbers, after finding that a single sweep of
+// the whole grid (975+ calls) comfortably fits Adzuna's 2,500/MONTH cap
+// but blows straight through its 250/DAY and 1,000/WEEK ones (all four
+// limits are Adzuna's own, from https://developer.adzuna.com/docs/
+// terms_of_service). So this route no longer queries every function on
+// every invocation -- it queries ONE CHUNK of CHUNK_SIZE functions (all
+// OPPORTUNITY_CITIES.length cities) and remembers where it left off (see
+// lib/repo/refreshPoolState.ts), advancing to the next chunk each time
+// it's called. The math, worked through end to end:
+//   - CHUNK_SIZE (16) x 15 cities = 240 calls per invocation -- under the
+//     250/day cap with a small margin.
+//   - FUNCTIONS.length (80) / CHUNK_SIZE (16) = 5 chunks make one full
+//     pass over every function -- 5 x 240 = 1,200 calls per pass.
+//   - The crontab entry (see docs/README, or ask -- it's given as an exact
+//     schedule) fires on 10 specific days a month, grouped 1/3/5/7/9 and
+//     15/17/19/21/23 -- two passes a month, spaced so no run-day is ever
+//     more than 4 chunks from another within any 7-day window (4 x 240 =
+//     960, under the 1,000/week cap), and 10 x 240 = 2,400/month, under
+//     the 2,500/month cap.
+// A missed or late firing doesn't break this -- the cursor just resumes
+// at whatever chunk comes next whenever this route is next called,
+// instead of being tied to a specific calendar date.
 //
 // Per a direct founder call: city coverage stays FIXED (see
 // OPPORTUNITY_CITIES in lib/geo.ts -- 15 hand-picked major cities, not "as
-// many as possible"), and the query budget goes toward much broader
-// FUNCTION coverage instead -- 40 -> 65 functions here, 15 cities, 975/run
-// (65 * 15). Seniority is deliberately NOT encoded into these query
-// strings (no "Senior Product Manager" vs "Associate Product Manager" as
-// separate cells, and no extra Adzuna call spent on it) -- Adzuna already
-// returns a spread of levels for a plain title, and matching a specific
-// person's seniority against that spread happens per-user in
-// rankOpportunities (lib/ai.ts), which is an OpenAI call, not an Adzuna
-// one -- it runs whenever a user's own ranking needs recomputing, entirely
-// separate from this route's budget.
+// many as possible"), and the query budget goes toward broader FUNCTION
+// coverage instead -- grown 65 -> 80 alongside this chunking change.
+// Seniority is deliberately NOT encoded into these query strings (no
+// "Senior Product Manager" vs "Associate Product Manager" as separate
+// cells, and no extra Adzuna call spent on it) -- Adzuna already returns a
+// spread of levels for a plain title, and matching a specific person's
+// seniority against that spread happens per-user in rankOpportunities
+// (lib/ai.ts), which is an OpenAI call, not an Adzuna one -- it runs
+// whenever a user's own ranking needs recomputing, entirely separate from
+// this route's budget.
 const FUNCTIONS = [
   "Product Manager",
   "Strategy Manager",
@@ -95,29 +109,48 @@ const FUNCTIONS = [
   "Recruiter",
   "Underwriter",
   "Actuary",
-];
+  // Added alongside the chunking change (65 -> 80) -- several of these
+  // (Automobile Engineer, Production Manager, Plant Manager, Maintenance
+  // Engineer) also directly help automotive-industry matches, per a
+  // direct founder ask.
+  "Automobile Engineer",
+  "Production Manager",
+  "Plant Manager",
+  "Maintenance Engineer",
+  "Design Engineer",
+  "R&D Engineer",
+  "Field Sales Executive",
+  "Key Account Manager",
+  "Insurance Manager",
+  "Wealth Manager",
+  "Relationship Manager",
+  "Data Engineer",
+  "Machine Learning Engineer",
+  "QA Engineer",
+  "Technical Writer",
+]; // 80 total -- must stay a multiple of CHUNK_SIZE (16) or the chunking math above breaks
 
 const CITIES = OPPORTUNITY_CITIES;
 
-// How many brand-new (never-before-seen external_id) postings this run
-// will spend an apply-link resolution request on -- see
-// lib/applyLinkResolver.ts. Bounded so a run that suddenly turns up a huge
-// backlog of new listings (e.g. the very first run after broadening the
-// grid) can't balloon into thousands of outbound HTTP requests to
+// See the top-of-file comment for the exact math this size was chosen
+// from -- CHUNK_SIZE x CITIES.length must stay comfortably under 250 (the
+// daily cap).
+const CHUNK_SIZE = 16;
+const TOTAL_CHUNKS = FUNCTIONS.length / CHUNK_SIZE;
+
+// How many brand-new (never-before-seen external_id) postings this
+// invocation will spend an apply-link resolution request on -- see
+// lib/applyLinkResolver.ts. Bounded so a chunk that turns up a big backlog
+// of new listings can't balloon into hundreds of outbound HTTP requests to
 // third-party sites in one shot; anything over the cap just gets picked up
-// on a LATER run instead, since the same Adzuna query tends to keep
-// returning the same listings run to run. Raised from 300 (the twice-a-
-// month version of this route) to 600 now that this only runs once a
-// month -- a full month's worth of new postings across a much bigger grid
-// is a bigger backlog, and "picked up next run" now means "next month,"
-// not "in two weeks," so it's worth spending more of this run's time
-// clearing it.
-const MAX_RESOLUTIONS_PER_RUN = 600;
-// At most this many resolution requests in flight at once, across the
-// whole run -- a burst of hundreds of simultaneous requests from one
-// server IP is exactly what got the earlier Jooble integration blocked by
-// Cloudflare; staying modest here is deliberate, not just being slow for
-// its own sake.
+// on a LATER chunk instead. Sized down from 600 (the old whole-grid-in-
+// one-run version of this route) now that one invocation is ~1/5th the
+// size.
+const MAX_RESOLUTIONS_PER_RUN = 150;
+// At most this many resolution requests in flight at once -- a burst of
+// hundreds of simultaneous requests from one server IP is exactly what
+// got the earlier Jooble integration blocked by Cloudflare; staying
+// modest here is deliberate, not just being slow for its own sake.
 const RESOLVE_CONCURRENCY = 8;
 // How many Adzuna queries run at once. Adzuna's own docs don't publish a
 // hard per-second rate limit, so this stays conservative rather than
@@ -126,11 +159,13 @@ const QUERY_CONCURRENCY = 5;
 
 type QueryCell = { fn: string; city: string };
 
-// Called on a monthly crontab entry (see the comment on FUNCTIONS above),
-// or by hand from an admin session / curl with the
-// x-opportunities-refresh-secret header. Best-effort per cell: one query
+// Called on the crontab schedule described above, or by hand from an
+// admin session / curl with the x-opportunities-refresh-secret header --
+// EVERY call (cron or manual) processes exactly one chunk and advances
+// the cursor, so there's only one code path to reason about regardless of
+// who triggers it. Best-effort per cell within the chunk: one query
 // failing (rate limit, transient network error) shouldn't abort the rest
-// of the grid, same posture as every other /run route's per-user loop.
+// of the chunk.
 export async function POST(req: Request) {
   const authed = (await isAdminAuthed()) || checkOpportunitiesRefreshSecret(req.headers.get("x-opportunities-refresh-secret"));
   if (!authed) {
@@ -139,6 +174,9 @@ export async function POST(req: Request) {
   if (!adzunaConfigured()) {
     return NextResponse.json({ error: "ADZUNA_APP_ID/ADZUNA_APP_KEY not configured" }, { status: 500 });
   }
+
+  const chunkIndex = getRefreshChunkIndex();
+  const chunkFunctions = FUNCTIONS.slice(chunkIndex * CHUNK_SIZE, (chunkIndex + 1) * CHUNK_SIZE);
 
   let queriesFailed = 0;
   let jobsUpserted = 0; // includes both brand-new and already-known (refreshed) postings
@@ -151,10 +189,15 @@ export async function POST(req: Request) {
   let filteredCapped = 0; // new posting, but this run already hit MAX_RESOLUTIONS_PER_RUN
 
   const cells: QueryCell[] = [];
-  for (const fn of FUNCTIONS) for (const city of CITIES) cells.push({ fn, city });
+  for (const fn of chunkFunctions) for (const city of CITIES) cells.push({ fn, city });
 
   const cellResults = await mapWithConcurrency(cells, QUERY_CONCURRENCY, async (cell) => {
     const jobs = await searchAdzunaJobs(cell.fn, cell.city, 1);
+    // Recorded regardless of outcome -- a failed request (including a 429
+    // that exhausted its retries in searchAdzunaJobs) still went out over
+    // the network and plausibly still counts against Adzuna's own limits.
+    // See lib/repo/adzunaUsage.ts.
+    recordAdzunaCall();
     if (!jobs) {
       queriesFailed++;
       return null;
@@ -199,8 +242,13 @@ export async function POST(req: Request) {
   }
 
   const removed = pruneStaleJobPostings();
+  advanceRefreshChunkIndex(TOTAL_CHUNKS);
 
   return NextResponse.json({
+    chunkIndex, // 0-based -- which chunk this invocation just processed
+    totalChunks: TOTAL_CHUNKS,
+    functionsThisChunk: chunkFunctions,
+    nextChunkIndex: (chunkIndex + 1) % TOTAL_CHUNKS,
     queriesRun: cells.length,
     queriesFailed,
     jobsUpserted,
@@ -209,5 +257,6 @@ export async function POST(req: Request) {
     filteredCapped,
     staleRemoved: removed,
     poolSize: countActiveJobPostings(),
+    adzunaUsage: getAdzunaUsage(),
   });
 }

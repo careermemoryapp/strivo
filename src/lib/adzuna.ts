@@ -5,14 +5,30 @@
 // Opportunities tab. Replaces the earlier Jooble integration (see git
 // history / lib/jooble.ts, now unused): Jooble's free tier was a
 // 500-request LIFETIME cap and its India endpoint started returning
-// Cloudflare bot-challenge pages from this app's server IP. Adzuna's free
-// tier renews MONTHLY (1,000 requests/month as of writing -- confirmed
-// against Adzuna's own pricing page; an earlier note here said 2,500,
-// which was wrong -- see ADZUNA_APP_ID's comment in .env.example) and uses
-// a single API with a
-// country-code URL segment, which also fits this product's "India first,
-// other countries later" roadmap better than Jooble's one-key-per-country
-// design would have.
+// Cloudflare bot-challenge pages from this app's server IP.
+//
+// Adzuna's own default limits, straight from
+// https://developer.adzuna.com/docs/terms_of_service ("Default API access
+// limits"): 25 hits/minute, 250 hits/day, 1,000 hits/week, 2,500 hits/
+// month. A note that used to live here said the monthly figure was
+// 1,000 -- that was wrong (misread from a secondary source, not Adzuna's
+// own docs) and has been corrected. 2,500/month is the real ceiling;
+// there is no API response header or separate endpoint that reports
+// calls remaining (confirmed against the same docs) -- see
+// lib/repo/adzunaUsage.ts for how this app tracks its own usage instead.
+// Note the DAILY cap (250) is tighter, in practice, than the monthly one
+// for this app's usage pattern: one refresh-pool run is 975 calls (see
+// FUNCTIONS in app/api/opportunities/refresh-pool/run), comfortably under
+// the monthly cap but nearly 4x the daily one if that limit is actually
+// enforced. An earlier 80-call test run completed with zero failures,
+// which suggests the per-day/per-minute figures aren't strictly
+// enforced in practice for a burst this size -- but see the 429 retry
+// below, added as a safety net rather than assuming that holds at 975
+// calls too.
+//
+// Uses a single API with a country-code URL segment, which also fits
+// this product's "India first, other countries later" roadmap better
+// than Jooble's one-key-per-country design would have.
 //
 // Auth is an (app_id, app_key) PAIR, not a single key like Jooble --
 // both are required query params on every request, confirmed against
@@ -68,6 +84,20 @@ function formatSalary(min: number | undefined, max: number | undefined, isPredic
   return isPredicted ? `${range} (estimated)` : range;
 }
 
+// Retries a 429 (rate limited) up to twice with a growing backoff before
+// giving up -- see the top-of-file comment on Adzuna's documented 25/min
+// and 250/day caps. A single non-429 failure still fails immediately (no
+// point retrying a 4xx/5xx that isn't about rate limiting), same as
+// before this existed.
+async function fetchWithRetry(url: string, attempt = 1): Promise<Response> {
+  const res = await fetch(url, { method: "GET" });
+  if (res.status === 429 && attempt < 3) {
+    await new Promise((resolve) => setTimeout(resolve, 3000 * attempt));
+    return fetchWithRetry(url, attempt + 1);
+  }
+  return res;
+}
+
 // One page of results for one (keywords, location) query. Returns null on
 // any failure (missing credentials, network error, non-200 response,
 // unexpected shape) rather than throwing -- refresh-pool/run calls this
@@ -91,7 +121,7 @@ export async function searchAdzunaJobs(
     url.searchParams.set("results_per_page", "20");
     url.searchParams.set("content-type", "application/json");
 
-    const res = await fetch(url.toString(), { method: "GET" });
+    const res = await fetchWithRetry(url.toString());
     if (!res.ok) {
       console.error(`Adzuna search failed: ${res.status} ${res.statusText}`);
       return null;

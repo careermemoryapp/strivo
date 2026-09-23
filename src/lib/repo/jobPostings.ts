@@ -86,14 +86,16 @@ export function upsertJobPosting(job: AdzunaJob, functionTag: string, cityTag: s
 // call -- that's a SEPARATE, per-job freshness check (see the 30-day
 // filter in lib/opportunities.ts, driven by posted_date) that decides what
 // a USER sees. This constant only decides what stays in the raw pool at
-// all. refresh-pool/run now runs once a MONTH (see the comment on
-// FUNCTIONS in that route), so this has to comfortably outlive a month --
-// a value close to 30 would silently empty the entire pool for days at the
-// end of every cycle, before the next run's upserts land (found as a real
-// bug: this was left at 10 from when refresh ran daily/weekly, so for most
-// of a month listActiveJobPostings/countActiveJobPostings were returning
-// nothing at all). 40 gives a ~10-day cushion for a late cron fire or a
-// skipped manual run without silently going blank.
+// all. refresh-pool/run now processes the function grid in paced CHUNKS
+// (see that route's top comment), so any single function only actually
+// gets re-queried (and its jobs' last_seen_at bumped) about once every
+// ~14-16 days, not every run -- this has to comfortably outlive that gap.
+// A value close to 15 would silently empty parts of the pool between a
+// function's chunk-runs (found as a real bug when this was still a
+// simple once-a-month design left over at 10 from when refresh ran daily/
+// weekly: for most of a month listActiveJobPostings/countActiveJobPostings
+// were returning nothing at all). 40 gives a large cushion for a late/
+// skipped cron fire on top of the ~15-day cadence.
 const STALE_AFTER_DAYS = 40;
 
 export function listActiveJobPostings(limit = 500): JobPosting[] {
