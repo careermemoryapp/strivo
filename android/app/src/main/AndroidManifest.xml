@@ -44,14 +44,14 @@
                  handleAppLinkIntent for what happens once the link lands
                  here).
 
-                 IMPORTANT: scoped to only the specific paths real emails
-                 link to (/blog, /record, /memories, /chats, /home; see
-                 BLOG_CTA_PATHS in repo/blogPosts.ts), NOT the whole host.
-                 An earlier version of this filter covered all of
-                 https://strivo.ai/*, which broke Google Sign-In for every
-                 user once verification finished propagating: the sign-in
-                 flow opens the system browser to /mobile-google-start,
-                 Google eventually redirects that browser tab to
+                 IMPORTANT: scoped to only specific paths real emails link
+                 to (/blog, /record, /memories, /chats; see BLOG_CTA_PATHS
+                 in repo/blogPosts.ts), NOT the whole host. An earlier
+                 version of this filter covered all of https://strivo.ai/*,
+                 which broke Google Sign-In for every user once
+                 verification finished propagating: the sign-in flow opens
+                 the system browser to /mobile-google-start, Google
+                 eventually redirects that browser tab to
                  https://strivo.ai/api/auth/callback/google, and once this
                  app is a verified handler for strivo.ai, Android hijacks
                  that in-browser redirect into this app's own WebView mid
@@ -61,7 +61,22 @@
                  for every account, every time. Scoping to specific paths
                  keeps the email-deep-link feature working while leaving
                  /api/auth/*, /mobile-google-start, and /login alone so
-                 they're never eligible for this interception. -->
+                 they're never eligible for this interception.
+
+                 /home was ALSO removed from this list (2026-09-24), even
+                 though it's a valid BLOG_CTA_PATHS target, after a
+                 recurring "signed in successfully, still bounced back to
+                 login" report that traced to this exact bug class: the
+                 sign-in flow's LAST hop (see /api/auth/mobile-consume)
+                 sets the session cookie and 302-redirects the WebView to
+                 https://strivo.ai/home. With /home verified, that redirect
+                 was eligible for the identical hijack-into-a-fresh-WebView-
+                 instance failure described above, just at the final hop
+                 instead of the callback one. A drip-email link straight to
+                 /home now opens the phone's regular browser instead of the
+                 app for someone with it installed (still works, just not a
+                 direct app-open); an accepted trade for closing a login
+                 bug over keeping one deep-link target's shortcut. -->
             <intent-filter android:autoVerify="true">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -70,7 +85,6 @@
                 <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/record" />
                 <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/memories" />
                 <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/chats" />
-                <data android:scheme="https" android:host="strivo.ai" android:pathPrefix="/home" />
             </intent-filter>
 
         </activity>

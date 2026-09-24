@@ -40,7 +40,15 @@ export async function GET(req: NextRequest) {
     secure: true,
     sameSite: "lax",
     path: "/",
-    maxAge: 60 * 60 * 24 * 30, // matches NextAuth's default JWT session maxAge
+    // Matches authOptions.session.maxAge in lib/auth.ts (14 days, not
+    // next-auth's own 30-day default -- this used to say "matches
+    // NextAuth's default JWT session maxAge," which was true of the
+    // library default but not of this app's own shortened config, so the
+    // cookie set here was outliving the session it was meant to represent
+    // by 16 days). Found and fixed 2026-09-24 alongside the /home App
+    // Links removal above -- not itself the cause of that bug, but the
+    // same investigation surfaced it.
+    maxAge: 14 * 24 * 60 * 60,
   });
   return res;
 }

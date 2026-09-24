@@ -54,6 +54,18 @@ type OpportunitiesResponse = {
 // moved from an ad hoc amber to the shared --color-success token (green
 // reads as unambiguously positive, where amber read more like a caution),
 // and possible stays the neutral ink-soft grey it always was.
+// rankOpportunities (lib/ai.ts) writes `reason` as a lowercase-first
+// sentence fragment (its prompt asks for something like "your background
+// in driving organizational change...", meant to continue a lead-in that
+// no longer exists now that it's shown as its own standalone line -- see
+// the reason callout below). Fixed at display time rather than re-tuning
+// the prompt: this guarantees correct capitalization for every reason
+// already sitting in the database too, not just ones generated from here
+// on.
+function capitalizeFirst(text: string): string {
+  return text.length > 0 ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
 const FIT_CONFIG: Record<
   NonNullable<OpportunityCard["fit"]>,
   { label: string; icon: typeof Sparkles | null; badgeClass: string }
@@ -170,21 +182,24 @@ function OpportunityCardItem({
           {(opp.company?.trim()?.[0] ?? opp.title.trim()[0] ?? "?").toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-start justify-between gap-2">
-            <p className={cn("min-w-0 font-semibold text-ink leading-snug", featured && "text-[16px]")}>{opp.title}</p>
-            {fitCfg && (
-              <span
-                className={cn(
-                  "inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                  fitCfg.badgeClass
-                )}
-              >
-                {FitIcon && <FitIcon size={12} />}
-                {fitCfg.label}
-              </span>
-            )}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-ink-soft">
+          {/* Title kept to one line (truncated with an ellipsis rather than
+              wrapping) and the fit badge moved onto its own row underneath
+              -- a direct founder ask. Previously the badge sat inline next
+              to the title, which was routinely pushing a long title onto
+              two or three lines instead of the one it needed. */}
+          <p className={cn("truncate font-semibold text-ink leading-snug", featured && "text-[16px]")}>{opp.title}</p>
+          {fitCfg && (
+            <span
+              className={cn(
+                "mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                fitCfg.badgeClass
+              )}
+            >
+              {FitIcon && <FitIcon size={12} />}
+              {fitCfg.label}
+            </span>
+          )}
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[12.5px] text-ink-soft">
             {opp.company && <span className="font-medium">{opp.company}</span>}
             {opp.location && (
               <span className="inline-flex items-center gap-1">
@@ -210,7 +225,7 @@ function OpportunityCardItem({
       {opp.reason && (
         <div className="mt-2.5 flex items-start gap-1.5 rounded-input bg-brand-primary-soft/50 px-2.5 py-2">
           <Sparkles size={13} className="mt-0.5 shrink-0 text-brand-primary" />
-          <p className="text-[12.5px] text-ink leading-relaxed">{opp.reason}</p>
+          <p className="text-[12.5px] text-ink leading-relaxed">{capitalizeFirst(opp.reason)}</p>
         </div>
       )}
 
