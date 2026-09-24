@@ -37,6 +37,12 @@ type OpportunityCard = {
   postedDate: string | null;
   fit: "strong" | "good" | "possible" | null;
   reason: string | null;
+  // Which way (if any) the user already reacted to this job, per the last
+  // server response -- lets a mark survive a refresh/tab-away instead of
+  // only lasting for the feedbackGiven state's own in-memory lifetime (see
+  // the hydration step in load() below, and getFeedbackMap in
+  // lib/repo/userOpportunities.ts for the read side of this fix).
+  feedback: "relevant" | "not_for_me" | null;
 };
 
 type JobPreferences = { city: string | null; function: string | null; industry: string | null };
@@ -68,11 +74,31 @@ function capitalizeFirst(text: string): string {
 
 const FIT_CONFIG: Record<
   NonNullable<OpportunityCard["fit"]>,
-  { label: string; icon: typeof Sparkles | null; badgeClass: string }
+  { label: string; icon: typeof Sparkles | null; badgeClass: string; accentClass: string }
 > = {
-  strong: { label: "Strong fit", icon: Sparkles, badgeClass: "bg-brand-primary-soft text-brand-primary" },
-  good: { label: "Good fit", icon: CheckCircle2, badgeClass: "bg-success/10 text-success" },
-  possible: { label: "Worth exploring", icon: null, badgeClass: "bg-ink-soft/10 text-ink-soft" },
+  // accentClass feeds the left accent strip below (an absolutely-positioned
+  // div, not a border utility -- a `border-l-4` competes with the Card
+  // component's own border classes for the same CSS property and loses
+  // unpredictably depending on class order, the same class of bug the
+  // entrance-animation comment above already called out for `transition`).
+  strong: {
+    label: "Strong fit",
+    icon: Sparkles,
+    badgeClass: "bg-brand-primary-soft text-brand-primary",
+    accentClass: "bg-gradient-brand",
+  },
+  good: {
+    label: "Good fit",
+    icon: CheckCircle2,
+    badgeClass: "bg-success/10 text-success",
+    accentClass: "bg-success",
+  },
+  possible: {
+    label: "Worth exploring",
+    icon: null,
+    badgeClass: "bg-ink-soft/10 text-ink-soft",
+    accentClass: "bg-ink-soft/40",
+  },
 };
 
 // Split out from the main list render so each card can track its own
@@ -164,6 +190,18 @@ function OpportunityCardItem({
       )}
       style={!shown ? { transitionDelay: `${Math.min(index, 8) * 60}ms` } : undefined}
     >
+      {/* Left accent strip, colored by fit tier -- absolutely positioned
+          (not a border-l utility) so it can't lose a cascade fight against
+          the Card component's own `border` classes, and clipped to the
+          card's rounded corners by the `overflow-hidden` above rather than
+          needing its own rounding. Skipped on featured cards: those already
+          carry the gradient wash + "Top match" badge as their own visual
+          cue, and a second colored accent there would compete with it
+          instead of adding anything. Founder ask was open-ended ("make it
+          more attractive, I don't know how") -- this gives every card an
+          at-a-glance fit signal without reading the badge text, on top of
+          the existing badge/callout/featured treatment already in place. */}
+      {!featured && fitCfg && <div className={cn("absolute inset-y-0 left-0 w-1", fitCfg.accentClass)} />}
       {featured && (
         <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-brand px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wide text-white">
           <Crown size={11} />
@@ -182,12 +220,26 @@ function OpportunityCardItem({
           {(opp.company?.trim()?.[0] ?? opp.title.trim()[0] ?? "?").toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
-          {/* Title kept to one line (truncated with an ellipsis rather than
-              wrapping) and the fit badge moved onto its own row underneath
-              -- a direct founder ask. Previously the badge sat inline next
-              to the title, which was routinely pushing a long title onto
-              two or three lines instead of the one it needed. */}
-          <p className={cn("truncate font-semibold text-ink leading-snug", featured && "text-[16px]")}>{opp.title}</p>
+          {/* Fit badge moved onto its own row underneath the title -- a
+              direct founder ask, so a long title no longer pushes the badge
+              inline into a cramped, oddly-wrapped line. The title itself
+              wraps normally up to 2 lines (line-clamp-2) rather than being
+              force-truncated to a single line: a single-line `truncate`
+              was cutting long titles off mid-word into a bare ellipsis, and
+              a plain `break-words` with no clamp let some titles wrap one
+              word per line when a word was long relative to the card width
+              (narrow avatar column + featured-card padding). line-clamp-2
+              gives every title up to two full lines of normal word-wrapping
+              before it clips, so it reads as a clean headline instead of
+              either a truncated fragment or an awkward one-word stack. */}
+          <p
+            className={cn(
+              "line-clamp-2 font-semibold text-ink leading-snug",
+              featured && "text-[16px]"
+            )}
+          >
+            {opp.title}
+          </p>
           {fitCfg && (
             <span
               className={cn(
@@ -310,6 +362,16 @@ export function OpportunitiesClient() {
       if (!res.ok) throw new Error();
       const json = (await res.json()) as OpportunitiesResponse;
       setData(json);
+      // Hydrate feedbackGiven from the server's own record of past taps --
+      // without this, a mark only lived as long as this component stayed
+      // mounted, so navigating to another tab and back (a fresh load()
+      // call) showed every card as unmarked again even though the POST to
+      // /api/opportunities/:id/feedback had already succeeded earlier.
+      const fromServer: Record<string, "relevant" | "not_for_me"> = {};
+      for (const opp of json.opportunities) {
+        if (opp.feedback) fromServer[opp.id] = opp.feedback;
+      }
+      setFeedbackGiven((prev) => ({ ...fromServer, ...prev }));
     } catch {
       setError("Couldn't load opportunities. Check your connection and try again.");
     } finally {

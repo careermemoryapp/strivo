@@ -132,6 +132,33 @@ export function listFeedbackedJobIds(userId: string): Set<string> {
   return new Set(rows.map((r) => r.job_posting_id));
 }
 
+// Which way (if any) this user already reacted to each job -- unlike
+// listFeedbackedJobIds above, this keeps the DIRECTION, not just whether
+// feedback exists, so the Opportunities tab can show a job as already
+// "Marked fit"/"Marked not a fit" on page load rather than only for the
+// rest of the browser session it was tapped in (see the feedback field's
+// comment on OpportunityCard in lib/opportunities.ts -- this is the read
+// side of that fix). recordOpportunityFeedback has no upsert/unique
+// constraint, so in principle a job could have more than one row here (no
+// UI path creates that today, since a marked card no longer offers the
+// buttons to tap again -- but ORDER BY + first-write-wins below makes this
+// correct even if an old duplicate exists) -- the most recent row per job
+// is what's kept.
+export function getFeedbackMap(userId: string): Record<string, "relevant" | "not_for_me"> {
+  const db = getDb();
+  const rows = db
+    .prepare(
+      `SELECT job_posting_id, feedback FROM opportunity_feedback
+        WHERE user_id = ? ORDER BY created_at DESC`
+    )
+    .all(userId) as { job_posting_id: string; feedback: "relevant" | "not_for_me" }[];
+  const map: Record<string, "relevant" | "not_for_me"> = {};
+  for (const row of rows) {
+    if (!(row.job_posting_id in map)) map[row.job_posting_id] = row.feedback;
+  }
+  return map;
+}
+
 export type OpportunityFeedbackStats = {
   relevant: number; // 👍 "Fit" taps, all-time
   notForMe: number; // 👎 "Not a fit" taps, all-time

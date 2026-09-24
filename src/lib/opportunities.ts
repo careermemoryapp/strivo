@@ -29,6 +29,7 @@ import {
   getCachedOpportunities,
   replaceUserOpportunities,
   listFeedbackedJobIds,
+  getFeedbackMap,
 } from "@/lib/repo/userOpportunities";
 import { rankOpportunities, type OpportunityCandidate } from "@/lib/ai";
 
@@ -42,6 +43,14 @@ export type OpportunityCard = {
   postedDate: string | null;
   fit: "strong" | "good" | "possible" | null; // null when not yet personalized, or on the rare AI-unavailable fallback
   reason: string | null;
+  // Whatever this user already tapped on this job in a PREVIOUS visit (see
+  // opportunity_feedback via getFeedbackMap in lib/repo/userOpportunities.ts)
+  // -- null means never reacted to. Round-tripped so OpportunitiesClient.tsx
+  // can hydrate its "Marked fit"/"Marked not a fit" card state from the
+  // server on load, instead of only from taps made in the current browser
+  // session (which a refresh or revisit used to silently forget, even
+  // though the feedback itself was already durably saved).
+  feedback: "relevant" | "not_for_me" | null;
 };
 
 export type OpportunitiesResult = {
@@ -94,7 +103,12 @@ const MAX_JOB_AGE_DAYS = 15;
 // visibly change the list, not sit unused until the next scheduled refresh.
 const RECOMPUTE_AFTER_NEW_MEMORIES = 3;
 
-function toCard(job: JobPosting, fit: OpportunityCard["fit"], reason: string | null): OpportunityCard {
+function toCard(
+  job: JobPosting,
+  fit: OpportunityCard["fit"],
+  reason: string | null,
+  feedback: OpportunityCard["feedback"]
+): OpportunityCard {
   return {
     id: job.id,
     title: job.title,
@@ -105,6 +119,7 @@ function toCard(job: JobPosting, fit: OpportunityCard["fit"], reason: string | n
     postedDate: job.posted_date,
     fit,
     reason,
+    feedback,
   };
 }
 
@@ -243,6 +258,11 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   // than waiting on memories alone.
   const wantsPersonalized = roles.length > 0 || hasStatedPreferences(prefs);
   const memoriesNeeded = roles.length > 0 ? 0 : Math.max(0, MIN_TOTAL_MEMORIES - memoryCount);
+  // Read once, reused across every return path below (including the
+  // fallback and empty-pool ones, which return before this would otherwise
+  // matter) -- see the feedback field's own comment on OpportunityCard for
+  // why this exists at all.
+  const feedbackMap = getFeedbackMap(userId);
 
   const cache = getCachedOpportunities(userId);
   if (isCacheFresh(cache, memoryCount, wantsPersonalized)) {
@@ -251,7 +271,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
       memoryCount,
       memoriesNeeded,
       statedPreferences: prefs,
-      opportunities: cache.map((row) => toCard(row.job, row.fit, row.reason)),
+      opportunities: cache.map((row) => toCard(row.job, row.fit, row.reason, feedbackMap[row.job.id] ?? null)),
     };
   }
 
@@ -336,7 +356,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
       memoryCount,
       memoriesNeeded,
       statedPreferences: prefs,
-      opportunities: fallback.map((job) => toCard(job, null, null)),
+      opportunities: fallback.map((job) => toCard(job, null, null, feedbackMap[job.id] ?? null)),
     };
   }
 
@@ -360,6 +380,6 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
     memoryCount,
     memoriesNeeded: 0,
     statedPreferences: prefs,
-    opportunities: items.map((item) => toCard(item.job, item.fit, item.reason)),
+    opportunities: items.map((item) => toCard(item.job, item.fit, item.reason, feedbackMap[item.job.id] ?? null)),
   };
 }
