@@ -10,11 +10,11 @@ import {
   ExternalLink,
   Lock,
   ShieldCheck,
-  SlidersHorizontal,
   MapPin,
   Clock3,
   Sparkles,
   CheckCircle2,
+  Crown,
 } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
@@ -22,7 +22,6 @@ import { NotificationBell } from "@/components/NotificationBell";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Card } from "@/components/Card";
 import { Button } from "@/components/Button";
-import { TextField } from "@/components/TextField";
 import { EmptyState } from "@/components/EmptyState";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -86,11 +85,19 @@ function OpportunityCardItem({
   opp,
   index,
   feedback,
+  isTopMatch,
   onFeedback,
 }: {
   opp: OpportunityCard;
   index: number;
   feedback: "relevant" | "not_for_me" | null;
+  // The best-ranked card still standing at the top of the list (see
+  // sortedVisible in the parent -- a "not a fit" tap can knock the
+  // previous #1 down, so this is re-evaluated on every render, not fixed
+  // to whichever job Strivo ranked #1 server-side). Direct founder ask:
+  // the list was reading as a plain job board -- this gives the single
+  // best match real visual weight instead of every card looking the same.
+  isTopMatch: boolean;
   onFeedback: (jobId: string, feedback: "relevant" | "not_for_me") => void;
 }) {
   const [shown, setShown] = useState(false);
@@ -122,6 +129,10 @@ function OpportunityCardItem({
   const FitIcon = fitCfg?.icon ?? null;
   const isRecent = opp.postedDate && !isNaN(new Date(opp.postedDate).getTime());
   const dimmed = feedback === "not_for_me";
+  // Only the actual current #1 gets the featured treatment below -- never a
+  // card someone's already sunk (see the isTopMatch comment on the props
+  // type for why "current" matters here).
+  const featured = isTopMatch && !dimmed;
   const phaseClass = !shown
     ? "opacity-0 scale-100 translate-y-2 duration-500"
     : dimmed
@@ -130,16 +141,37 @@ function OpportunityCardItem({
 
   return (
     <Card
-      className={cn("transition-all ease-out", phaseClass, dimmed && "grayscale")}
+      className={cn(
+        "relative overflow-hidden transition-all ease-out",
+        phaseClass,
+        dimmed && "grayscale",
+        // A gradient wash + brand-colored ring instead of the plain
+        // bg-surface/border-border every other card gets -- this is the
+        // one visual cue that this isn't just another row in a list.
+        featured && "border-transparent bg-gradient-to-br from-brand-primary-soft/70 via-surface to-surface ring-1 ring-brand-primary/25"
+      )}
       style={!shown ? { transitionDelay: `${Math.min(index, 8) * 60}ms` } : undefined}
     >
+      {featured && (
+        <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-gradient-brand px-2.5 py-1 text-[10.5px] font-bold uppercase tracking-wide text-white">
+          <Crown size={11} />
+          Top match
+        </div>
+      )}
       <div className="flex items-start gap-3">
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-brand-secondary-soft text-brand-secondary text-[16px] font-bold">
+        <div
+          className={cn(
+            "flex shrink-0 items-center justify-center rounded-full font-bold",
+            featured
+              ? "h-12 w-12 bg-gradient-brand text-white text-[18px] shadow-sm"
+              : "h-11 w-11 bg-brand-secondary-soft text-brand-secondary text-[16px]"
+          )}
+        >
           {(opp.company?.trim()?.[0] ?? opp.title.trim()[0] ?? "?").toUpperCase()}
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
-            <p className="min-w-0 font-semibold text-ink leading-snug">{opp.title}</p>
+            <p className={cn("min-w-0 font-semibold text-ink leading-snug", featured && "text-[16px]")}>{opp.title}</p>
             {fitCfg && (
               <span
                 className={cn(
@@ -170,7 +202,17 @@ function OpportunityCardItem({
         </div>
       </div>
 
-      {opp.reason && <p className="mt-2.5 text-[13px] text-ink-soft leading-relaxed">{opp.reason}</p>}
+      {/* Strivo's own reasoning, lifted out of plain body text into a
+          tinted callout -- a direct founder ask for the list to feel less
+          like a scraped job board and more like something that actually
+          thought about you. Shown on every card, not just the featured
+          one, so the "why this fits" voice is consistent throughout. */}
+      {opp.reason && (
+        <div className="mt-2.5 flex items-start gap-1.5 rounded-input bg-brand-primary-soft/50 px-2.5 py-2">
+          <Sparkles size={13} className="mt-0.5 shrink-0 text-brand-primary" />
+          <p className="text-[12.5px] text-ink leading-relaxed">{opp.reason}</p>
+        </div>
+      )}
 
       <div className="mt-3 flex items-center justify-between gap-2 border-t border-border pt-3">
         {/* Once feedback is given, the buttons are replaced by a static
@@ -234,22 +276,18 @@ export function OpportunitiesClient() {
   // why that changed from the original "swipe to dismiss" design.
   const [feedbackGiven, setFeedbackGiven] = useState<Record<string, "relevant" | "not_for_me">>({});
 
-  // The "tell us what you're looking for" form shown on the locked state
-  // (see the !data.personalized block below) -- seeded from whatever's
-  // already stored (see load() below) so re-opening the tab shows what you
-  // told Strivo last time, not a blank form every visit.
-  const [prefCity, setPrefCity] = useState("");
-  const [prefFunction, setPrefFunction] = useState("");
-  const [prefIndustry, setPrefIndustry] = useState("");
-  const [savingPrefs, setSavingPrefs] = useState(false);
-  const [prefsError, setPrefsError] = useState<string | null>(null);
-  // Same form, shown collapsed once someone's already personalized -- a
-  // direct founder ask: people who already see matches should still be
-  // able to change city/function/industry (e.g. relocating, switching
-  // industries) rather than that only being possible from the locked
-  // state's version of this form.
-  const [showEditPrefs, setShowEditPrefs] = useState(false);
-
+  // There used to be a "tell us what you're looking for" city/function/
+  // industry form here (both on the locked state and as a "change search
+  // settings" toggle once personalized) -- removed per a direct founder
+  // call: asking the person to manually filter undercuts the actual point
+  // of the product, which is that Strivo should already know their city
+  // and function from their own recorded memories and be good enough to
+  // judge fit without them specifying anything. Letting someone pick a
+  // different city than the one Strivo inferred is a real, deliberately
+  // deferred feature (e.g. for a planned relocation) -- see
+  // POST /api/opportunities/preferences and lib/opportunities.ts's
+  // wantsPersonalized, both left intact server-side for exactly that
+  // reason -- just not surfaced as a filter someone fills in today.
   async function load() {
     setError(null);
     try {
@@ -257,39 +295,10 @@ export function OpportunitiesClient() {
       if (!res.ok) throw new Error();
       const json = (await res.json()) as OpportunitiesResponse;
       setData(json);
-      setPrefCity(json.statedPreferences?.city ?? "");
-      setPrefFunction(json.statedPreferences?.function ?? "");
-      setPrefIndustry(json.statedPreferences?.industry ?? "");
     } catch {
       setError("Couldn't load opportunities. Check your connection and try again.");
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function savePreferences() {
-    setPrefsError(null);
-    setSavingPrefs(true);
-    try {
-      const res = await fetch("/api/opportunities/preferences", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          city: prefCity.trim() || null,
-          function: prefFunction.trim() || null,
-          industry: prefIndustry.trim() || null,
-        }),
-      });
-      if (!res.ok) throw new Error();
-      // Saving clears the server-side cache (see clearUserOpportunities in
-      // lib/repo/userOpportunities.ts), so this re-fetch picks up real
-      // matches immediately rather than the stale locked result.
-      setLoading(true);
-      await load();
-    } catch {
-      setPrefsError("Couldn't save that -- check your connection and try again.");
-    } finally {
-      setSavingPrefs(false);
     }
   }
 
@@ -374,13 +383,13 @@ export function OpportunitiesClient() {
         )}
 
         {/* Locked state: deliberately no jobs at all until Strivo has
-            enough recorded memories, OR the person has told Strivo
-            directly what they want (see wantsPersonalized in
-            lib/opportunities.ts -- product decision, not a loading state).
-            Showing a generic sample of the pool here used to undercut the
-            whole incentive to record memories, so this replaces that with
-            an explicit "unlock" card, PLUS a quick form as the faster path
-            in for someone who doesn't want to wait on memories at all. */}
+            enough recorded memories, OR the person had already stated
+            preferences before that path was removed from this UI (see
+            wantsPersonalized in lib/opportunities.ts -- product decision,
+            not a loading state). Showing a generic sample of the pool here
+            used to undercut the whole incentive to record memories, so
+            this is an explicit "unlock" card rather than an empty list. No
+            form anymore -- see the comment above load() for why. */}
         {!loading && !error && data && !data.personalized && (
           <Card>
             <div className="flex items-start gap-3">
@@ -393,7 +402,7 @@ export function OpportunitiesClient() {
                 </p>
                 <p className="mt-1 text-[13px] text-ink-soft">
                   {data.memoriesNeeded > 0
-                    ? "This tab stays empty until Strivo actually knows enough about your experience to judge fit — your seniority, industry, and location — rather than showing you a generic list from the pool."
+                    ? "This tab stays empty until Strivo actually knows enough about your experience to judge fit — your seniority, industry, and location — rather than showing you a generic list from the pool. No forms to fill in; just keep recording."
                     : "You've recorded enough for Strivo to start naming real roles for you. This list fills in automatically once that finishes — usually within a few days."}
                 </p>
                 <Button variant="secondary" className="mt-3 !py-2 !px-3 text-[13px]" onClick={() => router.push("/record")}>
@@ -401,89 +410,16 @@ export function OpportunitiesClient() {
                 </Button>
               </div>
             </div>
-
-            <div className="mt-5 border-t border-border pt-4">
-              <p className="text-sm font-semibold text-ink">Or tell us what you&apos;re looking for</p>
-              <p className="mt-1 text-[13px] text-ink-soft">
-                While we keep learning from your memories, you can point us at real jobs right now — city, role, and industry.
-              </p>
-              <div className="mt-3 space-y-3">
-                <TextField label="City" placeholder="e.g. Bengaluru" value={prefCity} onChange={(e) => setPrefCity(e.target.value)} />
-                <TextField
-                  label="Function / role"
-                  placeholder="e.g. Product Manager"
-                  value={prefFunction}
-                  onChange={(e) => setPrefFunction(e.target.value)}
-                />
-                <TextField
-                  label="Industry"
-                  placeholder="e.g. Fintech"
-                  value={prefIndustry}
-                  onChange={(e) => setPrefIndustry(e.target.value)}
-                />
-              </div>
-              {prefsError && <p className="mt-2 text-[13px] text-red-600">{prefsError}</p>}
-              <Button
-                className="mt-3 !py-2 !px-4 text-[13px]"
-                loading={savingPrefs}
-                disabled={!prefCity.trim() && !prefFunction.trim() && !prefIndustry.trim()}
-                onClick={savePreferences}
-              >
-                Find jobs for this
-              </Button>
-            </div>
           </Card>
         )}
 
-        {/* Personalized users can still open the same city/function/
-            industry form the locked state shows -- collapsed by default so
-            it doesn't compete with the job list, but always reachable in
-            case what Strivo has inferred (from memories or an earlier
-            answer here) isn't right anymore. */}
-        {!loading && !error && data?.personalized && (
-          <div>
-            <button
-              onClick={() => setShowEditPrefs((v) => !v)}
-              className="flex items-center gap-1.5 text-[12.5px] font-semibold text-ink-soft"
-            >
-              <SlidersHorizontal size={13} />
-              {showEditPrefs ? "Hide search settings" : "Change city, role, or industry"}
-            </button>
-            {showEditPrefs && (
-              <Card className="mt-2">
-                <p className="text-[13px] text-ink-soft">
-                  Point Strivo at a different city, role, or industry — this replaces what it&apos;s picked up from
-                  your memories or an earlier answer here.
-                </p>
-                <div className="mt-3 space-y-3">
-                  <TextField label="City" placeholder="e.g. Bengaluru" value={prefCity} onChange={(e) => setPrefCity(e.target.value)} />
-                  <TextField
-                    label="Function / role"
-                    placeholder="e.g. Product Manager"
-                    value={prefFunction}
-                    onChange={(e) => setPrefFunction(e.target.value)}
-                  />
-                  <TextField
-                    label="Industry"
-                    placeholder="e.g. Automotive"
-                    value={prefIndustry}
-                    onChange={(e) => setPrefIndustry(e.target.value)}
-                  />
-                </div>
-                {prefsError && <p className="mt-2 text-[13px] text-red-600">{prefsError}</p>}
-                <Button
-                  className="mt-3 !py-2 !px-4 text-[13px]"
-                  loading={savingPrefs}
-                  disabled={!prefCity.trim() && !prefFunction.trim() && !prefIndustry.trim()}
-                  onClick={async () => {
-                    await savePreferences();
-                    setShowEditPrefs(false);
-                  }}
-                >
-                  Update my search
-                </Button>
-              </Card>
-            )}
+        {/* Curated-feel summary line, replacing the old filter form's
+            space -- a direct founder ask for this to read as "Strivo went
+            and found these for you" rather than a bare list of results. */}
+        {!loading && !error && data?.personalized && visible.length > 0 && (
+          <div className="flex items-center gap-1.5 px-0.5 text-[12.5px] font-medium text-ink-soft">
+            <Sparkles size={13} className="text-brand-primary" />
+            {visible.length} {visible.length === 1 ? "role" : "roles"} matched to your experience — no filters, just fit.
           </div>
         )}
 
@@ -503,6 +439,7 @@ export function OpportunitiesClient() {
               opp={opp}
               index={i}
               feedback={feedbackGiven[opp.id] ?? null}
+              isTopMatch={i === 0}
               onFeedback={sendFeedback}
             />
           ))}
