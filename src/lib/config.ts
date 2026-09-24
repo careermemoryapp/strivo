@@ -137,6 +137,53 @@ export const CAREER_MUSCLES_LIST = [
   "People Development",
 ] as const;
 
+// Fixed industry taxonomy for the Opportunities tab's matching engine (see
+// lib/opportunities.ts). This is deliberately a CLOSED list rather than
+// open text, and it's shared by two places that need to describe industry
+// the exact same way to be comparable at all: generateSuggestedRoles'
+// per-role `industry` field (what industry a PERSON'S evidence points at)
+// and classifyJobPostings' `industry` field (what industry a JOB POSTING
+// belongs to) -- both in lib/ai.ts. Before this existed, both sides wrote
+// independent freeform text ("Automotive", "Automotive Manufacturing",
+// "Auto sector"...) that looked similar but never matched exactly, so
+// nothing could actually check "is this job the same industry as this
+// person" -- it could only be judged loosely, at ranking time, by an LLM
+// re-reading raw text every single time. A closed, shared vocabulary turns
+// that into a plain equality check the matcher can run cheaply and
+// consistently over the whole pool. Picked as a broad-but-manageable set
+// covering the sectors Strivo's own users' memories/resumes actually name
+// most (a direct founder call, discussing the "13, 14, 15... call it 16
+// industries" scope) -- grow this list rather than letting either side
+// invent an ad hoc entry outside it, or the two sides drift apart again.
+export const OPPORTUNITY_INDUSTRIES_LIST = [
+  "Automotive",
+  "Manufacturing / Industrial",
+  "Technology / SaaS",
+  "IT Services / Consulting",
+  "BFSI (Banking, Financial Services & Insurance)",
+  "Retail / E-commerce",
+  "FMCG / Consumer Goods",
+  "Healthcare / Pharma",
+  "Real Estate / Construction",
+  "Energy / Renewable Energy",
+  "Telecom",
+  "Media / Entertainment",
+  "Education / EdTech",
+  "Logistics / Supply Chain",
+  "Hospitality / Travel",
+  "Agriculture / Agritech",
+] as const;
+
+// Fixed seniority bands -- same "closed list so both sides are directly
+// comparable" reasoning as OPPORTUNITY_INDUSTRIES_LIST above. One band
+// describes a PERSON overall (generateSuggestedRoles' top-level `seniority`
+// field, distinct from the per-role industry above), the other describes a
+// JOB POSTING (classifyJobPostings' `seniority` field) -- both in
+// lib/ai.ts. Four bands, not a raw years-of-experience number: coarse
+// enough that the model can commit to one confidently from a title +
+// description alone, which a specific number never would be.
+export const OPPORTUNITY_SENIORITY_LIST = ["Entry-level", "Mid-level", "Senior", "Leadership"] as const;
+
 // Fixed allow-list of Career Wrapped analytics events (see the spec's
 // analytics section) -- the single source of truth for both the client
 // trackEvent() helper (lib/trackEvent.ts) and the API route that persists

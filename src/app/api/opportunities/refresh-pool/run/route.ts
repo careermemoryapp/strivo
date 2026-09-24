@@ -3,9 +3,17 @@ import { isAdminAuthed, checkOpportunitiesRefreshSecret } from "@/lib/adminAuth"
 import { adzunaConfigured, searchAdzunaJobs, type AdzunaJob } from "@/lib/adzuna";
 import { resolveDirectApplyUrl, mapWithConcurrency } from "@/lib/applyLinkResolver";
 import { OPPORTUNITY_CITIES } from "@/lib/geo";
-import { upsertJobPosting, externalIdExists, pruneStaleJobPostings, countActiveJobPostings } from "@/lib/repo/jobPostings";
+import {
+  upsertJobPosting,
+  externalIdExists,
+  pruneStaleJobPostings,
+  countActiveJobPostings,
+  listUnclassifiedActiveJobPostings,
+  setJobClassification,
+} from "@/lib/repo/jobPostings";
 import { recordAdzunaCall, getAdzunaUsage } from "@/lib/repo/adzunaUsage";
 import { getRefreshChunkIndex, advanceRefreshChunkIndex } from "@/lib/repo/refreshPoolState";
+import { classifyJobPostings, aiConfigured } from "@/lib/ai";
 
 // Fixed function x city grid, PACED IN CHUNKS -- a direct founder call,
 // worked through with exact numbers, after finding that a single sweep of
@@ -157,6 +165,20 @@ const RESOLVE_CONCURRENCY = 8;
 // finding out the hard way.
 const QUERY_CONCURRENCY = 5;
 
+// Industry/seniority classification (see classifyJobPostings in lib/ai.ts)
+// for the Opportunities tab's structured matching (lib/opportunities.ts) --
+// deliberately NOT part of the Adzuna call budget this whole file is
+// careful to stay under (see the top-of-file comment): this is pure OpenAI
+// cost, spent once per posting ever, not per Adzuna query. Bounded per run
+// the same way apply-link resolution is bounded above -- a chunk that turns
+// up a big backlog can't balloon into an unbounded number of OpenAI calls
+// in one invocation; whatever's left over just gets picked up on a LATER
+// chunk (see listUnclassifiedActiveJobPostings, which always returns the
+// oldest-still-unclassified backlog first, so this naturally works down
+// both this run's new postings AND any pre-existing backlog together).
+const CLASSIFY_BATCH_SIZE = 25;
+const MAX_CLASSIFY_BATCHES_PER_RUN = 6; // up to 150 postings classified per invocation
+
 type QueryCell = { fn: string; city: string };
 
 // Called on the crontab schedule described above, or by hand from an
@@ -299,6 +321,39 @@ export async function POST(req: Request) {
   }
 
   const removed = pruneStaleJobPostings();
+
+  // See the constants' own comment above -- this backfills BOTH this run's
+  // brand-new postings and any older backlog still sitting unclassified,
+  // a bounded batch at a time, every chunk run, until the whole pool is
+  // caught up. Gated on aiConfigured() specifically because
+  // setJobClassification marks a posting as permanently "attempted" (see
+  // classified_at's own comment in lib/db.ts) -- without this check, a run
+  // during any window where OPENAI_API_KEY happens to be unset would
+  // classifyJobPostings-returns-nothing its way through the ENTIRE backlog,
+  // stamping every posting industry_tag=null/seniority_tag=null/
+  // classified_at=now and permanently skipping it, rather than genuinely
+  // being retried once the key is back.
+  let jobsClassified = 0;
+  if (aiConfigured()) {
+    const toClassify = listUnclassifiedActiveJobPostings(CLASSIFY_BATCH_SIZE * MAX_CLASSIFY_BATCHES_PER_RUN);
+    for (let i = 0; i < toClassify.length; i += CLASSIFY_BATCH_SIZE) {
+      const batch = toClassify.slice(i, i + CLASSIFY_BATCH_SIZE);
+      const classified = await classifyJobPostings(
+        batch.map((job) => ({ id: job.id, title: job.title, company: job.company, snippet: job.snippet }))
+      );
+      for (const job of batch) {
+        const result = classified.get(job.id);
+        // Still written even when THIS call came back empty (a transient
+        // API failure, not a missing key -- see the aiConfigured() gate
+        // above) -- see classified_at's own comment in lib/db.ts for why a
+        // genuinely-attempted-but-inconclusive posting still has to be
+        // marked done rather than retried forever.
+        setJobClassification(job.id, result?.industry ?? null, result?.seniority ?? null);
+        jobsClassified++;
+      }
+    }
+  }
+
   advanceRefreshChunkIndex(TOTAL_CHUNKS);
 
   return NextResponse.json({
@@ -327,6 +382,11 @@ export async function POST(req: Request) {
       .map(([domain, count]) => `${domain} (${count})`),
     staleRemoved: removed,
     poolSize: countActiveJobPostings(),
+    // How many postings this invocation ran industry/seniority
+    // classification on (new + backlog combined) -- see the constants'
+    // comment above. 0 whenever aiConfigured() is false, distinguishable
+    // from "backlog was already empty" only by also checking poolSize.
+    jobsClassified,
     adzunaUsage: getAdzunaUsage(),
   });
 }

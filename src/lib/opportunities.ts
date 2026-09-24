@@ -20,6 +20,7 @@ import { countMemories } from "@/lib/repo/memories";
 import { getUserById } from "@/lib/repo/users";
 import { detectCityFromText } from "@/lib/geo";
 import { getLatestSuggestedRolesForUser, MIN_TOTAL_MEMORIES } from "@/lib/repo/suggestedRoles";
+import { OPPORTUNITY_INDUSTRIES_LIST, OPPORTUNITY_SENIORITY_LIST } from "@/lib/config";
 import { getJobPreferences, hasStatedPreferences, type JobPreferences } from "@/lib/repo/jobPreferences";
 import {
   listActiveJobPostings,
@@ -151,16 +152,85 @@ function keywordsFrom(text: string): string[] {
 // function/industry signal for the jobs that DO share real keyword overlap.
 const LOCATION_MATCH_BONUS = 8;
 
-function preFilterCandidates(
+// Structured 4-factor matching (function, industry, location, seniority) --
+// a direct founder call, after the earlier pure-keyword-overlap version of
+// this function (preFilterCandidates) couldn't reliably tell "Finance
+// Manager at a retail company" from "Finance Manager at an automotive
+// company": job_postings had no industry field at all, so the only signal
+// was whatever words happened to overlap between a person's profile text
+// and a job's title/snippet. Now that jobs and people are both classified
+// against the SAME closed vocabularies (see classifyJobPostings and
+// generateSuggestedRoles in lib/ai.ts, OPPORTUNITY_INDUSTRIES_LIST/
+// OPPORTUNITY_SENIORITY_LIST in lib/config.ts), industry and seniority can
+// be scored as real, exact signals instead of hoping the raw text happens
+// to mention them.
+//
+// Function itself is deliberately NOT given a separate structured bonus
+// here -- job.function_tag is literally the title that was searched to
+// find it (see the FUNCTIONS grid in refresh-pool/run), which already
+// shows up as a strong keyword-overlap hit against a person's own
+// suggested-role titles below without any extra logic. Adding a second,
+// redundant bonus for the same signal would just double-count it.
+//
+// Seniority gets ONE genuine hard filter (see SENIORITY_HARD_EXCLUDE_GAP)
+// -- a direct founder ask that the tab actually stop showing obviously
+// wrong-level postings rather than relying entirely on the LLM ranking
+// step's judgment. Industry does NOT get a hard filter, only a bonus/
+// penalty: a "plausible pivot" into an adjacent industry is exactly the
+// kind of judgment call rankOpportunities (lib/ai.ts) already makes well
+// with the full posting text in front of it, and a rigid industry filter
+// would risk wrongly emptying a thin pool. Both signals fall back to
+// neutral (no bonus, no penalty, never excluded) whenever either side of
+// the comparison is unclassified/unknown -- an unclassified posting or a
+// person Strivo hasn't sized up yet should never be punished for missing
+// data it never had a chance to provide.
+const SENIORITY_ORDER: Record<string, number> = Object.fromEntries(
+  OPPORTUNITY_SENIORITY_LIST.map((s, i) => [s, i])
+);
+const SENIORITY_HARD_EXCLUDE_GAP = 2; // e.g. Entry-level vs Leadership -- only applied when BOTH sides are confidently classified
+const SENIORITY_MATCH_BONUS = 9;
+const SENIORITY_ADJACENT_BONUS = 3; // one band off either way -- still a normal, worth-showing stretch
+const INDUSTRY_MATCH_BONUS = 10;
+const INDUSTRY_MISMATCH_PENALTY = 3;
+
+// Maps a legacy freeform stated industry (see JobPreferences.industry --
+// typed into the now-removed filter form, still read here for anyone who
+// used it before that form came out) onto the closed taxonomy, so it can
+// still contribute to the exact-match scoring above instead of being
+// silently ignored just because it isn't a byte-for-byte match. Only an
+// exact (case-insensitive) match against a real list entry counts --
+// deliberately no fuzzy/substring guessing here, unlike the AI
+// classification prompts, since there's no model in the loop to judge intent.
+function canonicalIndustry(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const lower = text.trim().toLowerCase();
+  if (!lower) return null;
+  return OPPORTUNITY_INDUSTRIES_LIST.find((i) => i.toLowerCase() === lower) ?? null;
+}
+
+function matchCandidates(
   pool: JobPosting[],
   profileKeywords: string[],
   excludeIds: Set<string>,
   limit: number,
-  boostCity: string | null
+  boostCity: string | null,
+  userIndustries: Set<string>,
+  userSeniority: string | null
 ): JobPosting[] {
   const kw = new Set(profileKeywords);
+  const userSeniorityRank = userSeniority ? SENIORITY_ORDER[userSeniority] : undefined;
   const scored = pool
     .filter((job) => !excludeIds.has(job.id))
+    .filter((job) => {
+      // The one real hard exclude -- see this section's top comment.
+      // Skipped entirely (job stays eligible) unless BOTH the job's own
+      // seniority_tag and this user's overall_seniority are confidently
+      // known and land in valid, recognized bands.
+      if (userSeniorityRank === undefined || !job.seniority_tag) return true;
+      const jobRank = SENIORITY_ORDER[job.seniority_tag];
+      if (jobRank === undefined) return true;
+      return Math.abs(jobRank - userSeniorityRank) < SENIORITY_HARD_EXCLUDE_GAP;
+    })
     .map((job) => {
       const haystack = keywordsFrom(`${job.title} ${job.snippet ?? ""}`);
       let score = 0;
@@ -168,12 +238,23 @@ function preFilterCandidates(
       if (boostCity && job.location && job.location.toLowerCase().includes(boostCity.toLowerCase())) {
         score += LOCATION_MATCH_BONUS;
       }
+      if (job.industry_tag && userIndustries.size > 0) {
+        score += userIndustries.has(job.industry_tag) ? INDUSTRY_MATCH_BONUS : -INDUSTRY_MISMATCH_PENALTY;
+      }
+      if (job.seniority_tag && userSeniorityRank !== undefined) {
+        const jobRank = SENIORITY_ORDER[job.seniority_tag];
+        if (jobRank !== undefined) {
+          const gap = Math.abs(jobRank - userSeniorityRank);
+          if (gap === 0) score += SENIORITY_MATCH_BONUS;
+          else if (gap === 1) score += SENIORITY_ADJACENT_BONUS;
+        }
+      }
       return { job, score };
     })
-    // A job with zero keyword overlap is still worth a chance at the
-    // margin (function/industry transferability is exactly what the LLM
-    // step is for -- see rankOpportunities), so this sorts by score
-    // rather than dropping zero-score rows outright.
+    // A job with zero keyword overlap (and no industry/seniority signal)
+    // is still worth a chance at the margin -- see the section comment
+    // above -- so this sorts by score rather than dropping zero-score
+    // rows outright.
     .sort((a, b) => b.score - a.score);
   return scored.slice(0, limit).map((s) => s.job);
 }
@@ -182,7 +263,8 @@ function buildProfileText(
   roles: { title: string; industry: string | null; reasoning?: string | null }[],
   resumeText: string | null,
   detectedCity: string | null,
-  stated: JobPreferences | null
+  stated: JobPreferences | null,
+  seniority: string | null
 ): string {
   const rolesListing = roles
     .map((r) => `- ${r.title}${r.industry ? ` (${r.industry})` : ""}${r.reasoning ? ` -- ${r.reasoning}` : ""}`)
@@ -206,8 +288,14 @@ function buildProfileText(
   const locationLine = detectedCity
     ? `Likely based in: ${detectedCity}${stated?.city ? " (they told Strivo this directly)" : " (detected from their resume)"}`
     : null;
+  // Same "state it explicitly rather than trust the model to infer it"
+  // reasoning as locationLine -- this is now also the same structured
+  // seniority band matchCandidates (below) uses for the hard exclude/bonus
+  // scoring, so it's worth rankOpportunities seeing it spelled out too,
+  // not just implicitly from the resume excerpt.
+  const seniorityLine = seniority ? `Estimated seniority level: ${seniority}` : null;
 
-  const parts = [rolesSection, statedLine, locationLine, resumeExcerpt ? `Resume excerpt:\n${resumeExcerpt}` : null].filter(
+  const parts = [rolesSection, statedLine, locationLine, seniorityLine, resumeExcerpt ? `Resume excerpt:\n${resumeExcerpt}` : null].filter(
     (p): p is string => !!p
   );
   return parts.length > 0
@@ -317,7 +405,8 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   // An explicitly stated city always wins over one merely detected in the
   // resume -- the person said it themselves, no inference needed.
   const detectedCity = prefs?.city || detectCityFromText(resumeText);
-  const profileText = buildProfileText(roles, resumeText, detectedCity, prefs);
+  const userSeniority = suggestedRoles?.seniority ?? null;
+  const profileText = buildProfileText(roles, resumeText, detectedCity, prefs, userSeniority);
   // Role title/industry keywords, PLUS the first slice of resume text,
   // PLUS whatever function/industry the person stated directly -- the
   // resume alone is what carries someone's actual seniority language
@@ -329,7 +418,17 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
     ...keywordsFrom((resumeText ?? "").slice(0, 1500)),
     ...keywordsFrom(`${prefs?.function ?? ""} ${prefs?.industry ?? ""}`),
   ];
-  const candidates = preFilterCandidates(pool, profileKeywords, excludeIds, 80, detectedCity);
+  // Every industry this person's own evidence points at -- from every role
+  // suggested_roles named (a person can genuinely span more than one, e.g.
+  // a consultant who's worked across a couple of sectors), PLUS a stated
+  // preference if it happens to land exactly on a taxonomy entry (see
+  // canonicalIndustry). Empty means "nothing confidently known" -- see
+  // matchCandidates' own comment for why that's treated as neutral, never
+  // as a mismatch.
+  const userIndustries = new Set(roles.map((r) => r.industry).filter((v): v is string => !!v));
+  const statedIndustry = canonicalIndustry(prefs?.industry);
+  if (statedIndustry) userIndustries.add(statedIndustry);
+  const candidates = matchCandidates(pool, profileKeywords, excludeIds, 80, detectedCity, userIndustries, userSeniority);
   const opportunityCandidates: OpportunityCandidate[] = candidates.map((job) => ({
     id: job.id,
     title: job.title,

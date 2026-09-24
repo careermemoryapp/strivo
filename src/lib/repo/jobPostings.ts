@@ -15,6 +15,16 @@ export type JobPosting = {
   posted_date: string | null;
   fetched_at: string;
   last_seen_at: string;
+  // This job's own classification against the closed OPPORTUNITY_
+  // INDUSTRIES_LIST/OPPORTUNITY_SENIORITY_LIST vocabularies (lib/config.ts)
+  // -- see classifyJobPostings in lib/ai.ts for how these get set, and
+  // classified_at's own comment in lib/db.ts for why "unclassified" is
+  // tracked separately rather than inferred from these being null (the
+  // classifier can legitimately return null for both, meaning "genuinely
+  // inconclusive," which is different from "never attempted").
+  industry_tag: string | null;
+  seniority_tag: string | null;
+  classified_at: string | null;
 };
 
 // Whether a job we've already vetted (see resolveDirectApplyUrl in
@@ -121,6 +131,45 @@ export function pruneStaleJobPostings(): number {
   const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
   const result = db.prepare(`DELETE FROM job_postings WHERE last_seen_at < ?`).run(cutoff);
   return Number(result.changes);
+}
+
+// Writes the result of one classifyJobPostings (lib/ai.ts) call back onto
+// a posting -- always called exactly once per posting, whatever the model
+// returned, INCLUDING when both industry and seniority come back null
+// (genuinely inconclusive). classified_at is what actually marks this
+// posting as "done" (see listUnclassifiedActiveJobPostings below and that
+// column's own comment in lib/db.ts) -- skipping this call for a null/null
+// result would leave the posting looking permanently unclassified and
+// re-spend a classification call on it every single refresh-pool run
+// forever, for a job that was never going to resolve.
+export function setJobClassification(id: string, industry: string | null, seniority: string | null): void {
+  const db = getDb();
+  db.prepare(`UPDATE job_postings SET industry_tag = ?, seniority_tag = ?, classified_at = ? WHERE id = ?`).run(
+    industry,
+    seniority,
+    nowIso(),
+    id
+  );
+}
+
+// Postings in the active pool that classifyJobPostings has never run
+// against yet (see classified_at's own comment for why that's tracked
+// separately from industry_tag being null). Called from
+// app/api/opportunities/refresh-pool/run each chunk -- this naturally
+// covers BOTH brand-new postings just upserted this run AND any older row
+// still sitting unclassified from before this feature existed, without
+// needing a separate one-off backfill route: the backlog just works itself
+// down a bounded batch at a time on every future chunk run until it's
+// empty, the same "no single invocation needs to do everything" shape
+// refresh-pool/run already uses for the function x city grid itself.
+export function listUnclassifiedActiveJobPostings(limit: number): JobPosting[] {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  return db
+    .prepare(
+      `SELECT * FROM job_postings WHERE last_seen_at >= ? AND classified_at IS NULL ORDER BY last_seen_at DESC LIMIT ?`
+    )
+    .all(cutoff, limit) as JobPosting[];
 }
 
 // Wipes the ENTIRE pool -- a one-time cleanup lever, not something a

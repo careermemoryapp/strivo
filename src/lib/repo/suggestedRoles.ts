@@ -13,6 +13,12 @@ export type SuggestedRolesRow = {
   roles_json: string;
   memory_count_at_generation: number;
   created_at: string;
+  // One overall seniority band for the person (from the closed
+  // OPPORTUNITY_SENIORITY_LIST in lib/config.ts), generated in the same
+  // call as roles_json -- see generateSuggestedRoles' own comment in
+  // lib/ai.ts. Null for rows generated before this existed, or whenever
+  // the sample genuinely didn't support a confident read.
+  overall_seniority: string | null;
 };
 
 // Below this many total memories there just isn't enough real evidence to
@@ -44,14 +50,15 @@ export function createSuggestedRoles(input: {
   userId: string;
   roles: SuggestedRole[];
   memoryCountAtGeneration: number;
+  overallSeniority: string | null;
 }): SuggestedRolesRow {
   const db = getDb();
   const id = newId("roles");
   const ts = nowIso();
   db.prepare(
-    `INSERT INTO suggested_roles (id, user_id, roles_json, memory_count_at_generation, created_at)
-     VALUES (?, ?, ?, ?, ?)`
-  ).run(id, input.userId, JSON.stringify(input.roles), input.memoryCountAtGeneration, ts);
+    `INSERT INTO suggested_roles (id, user_id, roles_json, memory_count_at_generation, created_at, overall_seniority)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(id, input.userId, JSON.stringify(input.roles), input.memoryCountAtGeneration, ts, input.overallSeniority);
   return db.prepare(`SELECT * FROM suggested_roles WHERE id = ?`).get(id) as SuggestedRolesRow;
 }
 
@@ -92,12 +99,14 @@ function parseSuggestedRoles(row: SuggestedRolesRow): SuggestedRole[] {
 // generated for this user yet (new account, or not enough history) so the
 // caller can render an honest "still taking shape" state instead of an
 // empty list.
-export function getLatestSuggestedRolesForUser(userId: string): { roles: SuggestedRole[]; generatedAt: string } | null {
+export function getLatestSuggestedRolesForUser(
+  userId: string
+): { roles: SuggestedRole[]; generatedAt: string; seniority: string | null } | null {
   const row = getLatestSuggestedRoles(userId);
   if (!row) return null;
   const roles = parseSuggestedRoles(row);
   if (roles.length === 0) return null;
-  return { roles, generatedAt: row.created_at };
+  return { roles, generatedAt: row.created_at, seniority: row.overall_seniority ?? null };
 }
 
 // Decides whether this user is due for a fresh round of role suggestions --

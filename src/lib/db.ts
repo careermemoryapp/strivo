@@ -872,6 +872,67 @@ function migrate(db: DatabaseSync) {
     db.exec(`ALTER TABLE job_postings RENAME COLUMN jooble_id TO external_id;`);
   }
 
+  // Structured 4-factor Opportunities matching (function/industry/
+  // location/seniority) -- a direct founder call, after the plain
+  // function x city pool + loose keyword ranking couldn't reliably tell
+  // "Finance Manager at a retail company" from "Finance Manager at an
+  // automotive company." industry_tag/seniority_tag are the job's own
+  // classification, drawn from the closed OPPORTUNITY_INDUSTRIES_LIST/
+  // OPPORTUNITY_SENIORITY_LIST vocabularies in lib/config.ts (see
+  // classifyJobPostings in lib/ai.ts) so they can be compared by plain
+  // equality against a person's own inferred industry/seniority (see
+  // lib/opportunities.ts) instead of another fuzzy LLM judgment call.
+  // Both nullable: a posting whose title/company/description genuinely
+  // doesn't reveal a clear sector or level is left null rather than
+  // guessed. classified_at is a SEPARATE marker from "industry_tag IS
+  // NULL" on purpose -- the classifier can legitimately return null for
+  // both fields (genuinely inconclusive), and without its own timestamp
+  // there'd be no way to tell "never attempted" from "attempted, came
+  // back inconclusive," so listUnclassifiedActiveJobPostings (lib/repo/
+  // jobPostings.ts) would keep re-spending a classification call on the
+  // same unclassifiable posting forever. classified_at is set exactly
+  // once, whatever the outcome, and that's what that query actually
+  // filters on.
+  const needsOpportunitiesMatchingCacheBust = !jobPostingColumns.includes("industry_tag");
+  if (!jobPostingColumns.includes("industry_tag")) {
+    db.exec(`ALTER TABLE job_postings ADD COLUMN industry_tag TEXT;`);
+  }
+  if (!jobPostingColumns.includes("seniority_tag")) {
+    db.exec(`ALTER TABLE job_postings ADD COLUMN seniority_tag TEXT;`);
+  }
+  if (!jobPostingColumns.includes("classified_at")) {
+    db.exec(`ALTER TABLE job_postings ADD COLUMN classified_at TEXT;`);
+  }
+
+  // Same closed-vocabulary treatment for the PERSON side of the match --
+  // one overall seniority band per person, from the same OPPORTUNITY_
+  // SENIORITY_LIST job postings are classified against, inferred in the
+  // same AI call as the existing per-role `industry` field (see
+  // generateSuggestedRoles in lib/ai.ts) so this is zero extra LLM calls,
+  // not a second classification pass. Null for anyone generated before
+  // this shipped, or whenever the sample genuinely doesn't support a
+  // confident read -- same "don't guess" convention as industry.
+  const suggestedRolesColumns = (db.prepare(`PRAGMA table_info(suggested_roles)`).all() as { name: string }[]).map(
+    (c) => c.name
+  );
+  if (!suggestedRolesColumns.includes("overall_seniority")) {
+    db.exec(`ALTER TABLE suggested_roles ADD COLUMN overall_seniority TEXT;`);
+  }
+
+  // One-time cache bust, guarded by the exact same "did industry_tag exist
+  // BEFORE this boot's migration ran" check as the ALTER TABLEs above (so
+  // it only ever fires once, on the first boot after this shipped, never
+  // again after). Every row already sitting in user_opportunities was
+  // ranked by the OLD keyword-only matching -- now that matching is
+  // structured around industry/seniority/location/function, that cached
+  // ranking no longer reflects how today's engine would actually order the
+  // same person's list. Clearing it here means everyone gets the new
+  // matching quality the next time they open the tab, instead of each
+  // person waiting out their own CACHE_MAX_AGE_DAYS individually.
+  if (needsOpportunitiesMatchingCacheBust) {
+    db.exec(`DELETE FROM user_opportunities;`);
+  }
+
   const userColumns = (db.prepare(`PRAGMA table_info(users)`).all() as { name: string }[]).map((c) => c.name);
   if (!userColumns.includes("trial_ends_at")) {
     db.exec(`ALTER TABLE users ADD COLUMN trial_ends_at TEXT;`);

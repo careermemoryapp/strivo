@@ -105,9 +105,14 @@ export async function POST(req: Request) {
     if (shouldGenerateSuggestedRoles(userId)) {
       const roleMemories = listNewestMemories(userId, ROLE_SAMPLE_SIZE);
       if (roleMemories.length > 0) {
-        const roles = await generateSuggestedRoles(roleMemories);
-        if (roles && roles.length > 0) {
-          createSuggestedRoles({ userId, roles, memoryCountAtGeneration: roleMemories.length });
+        const generated = await generateSuggestedRoles(roleMemories);
+        if (generated && generated.roles.length > 0) {
+          createSuggestedRoles({
+            userId,
+            roles: generated.roles,
+            memoryCountAtGeneration: roleMemories.length,
+            overallSeniority: generated.seniority,
+          });
           roleSuggestionsSent++;
         } else {
           roleSuggestionsSkippedNoFit++;

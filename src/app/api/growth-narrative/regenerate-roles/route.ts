@@ -49,8 +49,8 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This account has no memories yet -- nothing to generate roles from" }, { status: 400 });
   }
 
-  const roles = await generateSuggestedRoles(roleMemories);
-  if (!roles || roles.length === 0) {
+  const generated = await generateSuggestedRoles(roleMemories);
+  if (!generated || generated.roles.length === 0) {
     return NextResponse.json({
       ok: true,
       rolesGenerated: 0,
@@ -58,6 +58,16 @@ export async function POST(req: Request) {
     });
   }
 
-  createSuggestedRoles({ userId: user.id, roles, memoryCountAtGeneration: roleMemories.length });
-  return NextResponse.json({ ok: true, rolesGenerated: roles.length, roles });
+  createSuggestedRoles({
+    userId: user.id,
+    roles: generated.roles,
+    memoryCountAtGeneration: roleMemories.length,
+    overallSeniority: generated.seniority,
+  });
+  return NextResponse.json({
+    ok: true,
+    rolesGenerated: generated.roles.length,
+    roles: generated.roles,
+    seniority: generated.seniority,
+  });
 }

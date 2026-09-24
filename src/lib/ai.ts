@@ -2,7 +2,12 @@ import OpenAI from "openai";
 import * as Sentry from "@sentry/nextjs";
 import type { Memory } from "@/lib/repo/memories";
 import type { RecalledMessage } from "@/lib/retrieval";
-import { MEMORY_CATEGORIES_LIST, MEMORY_COMPETENCIES_LIST } from "@/lib/config";
+import {
+  MEMORY_CATEGORIES_LIST,
+  MEMORY_COMPETENCIES_LIST,
+  OPPORTUNITY_INDUSTRIES_LIST,
+  OPPORTUNITY_SENIORITY_LIST,
+} from "@/lib/config";
 
 // Server-only. Never import this file from a "use client" component.
 let client: OpenAI | null = null;
@@ -147,6 +152,8 @@ export type MemoryMetadata = {
 };
 
 const CATEGORY_OPTIONS: string[] = [...MEMORY_CATEGORIES_LIST];
+const INDUSTRY_OPTIONS: string[] = [...OPPORTUNITY_INDUSTRIES_LIST];
+const SENIORITY_OPTIONS: string[] = [...OPPORTUNITY_SENIORITY_LIST];
 
 // Behavioral-interview + modern-work competency taxonomy (the kind of thing
 // STAR answers and "tell me about a time..." questions are built around).
@@ -508,11 +515,20 @@ export type SuggestedRoleResult = { title: string; industry: string | null; reas
 // fresh open-ended chat question each time, which is what previously
 // produced a different-looking (sometimes a direct answer, sometimes a
 // request for more detail) response on every tap.
-// Returns an empty array (not an error) when nothing in the sample genuinely
-// supports naming a role -- callers should treat that the same as a hard
-// failure (skip storing anything, try again next cycle) rather than caching
-// an empty result.
-export async function generateSuggestedRoles(memories: Memory[]): Promise<SuggestedRoleResult[] | null> {
+// Returns null (not an error-vs-empty distinction the caller needs to make
+// itself) when nothing in the sample genuinely supports naming a role --
+// callers should treat that the same as a hard failure (skip storing
+// anything, try again next cycle) rather than caching an empty result.
+//
+// seniority (added alongside the Opportunities tab's structured 4-factor
+// matching -- see lib/opportunities.ts) is ONE overall band for the person
+// as a whole, from the closed OPPORTUNITY_SENIORITY_LIST vocabulary,
+// generated in this SAME call rather than a second AI round trip -- it's
+// asking the model to read the same evidence it's already looking at for
+// the per-role industry field, just at a coarser, person-level grain.
+export type GenerateSuggestedRolesResult = { roles: SuggestedRoleResult[]; seniority: string | null };
+
+export async function generateSuggestedRoles(memories: Memory[]): Promise<GenerateSuggestedRolesResult | null> {
   const openai = getClient();
   if (!openai || memories.length === 0) return null;
   try {
@@ -557,11 +573,12 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
             "You are a career coach reviewing someone's personal career memories (from a career-memory app) to name roles they're genuinely ready for RIGHT NOW. " +
             "You'll be given a list of memories, each with a title, optional competencies, a short third-person summary, AND an excerpt of the person's OWN WORDS (their original transcript). " +
             "The summary is a compact recap of what they DID and can leave out which employer, client, or sector the story was about even when the person's own words clearly named it -- so for industry specifically, always check the 'In their own words' excerpt, not just the summary. " +
-            'Respond ONLY with JSON: {"roles": [{"title": string, "industry": string or null, "reasoning": string}]}. ' +
+            'Respond ONLY with JSON: {"roles": [{"title": string, "industry": string or null, "reasoning": string}], "seniority": string or null}. ' +
             "Up to 5 roles, best fit first. Every role must be directly supported by concrete evidence across these memories (skills actually demonstrated, scope of responsibility, kind of work actually done) -- never invent a role that isn't backed by what's actually here, and return fewer than 5 (even zero, as an empty array) rather than padding with a weak fit. " +
-            "industry: only set this to a specific industry or sector (e.g. 'Automotive', 'Renewable Energy', 'Technology / SaaS') when the memories themselves clearly point at one -- a company, sector, or domain actually mentioned or strongly implied. If the memories show transferable skills without pointing at a specific field, set industry to null -- do NOT guess an industry just because it's a common pairing for that role title. " +
+            `industry: the SINGLE best-matching entry from this exact list, copied EXACTLY, or null: ${INDUSTRY_OPTIONS.join(", ")}. Only set it when the memories themselves clearly point at one of these -- a company, sector, or domain actually mentioned or strongly implied. If the memories show transferable skills without pointing at a specific field, or point at a real sector that genuinely isn't a good match for anything on this list, set industry to null -- do NOT guess or force a near-fit just because it's a common pairing for that role title. ` +
             "reasoning: 1-2 sentences, written directly to the person ('you...'), citing the SPECIFIC memory or evidence that supports this role -- e.g. what they actually did, led, or solved. This is shown to them verbatim as the explanation for why this role is on their list, so it must be concrete and checkable against their own memories, never generic career-coach filler. " +
-            "Look across ALL the memories first and identify the ONE industry/sector that shows up most (a company, domain, or sector actually named or strongly implied across several memories, e.g. someone with years of automotive-sector work). If a clear dominant industry exists, 2 to 3 of the roles (out of up to 5) MUST be roles within THAT SAME industry -- a believable, evidenced next step from what they're already doing there, not a lateral pivot into something unrelated -- and industry for each of those roles MUST be set to that actual industry name, never null and never 'Any industry'. This is what shows the person the suggestions genuinely understand the industry and function they specialize in, instead of reading as generic. Only spend the remaining slots on adjacent or different fields, and only when the evidence genuinely supports it. If the memories genuinely show no dominant industry (truly cross-industry or industry-agnostic work), it's fine for industry to be null on some or all roles -- but check carefully first, since most people's memories do point at one. " +
+            "Look across ALL the memories first and identify the ONE industry/sector that shows up most (a company, domain, or sector actually named or strongly implied across several memories, e.g. someone with years of automotive-sector work). If a clear dominant industry exists (and it's a genuine match for one of the list entries above), 2 to 3 of the roles (out of up to 5) MUST be roles within THAT SAME industry -- a believable, evidenced next step from what they're already doing there, not a lateral pivot into something unrelated -- and industry for each of those roles MUST be set to that actual list entry, never null and never 'Any industry'. This is what shows the person the suggestions genuinely understand the industry and function they specialize in, instead of reading as generic. Only spend the remaining slots on adjacent or different fields, and only when the evidence genuinely supports it. If the memories genuinely show no dominant industry (truly cross-industry or industry-agnostic work), it's fine for industry to be null on some or all roles -- but check carefully first, since most people's memories do point at one. " +
+            `seniority: ONE overall band for this person as a whole (not per-role), the SINGLE best-matching entry from this exact list, copied EXACTLY, or null: ${SENIORITY_OPTIONS.join(", ")}. Judge this from the scope, scale, and language of responsibility actually shown across the memories as a whole (team/budget/project size they led or owned, whether they're described managing others vs. individually executing, titles or seniority language actually used) -- not from years of tenure alone. Set it to null only if the sample genuinely gives no basis to judge (very sparse or ambiguous evidence) rather than defaulting to a middle guess. ` +
             "Never invent facts not present in what you were given.",
         },
         { role: "user", content: listing },
@@ -582,18 +599,107 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Sugges
       ) {
         const title = (item as { title: string }).title.trim().slice(0, 80);
         const industryRaw = (item as { industry: string | null }).industry;
-        const industry = typeof industryRaw === "string" ? industryRaw.trim().slice(0, 60) || null : null;
+        // Constrained to the closed taxonomy (see this function's own
+        // comment on `seniority` for why) -- a value the model returns
+        // that isn't an exact list entry is dropped to null rather than
+        // stored as freeform text, so this field stays directly comparable
+        // to a job posting's own industry_tag (see classifyJobPostings
+        // below and the matching in lib/opportunities.ts).
+        const industry = typeof industryRaw === "string" && INDUSTRY_OPTIONS.includes(industryRaw) ? industryRaw : null;
         const reasoningRaw = (item as { reasoning?: unknown }).reasoning;
         const reasoning = typeof reasoningRaw === "string" ? reasoningRaw.trim().slice(0, 400) || null : null;
         if (title) roles.push({ title, industry, reasoning });
       }
       if (roles.length >= 5) break;
     }
-    return roles;
+    const seniorityRaw = (parsed as { seniority?: unknown }).seniority;
+    const seniority = typeof seniorityRaw === "string" && SENIORITY_OPTIONS.includes(seniorityRaw) ? seniorityRaw : null;
+    return { roles, seniority };
   } catch (err) {
     console.error("generateSuggestedRoles failed:", err);
     Sentry.captureException(err);
     return null;
+  }
+}
+
+export type JobClassification = { industry: string | null; seniority: string | null };
+
+// Batched LLM classification of real job postings into the SAME closed
+// industry/seniority taxonomies generateSuggestedRoles above uses for a
+// person -- what makes lib/opportunities.ts's structured matching possible
+// at all (see that file's matchCandidates). Deliberately its own function,
+// called once per NEW or still-unclassified posting (see
+// listUnclassifiedActiveJobPostings/setJobClassification in lib/repo/
+// jobPostings.ts and the caller in app/api/opportunities/refresh-pool/run)
+// rather than folded into rankOpportunities below -- that call happens
+// PER USER, every time their ranking recomputes, so classifying there would
+// mean re-classifying the same jobs over and over for every person who
+// happens to see them. This runs ONCE per job, ever, and the result is
+// reused by every user's matching from then on. Pure OpenAI cost, no
+// Adzuna calls -- direct founder call to keep Adzuna's own budget fixed and
+// do industry/seniority tagging entirely on the app's own end.
+//
+// Batched (multiple postings per call, like rankOpportunities) rather than
+// one call per job, to keep the number of API calls -- and therefore cost
+// and latency -- proportional to batches, not to job count. Hard-capped at
+// MAX_CLASSIFY_BATCH as a last line of defense against an accidentally huge
+// prompt; the caller is expected to chunk a larger backlog into
+// MAX_CLASSIFY_BATCH-sized calls itself (see the refresh-pool route).
+const MAX_CLASSIFY_BATCH = 25;
+
+export async function classifyJobPostings(
+  jobs: { id: string; title: string; company: string | null; snippet: string | null }[]
+): Promise<Map<string, JobClassification>> {
+  const openai = getClient();
+  const result = new Map<string, JobClassification>();
+  if (!openai || jobs.length === 0) return result;
+  const batch = jobs.slice(0, MAX_CLASSIFY_BATCH);
+  try {
+    const listing = batch
+      .map((j) => {
+        const snippet = j.snippet ? (j.snippet.length > 300 ? `${j.snippet.slice(0, 300)}…` : j.snippet) : "(no description)";
+        return `[${j.id}] "${j.title}" at ${j.company ?? "Unknown company"}\n  ${snippet}`;
+      })
+      .join("\n\n");
+    const completion = await openai.chat.completions.create({
+      model: CHAT_MODEL,
+      temperature: 0,
+      response_format: { type: "json_object" },
+      messages: [
+        {
+          role: "system",
+          content:
+            "You classify real job postings into a fixed industry and seniority taxonomy, using ONLY the title, company name, and description given for each -- never guess beyond what's actually there. " +
+            'Respond ONLY with JSON: {"classified": [{"id": string, "industry": string or null, "seniority": string or null}]}. One entry per posting given, using its exact [id] tag. ' +
+            `industry: the SINGLE best-matching entry from this exact list, copied EXACTLY, or null: ${INDUSTRY_OPTIONS.join(", ")}. Judge the sector the EMPLOYER operates in, using the company name and description (not the job title alone) -- e.g. a "Finance Manager" at a car maker is Automotive, the exact same title at a hospital chain is Healthcare / Pharma, and at an IT services firm is IT Services / Consulting. If the company/description genuinely doesn't reveal a clear sector (generic company name, no descriptive text), return null rather than guessing from the title alone. ` +
+            `seniority: the SINGLE best-matching entry from this exact list, copied EXACTLY, or null: ${SENIORITY_OPTIONS.join(", ")}. Judge from the title and description -- explicit seniority language ("Head of", "Director", "VP", "Junior", "Lead", "Associate"), years of experience mentioned, or scope of responsibility described. If genuinely unclear, return null rather than defaulting to a middle guess. ` +
+            "Only use ids exactly as given in the [id] tags -- never invent an id, never renumber.",
+        },
+        { role: "user", content: `JOB POSTINGS:\n${listing}` },
+      ],
+    });
+    const raw = completion.choices[0]?.message?.content;
+    if (!raw) return result;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.classified)) return result;
+
+    const validIds = new Set(batch.map((j) => j.id));
+    for (const item of parsed.classified) {
+      if (item && typeof item === "object" && typeof (item as { id?: unknown }).id === "string") {
+        const id = (item as { id: string }).id;
+        if (!validIds.has(id)) continue;
+        const industryRaw = (item as { industry?: unknown }).industry;
+        const seniorityRaw = (item as { seniority?: unknown }).seniority;
+        const industry = typeof industryRaw === "string" && INDUSTRY_OPTIONS.includes(industryRaw) ? industryRaw : null;
+        const seniority = typeof seniorityRaw === "string" && SENIORITY_OPTIONS.includes(seniorityRaw) ? seniorityRaw : null;
+        result.set(id, { industry, seniority });
+      }
+    }
+    return result;
+  } catch (err) {
+    console.error("classifyJobPostings failed:", err);
+    Sentry.captureException(err);
+    return result;
   }
 }
 
