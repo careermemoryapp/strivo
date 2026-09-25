@@ -35,6 +35,11 @@ type OpportunityCard = {
   location: string | null;
   salary: string | null;
   sourceUrl: string;
+  // Looked up server-side, once per COMPANY, by lookupCompanyLogoDomain
+  // (lib/logoLookup.ts) -- see logoUrlFor's own comment below for why this
+  // is now the primary source for a card's logo, not the client-side
+  // sourceUrl guess.
+  logoDomain: string | null;
   postedDate: string | null;
   fit: "strong" | "good" | "possible" | null;
   reason: string | null;
@@ -73,39 +78,47 @@ function capitalizeFirst(text: string): string {
   return text.length > 0 ? text.charAt(0).toUpperCase() + text.slice(1) : text;
 }
 
-// The real employer domain a job's card avatar can show a logo for -- or
-// null when there isn't one worth trying. sourceUrl is the verified
-// employer/ATS apply link when resolveDirectApplyUrl (lib/applyLinkResolver.ts)
-// succeeded server-side, but for a job it couldn't verify, sourceUrl falls
-// back to Adzuna's own raw redirect link (see refresh-pool/run's own
-// comment on why that job still gets shown rather than dropped) -- a logo
-// lookup against THAT domain would show Adzuna's icon, not the employer's,
-// which is worse than the plain letter avatar this replaces. Reusing the
-// exact same AGGREGATOR_DOMAINS denylist the server already filters
-// verified apply links against (via isAggregatorDomain, from lib/config.ts
-// -- client-safe, unlike the rest of applyLinkResolver.ts) catches that
-// case, plus the rarer one where resolution succeeded but still landed on
-// a portal Strivo just hasn't excluded from AGGREGATOR_DOMAINS yet.
+// A client-side, secondary domain guess -- used ONLY when the server-side
+// lookup (opp.logoDomain, from lib/logoLookup.ts, keyed on the company's
+// NAME) hasn't found anything. sourceUrl is the verified employer/ATS
+// apply link when resolveDirectApplyUrl (lib/applyLinkResolver.ts)
+// succeeded server-side, but this app's server is IP-blocked by Adzuna
+// from following its own redirect_url (see the investigation at the top of
+// lib/applyLinkResolver.ts), so close to no NEW posting's sourceUrl
+// resolves to the employer's own domain any more -- this guess mostly
+// exists as a free, zero-cost extra chance for the rare posting where
+// resolution DID succeed (or for whenever Adzuna's block eventually
+// lifts), not as the primary source. Reuses the exact same
+// AGGREGATOR_DOMAINS denylist the server filters verified apply links
+// against (via isAggregatorDomain, from lib/config.ts -- client-safe,
+// unlike the rest of applyLinkResolver.ts), so a job still showing
+// Adzuna's own redirect link never has a logo guessed against Adzuna's own
+// domain instead of the employer's.
 function logoDomainFor(sourceUrl: string): string | null {
   if (isAggregatorDomain(sourceUrl)) return null;
   return hostnameOf(sourceUrl);
 }
 
-// Logo-by-domain lookup, via logo.dev -- no server round trip (the browser
-// fetches this directly). This used to be Clearbit's free logo.clearbit.com
-// (no key needed at all), but Clearbit's free Logo API was sunset industry-
-// wide in December 2025 (HubSpot, which acquired Clearbit, shut it down for
-// everyone, not just Strivo) -- every job card silently lost its logo and
-// fell back to the letter avatar at that point, which is what the founder
-// noticed. logo.dev is the replacement: it needs a "publishable" key (safe
-// to ship in client-side code by design -- logo.dev's own dashboard calls
-// it out as such, the same model as a Stripe publishable key), which the
-// founder generated for free and which lives in NEXT_PUBLIC_LOGO_DEV_TOKEN
-// (see .env.example) so it's not hardcoded here. `fallback=404` makes a
-// domain with no logo return a genuine 404 instead of logo.dev's own
-// default monogram placeholder -- without it, EVERY domain would "succeed"
-// with a generic icon and the onError fallback to the letter avatar below
-// would never fire, even for jobs with no real logo available.
+// Logo-by-domain image URL, via logo.dev -- no server round trip for the
+// image itself (the browser fetches this directly). This used to be
+// Clearbit's free logo.clearbit.com (no key needed at all), but Clearbit's
+// free Logo API was sunset industry-wide in December 2025 (HubSpot, which
+// acquired Clearbit, shut it down for everyone, not just Strivo) -- every
+// job card silently lost its logo and fell back to the letter avatar at
+// that point, which is what the founder noticed. logo.dev is the
+// replacement: it needs a "publishable" key (safe to ship in client-side
+// code by design -- logo.dev's own dashboard calls it out as such, the
+// same model as a Stripe publishable key), which the founder generated for
+// free and which lives in NEXT_PUBLIC_LOGO_DEV_TOKEN (see .env.example) so
+// it's not hardcoded here. `fallback=404` makes a domain with no logo
+// return a genuine 404 instead of logo.dev's own default monogram
+// placeholder -- without it, EVERY domain would "succeed" with a generic
+// icon and the onError fallback to the letter avatar below would never
+// fire, even for a domain with no real logo available. Takes a domain
+// either way it was found -- server-side by company NAME (opp.logoDomain,
+// the normal case now) or this file's own client-side guess from a job's
+// link (logoDomainFor, now the rare case) -- this function itself doesn't
+// care which.
 function logoUrlFor(domain: string): string | null {
   const token = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN;
   if (!token) return null;
@@ -179,17 +192,17 @@ function OpportunityCardItem({
   onFeedback: (jobId: string, feedback: "relevant" | "not_for_me") => void;
 }) {
   const [shown, setShown] = useState(false);
-  // The logo image src to attempt -- null when the job's apply link never
-  // resolved to a real employer domain (logoDomainFor), or when logo.dev's
-  // token isn't configured (logoUrlFor), in which case the render below
-  // goes straight to the letter avatar and never renders an <img> at all.
-  // Only one attempt is made per card: unlike an earlier version of this
-  // logic, there's no second, company-name-based lookup to fall back to
-  // (logo.dev's equivalent of that needs a server-side secret key and a
-  // small proxy route, which hasn't been built) -- see logoUrlFor's
-  // comment for why logo.dev replaced the domain-based lookup at all.
+  // The logo image src to attempt. Prefers opp.logoDomain -- the
+  // server-side, once-per-COMPANY lookup by NAME (lib/logoLookup.ts),
+  // which works regardless of whether this job's own apply link ever
+  // resolved -- falling back to this file's own client-side guess from
+  // the link itself (logoDomainFor) only when the server-side lookup
+  // hasn't found anything (never run yet, or genuinely no match). null
+  // when neither source has a domain, or logo.dev's publishable token
+  // isn't configured (logoUrlFor), in which case the render below goes
+  // straight to the letter avatar and never renders an <img> at all.
   const [logoFailed, setLogoFailed] = useState(false);
-  const domain = logoDomainFor(opp.sourceUrl);
+  const domain = opp.logoDomain ?? logoDomainFor(opp.sourceUrl);
   const logoSrc = domain ? logoUrlFor(domain) : null;
 
   useEffect(() => {

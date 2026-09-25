@@ -25,6 +25,13 @@ export type JobPosting = {
   industry_tag: string | null;
   seniority_tag: string | null;
   classified_at: string | null;
+  // This posting's company's logo domain, looked up ONCE PER COMPANY (see
+  // the column's own comment in lib/db.ts and lookupCompanyLogoDomain in
+  // lib/logoLookup.ts) -- null means either "never attempted"
+  // (logo_looked_up_at also null -- see listJobsNeedingLogoLookup) or
+  // "attempted, no logo found for this company" (logo_looked_up_at set).
+  logo_domain: string | null;
+  logo_looked_up_at: string | null;
 };
 
 // Whether a job we've already vetted (see resolveDirectApplyUrl in
@@ -194,6 +201,62 @@ export function purgeAllJobPostings(): number {
   const db = getDb();
   const result = db.prepare(`DELETE FROM job_postings`).run();
   return Number(result.changes);
+}
+
+// Writes the result of one lookupCompanyLogoDomain (lib/logoLookup.ts)
+// call back onto a posting -- see logo_looked_up_at's own comment in
+// lib/db.ts for why this is set exactly once per posting, whatever the
+// lookup returned (including null, a genuine "no logo found").
+export function setJobLogo(id: string, logoDomain: string | null): void {
+  const db = getDb();
+  db.prepare(`UPDATE job_postings SET logo_domain = ?, logo_looked_up_at = ? WHERE id = ?`).run(
+    logoDomain,
+    nowIso(),
+    id
+  );
+}
+
+// Postings in the active pool whose company logo has never been looked up
+// -- same "naturally works down both new postings AND any older backlog"
+// shape as listUnclassifiedActiveJobPostings above, called from
+// app/api/opportunities/refresh-pool/run each chunk.
+export function listJobsNeedingLogoLookup(limit: number): JobPosting[] {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  return db
+    .prepare(
+      `SELECT * FROM job_postings WHERE last_seen_at >= ? AND logo_looked_up_at IS NULL ORDER BY last_seen_at DESC LIMIT ?`
+    )
+    .all(cutoff, limit) as JobPosting[];
+}
+
+// A COMPANY-level, not posting-level, question: has ANY OTHER posting from
+// this same company already had its logo looked up? If so, reuse that
+// result (whether it found a real domain or genuinely found nothing)
+// instead of spending a second logo.dev Search API request on a company
+// the pool has already asked about -- the same employer routinely has
+// several open roles in the pool at once (matched by different function/
+// city grid cells), and a logo is purely a company-level fact, unlike
+// industry/seniority classification which genuinely can vary posting to
+// posting. Returns undefined (not null) when no prior attempt exists for
+// this company at all, so the caller can tell "reuse this" apart from
+// "go look it up." COLLATE NOCASE so "Kotak Mahindra Bank" and "kotak
+// mahindra bank" (Adzuna's own casing is inconsistent across listings)
+// are treated as the same company. Doesn't fully prevent two postings
+// from the SAME brand-new company both firing a lookup when they land in
+// the same concurrent batch (neither has written a result yet when the
+// other checks) -- accepted as a rare, low-cost duplicate rather than
+// adding cross-request locking for it; see the caller in refresh-pool/run.
+export function findResolvedLogoDomainForCompany(company: string): { domain: string | null } | undefined {
+  const db = getDb();
+  const row = db
+    .prepare(
+      `SELECT logo_domain FROM job_postings
+        WHERE company = ? COLLATE NOCASE AND logo_looked_up_at IS NOT NULL
+        ORDER BY logo_looked_up_at DESC LIMIT 1`
+    )
+    .get(company) as { logo_domain: string | null } | undefined;
+  return row ? { domain: row.logo_domain } : undefined;
 }
 
 export function countActiveJobPostings(): number {

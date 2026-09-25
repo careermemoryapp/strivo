@@ -10,10 +10,14 @@ import {
   countActiveJobPostings,
   listUnclassifiedActiveJobPostings,
   setJobClassification,
+  listJobsNeedingLogoLookup,
+  findResolvedLogoDomainForCompany,
+  setJobLogo,
 } from "@/lib/repo/jobPostings";
 import { recordAdzunaCall, getAdzunaUsage } from "@/lib/repo/adzunaUsage";
 import { getRefreshChunkIndex, advanceRefreshChunkIndex } from "@/lib/repo/refreshPoolState";
 import { classifyJobPostings, aiConfigured } from "@/lib/ai";
+import { lookupCompanyLogoDomain, logoDevConfigured } from "@/lib/logoLookup";
 
 // Fixed function x city grid, PACED IN CHUNKS -- a direct founder call,
 // worked through with exact numbers, after finding that a single sweep of
@@ -178,6 +182,15 @@ const QUERY_CONCURRENCY = 5;
 // both this run's new postings AND any pre-existing backlog together).
 const CLASSIFY_BATCH_SIZE = 25;
 const MAX_CLASSIFY_BATCHES_PER_RUN = 6; // up to 150 postings classified per invocation
+
+// Company logo lookup (lib/logoLookup.ts) -- same "bounded per run, backlog
+// works itself down over later chunks" shape as classification above, and
+// likewise pure logo.dev cost, no relation to the Adzuna budget this file
+// is otherwise careful about. Concurrency kept modest (unlike
+// RESOLVE_CONCURRENCY's Cloudflare-flagging concern above, this is simply
+// good manners toward a third-party API on logo.dev's own free tier).
+const MAX_LOGO_LOOKUPS_PER_RUN = 150;
+const LOGO_LOOKUP_CONCURRENCY = 5;
 
 type QueryCell = { fn: string; city: string };
 
@@ -354,6 +367,36 @@ export async function POST(req: Request) {
     }
   }
 
+  // Company logo lookup (lib/logoLookup.ts) -- same bounded-backlog shape
+  // and same "gate on the key being configured" reasoning as the
+  // classification pass above (logoDevConfigured() false must never
+  // permanently stamp the whole backlog as "attempted, no logo"). For
+  // each posting, first check whether some OTHER posting from the same
+  // company already has a result (findResolvedLogoDomainForCompany) --
+  // reuse it for free; only actually call logo.dev for a company this
+  // pool has never asked about before.
+  let jobsLogoLookedUp = 0;
+  let jobsLogoReused = 0;
+  if (logoDevConfigured()) {
+    const toLookup = listJobsNeedingLogoLookup(MAX_LOGO_LOOKUPS_PER_RUN);
+    await mapWithConcurrency(toLookup, LOGO_LOOKUP_CONCURRENCY, async (job) => {
+      if (!job.company) {
+        setJobLogo(job.id, null);
+        jobsLogoLookedUp++;
+        return;
+      }
+      const prior = findResolvedLogoDomainForCompany(job.company);
+      if (prior !== undefined) {
+        setJobLogo(job.id, prior.domain);
+        jobsLogoReused++;
+        return;
+      }
+      const domain = await lookupCompanyLogoDomain(job.company);
+      setJobLogo(job.id, domain);
+      jobsLogoLookedUp++;
+    });
+  }
+
   advanceRefreshChunkIndex(TOTAL_CHUNKS);
 
   return NextResponse.json({
@@ -387,6 +430,13 @@ export async function POST(req: Request) {
     // comment above. 0 whenever aiConfigured() is false, distinguishable
     // from "backlog was already empty" only by also checking poolSize.
     jobsClassified,
+    // How many postings this invocation looked up a company logo for --
+    // jobsLogoLookedUp actually called logo.dev (or had no company name to
+    // look up at all), jobsLogoReused got its result for free from another
+    // posting at the same company already looked up in an earlier run. 0
+    // for both whenever logoDevConfigured() is false.
+    jobsLogoLookedUp,
+    jobsLogoReused,
     adzunaUsage: getAdzunaUsage(),
   });
 }

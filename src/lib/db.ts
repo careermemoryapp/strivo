@@ -904,6 +904,33 @@ function migrate(db: DatabaseSync) {
     db.exec(`ALTER TABLE job_postings ADD COLUMN classified_at TEXT;`);
   }
 
+  // Company logo, looked up ONCE PER COMPANY (not per posting, and not
+  // per user/render) via logo.dev's Search API, keyed on the company's
+  // plain NAME -- see lookupCompanyLogoDomain in lib/logoLookup.ts. This
+  // deliberately does NOT reuse source_url the way the client's own
+  // logoDomainFor (OpportunitiesClient.tsx) does: this server this app
+  // runs on is IP-blocked by Adzuna from following its own redirect_url
+  // (see the long investigation at the top of lib/applyLinkResolver.ts),
+  // so source_url is the raw Adzuna redirect for close to 100% of NEW
+  // postings going forward, not the employer's own domain -- a
+  // founder-confirmed real gap, not a rare edge case. Looking up by name
+  // instead sidesteps that entirely: Adzuna always gives a company name,
+  // whether or not its link ever resolves. logo_domain is nullable (no
+  // match found, or the lookup was never attempted) and
+  // logo_looked_up_at is its own separate "attempted" marker, same
+  // reasoning as classified_at above -- a genuinely-searched company with
+  // no logo on file must still count as done, or every future chunk run
+  // would re-spend a lookup on it forever. See
+  // findResolvedLogoDomainForCompany in lib/repo/jobPostings.ts for how a
+  // SECOND posting from an already-looked-up company reuses that result
+  // instead of spending another logo.dev request on the same company.
+  if (!jobPostingColumns.includes("logo_domain")) {
+    db.exec(`ALTER TABLE job_postings ADD COLUMN logo_domain TEXT;`);
+  }
+  if (!jobPostingColumns.includes("logo_looked_up_at")) {
+    db.exec(`ALTER TABLE job_postings ADD COLUMN logo_looked_up_at TEXT;`);
+  }
+
   // Same closed-vocabulary treatment for the PERSON side of the match --
   // one overall seniority band per person, from the same OPPORTUNITY_
   // SENIORITY_LIST job postings are classified against, inferred in the

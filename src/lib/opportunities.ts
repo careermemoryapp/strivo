@@ -41,6 +41,14 @@ export type OpportunityCard = {
   location: string | null;
   salary: string | null;
   sourceUrl: string;
+  // This posting's company's logo domain, looked up server-side once per
+  // company (see lib/logoLookup.ts and the logo_domain column's comment in
+  // lib/db.ts) -- null when the lookup hasn't run yet, or genuinely found
+  // no logo for this company. OpportunitiesClient.tsx renders a real logo
+  // from this when present, falling back to a client-side guess from
+  // sourceUrl itself (rarely useful now -- see logoLookup.ts's top
+  // comment for why), then to the plain letter avatar.
+  logoDomain: string | null;
   postedDate: string | null;
   fit: "strong" | "good" | "possible" | null; // null when not yet personalized, or on the rare AI-unavailable fallback
   reason: string | null;
@@ -117,6 +125,7 @@ function toCard(
     location: job.location,
     salary: job.salary,
     sourceUrl: job.source_url,
+    logoDomain: job.logo_domain,
     postedDate: job.posted_date,
     fit,
     reason,
