@@ -78,6 +78,16 @@
 // means "drop this job" -- see refresh-pool/run for what happens instead.
 
 import { Impit } from "impit";
+// AGGREGATOR_DOMAINS/hostnameOf/isAggregatorDomain moved to lib/config.ts
+// (2026-09-25) so OpportunitiesClient.tsx -- a "use client" component --
+// can reuse the exact same denylist when deciding whether a job's
+// sourceUrl is worth trying a company-logo lookup against (see that
+// file's avatar rendering). This file stays server-only (see the top
+// comment) and just imports the shared list rather than keeping its own
+// copy. Re-exported so existing callers of isAggregatorDomain from THIS
+// file don't need to change their import path.
+import { isAggregatorDomain, hostnameOf } from "@/lib/config";
+export { isAggregatorDomain };
 
 const RESOLVE_TIMEOUT_MS = 6000;
 
@@ -98,66 +108,6 @@ const impitClient = new Impit({
   followRedirects: true,
   timeout: RESOLVE_TIMEOUT_MS,
 });
-
-// Job marketplaces / aggregators to exclude -- matched by hostname suffix,
-// so "www.linkedin.com" and "in.linkedin.com" both match "linkedin.com".
-// Deliberately NOT exhaustive of every job site that exists; this is the
-// practical list of what actually turns up in Adzuna's India results.
-// Extend it here if a refresh keeps letting another aggregator through.
-const AGGREGATOR_DOMAINS = [
-  "adzuna.com",
-  "adzuna.in",
-  "linkedin.com",
-  "indeed.com",
-  "in.indeed.com",
-  "naukri.com",
-  "naukrigulf.com",
-  "monsterindia.com",
-  "monster.com",
-  "foundit.in",
-  "shine.com",
-  "timesjobs.com",
-  "glassdoor.com",
-  "glassdoor.co.in",
-  "ziprecruiter.com",
-  "simplyhired.com",
-  "simplyhired.co.in",
-  "careerbuilder.com",
-  "careerjet.com",
-  "careerjet.co.in",
-  "jooble.org",
-  "jora.com",
-  "talent.com",
-  "jobrapido.com",
-  "jobsora.com",
-  "instahyre.com",
-  "hirist.com",
-  "iimjobs.com",
-  "cutshort.io",
-  "wellfound.com",
-  "angel.co",
-  "apna.co",
-  "freshersworld.com",
-  "quikrjobs.com",
-  "ncs.gov.in",
-  "receptix.com",
-  "google.com", // Google for Jobs aggregation pages, not a real employer flow
-];
-
-function hostnameOf(url: string): string | null {
-  try {
-    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-  } catch {
-    return null;
-  }
-}
-
-// Exact match or subdomain match ("in.indeed.com" -> matches "indeed.com").
-export function isAggregatorDomain(url: string): boolean {
-  const host = hostnameOf(url);
-  if (!host) return true; // unparseable URL -- treat as untrusted, exclude
-  return AGGREGATOR_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
-}
 
 // Follows the redirect chain (GET, not HEAD -- several career sites 405 on
 // HEAD) and returns the final landed URL, or null if it couldn't resolve

@@ -184,6 +184,75 @@ export const OPPORTUNITY_INDUSTRIES_LIST = [
 // description alone, which a specific number never would be.
 export const OPPORTUNITY_SENIORITY_LIST = ["Entry-level", "Mid-level", "Senior", "Leadership"] as const;
 
+// Job marketplaces / aggregators to exclude -- matched by hostname suffix,
+// so "www.linkedin.com" and "in.linkedin.com" both match "linkedin.com".
+// Deliberately NOT exhaustive of every job site that exists; this is the
+// practical list of what actually turns up in Adzuna's India results.
+// Extend it here if a refresh keeps letting another aggregator through.
+//
+// Lives here (not lib/applyLinkResolver.ts, which is server-only -- see
+// that file's own top comment) specifically so it's usable from a "use
+// client" component: OpportunitiesClient.tsx also needs this list, to
+// decide whether a job's sourceUrl is a real employer/ATS domain worth
+// trying a company-logo lookup against, or Adzuna's own click-tracking
+// redirect / a portal landing page that a logo lookup would show the wrong
+// (or no) icon for. applyLinkResolver.ts imports this same list rather
+// than keeping its own copy, so there's exactly one list to extend.
+export const AGGREGATOR_DOMAINS = [
+  "adzuna.com",
+  "adzuna.in",
+  "linkedin.com",
+  "indeed.com",
+  "in.indeed.com",
+  "naukri.com",
+  "naukrigulf.com",
+  "monsterindia.com",
+  "monster.com",
+  "foundit.in",
+  "shine.com",
+  "timesjobs.com",
+  "glassdoor.com",
+  "glassdoor.co.in",
+  "ziprecruiter.com",
+  "simplyhired.com",
+  "simplyhired.co.in",
+  "careerbuilder.com",
+  "careerjet.com",
+  "careerjet.co.in",
+  "jooble.org",
+  "jora.com",
+  "talent.com",
+  "jobrapido.com",
+  "jobsora.com",
+  "instahyre.com",
+  "hirist.com",
+  "iimjobs.com",
+  "cutshort.io",
+  "wellfound.com",
+  "angel.co",
+  "apna.co",
+  "freshersworld.com",
+  "quikrjobs.com",
+  "ncs.gov.in",
+  "receptix.com",
+  "google.com", // Google for Jobs aggregation pages, not a real employer flow
+];
+
+export function hostnameOf(url: string): string | null {
+  try {
+    return new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
+// Exact match or subdomain match ("in.indeed.com" -> matches "indeed.com").
+export function isAggregatorDomain(url: string): boolean {
+  const host = hostnameOf(url);
+  if (!host) return true; // unparseable URL -- treat as untrusted, exclude
+  return AGGREGATOR_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
+}
+
 // Fixed allow-list of Career Wrapped analytics events (see the spec's
 // analytics section) -- the single source of truth for both the client
 // trackEvent() helper (lib/trackEvent.ts) and the API route that persists

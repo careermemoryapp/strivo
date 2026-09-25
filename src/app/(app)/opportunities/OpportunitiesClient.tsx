@@ -26,6 +26,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
 import { cn } from "@/lib/utils";
+import { hostnameOf, isAggregatorDomain } from "@/lib/config";
 
 type OpportunityCard = {
   id: string;
@@ -70,6 +71,34 @@ type OpportunitiesResponse = {
 // on.
 function capitalizeFirst(text: string): string {
   return text.length > 0 ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
+// The real employer domain a job's card avatar can show a logo for -- or
+// null when there isn't one worth trying. sourceUrl is the verified
+// employer/ATS apply link when resolveDirectApplyUrl (lib/applyLinkResolver.ts)
+// succeeded server-side, but for a job it couldn't verify, sourceUrl falls
+// back to Adzuna's own raw redirect link (see refresh-pool/run's own
+// comment on why that job still gets shown rather than dropped) -- a logo
+// lookup against THAT domain would show Adzuna's icon, not the employer's,
+// which is worse than the plain letter avatar this replaces. Reusing the
+// exact same AGGREGATOR_DOMAINS denylist the server already filters
+// verified apply links against (via isAggregatorDomain, from lib/config.ts
+// -- client-safe, unlike the rest of applyLinkResolver.ts) catches that
+// case, plus the rarer one where resolution succeeded but still landed on
+// a portal Strivo just hasn't excluded from AGGREGATOR_DOMAINS yet.
+function logoDomainFor(sourceUrl: string): string | null {
+  if (isAggregatorDomain(sourceUrl)) return null;
+  return hostnameOf(sourceUrl);
+}
+
+// Logo-by-domain lookup -- no API key, no server round trip (the browser
+// fetches this directly). Genuinely 404s when it has no logo for a domain
+// (unlike some favicon services, which return a generic placeholder icon
+// instead of failing), which is what makes the onError fallback to the
+// letter avatar below actually work rather than showing a blank icon for
+// every company it doesn't recognize.
+function logoUrlFor(domain: string): string {
+  return `https://logo.clearbit.com/${domain}?size=128`;
 }
 
 const FIT_CONFIG: Record<
@@ -139,6 +168,14 @@ function OpportunityCardItem({
   onFeedback: (jobId: string, feedback: "relevant" | "not_for_me") => void;
 }) {
   const [shown, setShown] = useState(false);
+  // Whether the logo image for this card failed to load (404, network
+  // error, or genuinely no source domain worth trying -- see logoDomainFor)
+  // -- starts false so a real logo gets a chance to load first; flips to
+  // true on the <img>'s onError, at which point the render below falls
+  // back to the original letter-avatar treatment. Never flips back: once a
+  // domain's logo has failed to load this session, there's no reason to
+  // keep retrying it on every re-render.
+  const [logoFailed, setLogoFailed] = useState(false);
   useEffect(() => {
     // One animation frame after mount, not the same tick -- so the browser
     // has actually painted the initial opacity-0/translate-y-2 state (see
@@ -209,16 +246,48 @@ function OpportunityCardItem({
         </div>
       )}
       <div className="flex items-start gap-3">
-        <div
-          className={cn(
-            "flex shrink-0 items-center justify-center rounded-full font-bold",
-            featured
-              ? "h-12 w-12 bg-gradient-brand text-white text-[18px] shadow-sm"
-              : "h-11 w-11 bg-brand-secondary-soft text-brand-secondary text-[16px]"
-          )}
-        >
-          {(opp.company?.trim()?.[0] ?? opp.title.trim()[0] ?? "?").toUpperCase()}
-        </div>
+        {(() => {
+          const domain = logoDomainFor(opp.sourceUrl);
+          // A real company logo, framed in its own white circle so a
+          // transparent-background PNG (most company logos) reads cleanly
+          // regardless of the card's own background -- falls back to the
+          // original colored-letter treatment the instant the image fails
+          // to load, so this never risks showing a broken-image icon.
+          // Direct founder ask: real logos read as more vibrant and
+          // genuine than every card showing the same plain letter circle.
+          if (domain && !logoFailed) {
+            return (
+              <div
+                className={cn(
+                  "shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border",
+                  featured ? "h-12 w-12 shadow-sm" : "h-11 w-11"
+                )}
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- a
+                    third-party logo-by-domain URL, not a local/optimizable
+                    asset next/image can process. */}
+                <img
+                  src={logoUrlFor(domain)}
+                  alt=""
+                  className="h-full w-full object-contain p-1.5"
+                  onError={() => setLogoFailed(true)}
+                />
+              </div>
+            );
+          }
+          return (
+            <div
+              className={cn(
+                "flex shrink-0 items-center justify-center rounded-full font-bold",
+                featured
+                  ? "h-12 w-12 bg-gradient-brand text-white text-[18px] shadow-sm"
+                  : "h-11 w-11 bg-brand-secondary-soft text-brand-secondary text-[16px]"
+              )}
+            >
+              {(opp.company?.trim()?.[0] ?? opp.title.trim()[0] ?? "?").toUpperCase()}
+            </div>
+          );
+        })()}
         <div className="min-w-0 flex-1">
           {/* Fit badge moved onto its own row underneath the title -- a
               direct founder ask, so a long title no longer pushes the badge
