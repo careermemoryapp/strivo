@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatDistanceToNowStrict } from "date-fns";
 import {
@@ -91,45 +91,25 @@ function logoDomainFor(sourceUrl: string): string | null {
   return hostnameOf(sourceUrl);
 }
 
-// Logo-by-domain lookup -- no API key, no server round trip (the browser
-// fetches this directly). Genuinely 404s when it has no logo for a domain
-// (unlike some favicon services, which return a generic placeholder icon
-// instead of failing), which is what makes the onError fallback to the
-// letter avatar below actually work rather than showing a blank icon for
-// every company it doesn't recognize.
-function logoUrlFor(domain: string): string {
-  return `https://logo.clearbit.com/${domain}?size=128`;
-}
-
-// Second-chance logo lookup, keyed by the company's NAME rather than a URL.
-// logoDomainFor above only ever gets a usable domain when the job's apply
-// link actually resolved to the employer's own site -- it comes up empty
-// for two common cases: (1) a job whose link never got past Adzuna's own
-// redirect (isAggregatorDomain flags it, so no domain guess is even made),
-// and (2) a job that DID resolve to a genuine employer domain, but a
-// job-specific subdomain (a company's Workday/Taleo/SmartRecruiters
-// careers-site address, say) rather than the plain corporate domain
-// Clearbit actually has a logo indexed against -- "Standard Chartered"
-// posting through a subdomain like that is exactly this case. Clearbit's
-// Autocomplete endpoint is free, keyless, and CORS-open from the browser,
-// and matches on the company's display name instead of a URL, so it finds
-// the bank's real domain (and logo) regardless of which address the job
-// posting itself happened to link to. Results are cached by name (as
-// in-flight promises, so two cards for the same company in one page load
-// only ever trigger one request) since the same employer shows up on
-// multiple cards within a session.
-const companyLogoDomainCache = new Map<string, Promise<string | null>>();
-function lookupCompanyLogoDomain(company: string): Promise<string | null> {
-  const key = company.trim().toLowerCase();
-  if (!key) return Promise.resolve(null);
-  const cached = companyLogoDomainCache.get(key);
-  if (cached) return cached;
-  const lookup = fetch(`https://autocomplete.clearbit.com/v1/companies/suggest?query=${encodeURIComponent(company)}`)
-    .then((res) => (res.ok ? (res.json() as Promise<{ domain?: string }[]>) : []))
-    .then((results) => results?.[0]?.domain ?? null)
-    .catch(() => null);
-  companyLogoDomainCache.set(key, lookup);
-  return lookup;
+// Logo-by-domain lookup, via logo.dev -- no server round trip (the browser
+// fetches this directly). This used to be Clearbit's free logo.clearbit.com
+// (no key needed at all), but Clearbit's free Logo API was sunset industry-
+// wide in December 2025 (HubSpot, which acquired Clearbit, shut it down for
+// everyone, not just Strivo) -- every job card silently lost its logo and
+// fell back to the letter avatar at that point, which is what the founder
+// noticed. logo.dev is the replacement: it needs a "publishable" key (safe
+// to ship in client-side code by design -- logo.dev's own dashboard calls
+// it out as such, the same model as a Stripe publishable key), which the
+// founder generated for free and which lives in NEXT_PUBLIC_LOGO_DEV_TOKEN
+// (see .env.example) so it's not hardcoded here. `fallback=404` makes a
+// domain with no logo return a genuine 404 instead of logo.dev's own
+// default monogram placeholder -- without it, EVERY domain would "succeed"
+// with a generic icon and the onError fallback to the letter avatar below
+// would never fire, even for jobs with no real logo available.
+function logoUrlFor(domain: string): string | null {
+  const token = process.env.NEXT_PUBLIC_LOGO_DEV_TOKEN;
+  if (!token) return null;
+  return `https://img.logo.dev/${domain}?token=${token}&size=128&format=png&fallback=404`;
 }
 
 const FIT_CONFIG: Record<
@@ -199,63 +179,18 @@ function OpportunityCardItem({
   onFeedback: (jobId: string, feedback: "relevant" | "not_for_me") => void;
 }) {
   const [shown, setShown] = useState(false);
-  // The logo image src currently being attempted. Starts as the
-  // link-domain guess (logoDomainFor) when the job's apply link resolved
-  // to a real employer domain; starts null immediately when it didn't (see
-  // logoDomainFor's comment), so the name-based fallback below fires right
-  // away instead of waiting on a guaranteed-to-fail image load first.
-  const [logoSrc, setLogoSrc] = useState<string | null>(() => {
-    const domain = logoDomainFor(opp.sourceUrl);
-    return domain ? logoUrlFor(domain) : null;
-  });
-  // Whether the company-name fallback lookup has already been kicked off
-  // for this card, so it only ever runs once even though the effect below
-  // re-fires when logoSrc goes back to null after the link-domain guess's
-  // <img> fails. A ref, not state: it's read by handleLogoError (an event
-  // handler) and the effect below, never by the render itself, so it
-  // doesn't need to schedule a re-render of its own -- setting it directly
-  // in the effect body (rather than inside the async lookup's .then) would
-  // trip the lint rule against synchronous setState-in-effect.
-  const nameLookupStarted = useRef(false);
-  // True once every avenue (link-domain guess, then name lookup) has come
-  // up empty -- only then does the render below fall back to the original
-  // letter-avatar treatment. Never flips back: once both attempts have
-  // failed this session, there's no reason to keep retrying on every
-  // re-render.
-  const [logoExhausted, setLogoExhausted] = useState(false);
-
-  useEffect(() => {
-    if (logoSrc || nameLookupStarted.current || logoExhausted) return;
-    nameLookupStarted.current = true;
-    let cancelled = false;
-    // lookupCompanyLogoDomain resolves to null for an empty/missing name
-    // too, so the "no company on this card" case falls out of the same
-    // async path as a lookup that simply found nothing -- no separate
-    // synchronous setState branch needed here.
-    lookupCompanyLogoDomain(opp.company?.trim() ?? "").then((domain) => {
-      if (cancelled) return;
-      if (domain) setLogoSrc(logoUrlFor(domain));
-      else setLogoExhausted(true);
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [logoSrc, logoExhausted, opp.company]);
-
-  // The current logo src failed to load. If the name-based fallback hasn't
-  // run yet, clearing logoSrc re-triggers the effect above to try it. If it
-  // has already run (this IS the name-lookup's own logo failing), there's
-  // nothing left to try -- clear logoSrc here too (not just set
-  // logoExhausted), because the render below still holds onto whatever
-  // logoSrc last was: leaving the failed URL in place kept the broken
-  // <img> on screen forever instead of ever reaching the letter-avatar
-  // fallback, which is exactly the stuck-broken-icon bug this fixes.
-  function handleLogoError() {
-    setLogoSrc(null);
-    if (nameLookupStarted.current) {
-      setLogoExhausted(true);
-    }
-  }
+  // The logo image src to attempt -- null when the job's apply link never
+  // resolved to a real employer domain (logoDomainFor), or when logo.dev's
+  // token isn't configured (logoUrlFor), in which case the render below
+  // goes straight to the letter avatar and never renders an <img> at all.
+  // Only one attempt is made per card: unlike an earlier version of this
+  // logic, there's no second, company-name-based lookup to fall back to
+  // (logo.dev's equivalent of that needs a server-side secret key and a
+  // small proxy route, which hasn't been built) -- see logoUrlFor's
+  // comment for why logo.dev replaced the domain-based lookup at all.
+  const [logoFailed, setLogoFailed] = useState(false);
+  const domain = logoDomainFor(opp.sourceUrl);
+  const logoSrc = domain ? logoUrlFor(domain) : null;
 
   useEffect(() => {
     // One animation frame after mount, not the same tick -- so the browser
@@ -331,12 +266,13 @@ function OpportunityCardItem({
           // A real company logo, framed in its own white circle so a
           // transparent-background PNG (most company logos) reads cleanly
           // regardless of the card's own background -- falls back to the
-          // original colored-letter treatment once both the link-domain
-          // guess and the company-name fallback have failed, so this never
-          // risks showing a broken-image icon. Direct founder ask: real
-          // logos read as more vibrant and genuine than every card showing
-          // the same plain letter circle.
-          if (logoSrc && !logoExhausted) {
+          // original colored-letter treatment the instant the image fails
+          // to load (see logoUrlFor's fallback=404 comment for why a
+          // missing logo fails cleanly instead of showing a generic
+          // placeholder), so this never risks showing a broken-image icon.
+          // Direct founder ask: real logos read as more vibrant and
+          // genuine than every card showing the same plain letter circle.
+          if (logoSrc && !logoFailed) {
             return (
               <div
                 className={cn(
@@ -351,7 +287,7 @@ function OpportunityCardItem({
                   src={logoSrc}
                   alt=""
                   className="h-full w-full object-contain p-1.5"
-                  onError={handleLogoError}
+                  onError={() => setLogoFailed(true)}
                 />
               </div>
             );
