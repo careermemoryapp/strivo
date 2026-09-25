@@ -243,13 +243,16 @@ function OpportunityCardItem({
   }, [logoSrc, logoExhausted, opp.company]);
 
   // The current logo src failed to load. If the name-based fallback hasn't
-  // run yet, clearing logoSrc re-triggers the effect above to try it; if it
+  // run yet, clearing logoSrc re-triggers the effect above to try it. If it
   // has already run (this IS the name-lookup's own logo failing), there's
-  // nothing left to try.
+  // nothing left to try -- clear logoSrc here too (not just set
+  // logoExhausted), because the render below still holds onto whatever
+  // logoSrc last was: leaving the failed URL in place kept the broken
+  // <img> on screen forever instead of ever reaching the letter-avatar
+  // fallback, which is exactly the stuck-broken-icon bug this fixes.
   function handleLogoError() {
-    if (!nameLookupStarted.current) {
-      setLogoSrc(null);
-    } else {
+    setLogoSrc(null);
+    if (nameLookupStarted.current) {
       setLogoExhausted(true);
     }
   }
@@ -333,7 +336,7 @@ function OpportunityCardItem({
           // risks showing a broken-image icon. Direct founder ask: real
           // logos read as more vibrant and genuine than every card showing
           // the same plain letter circle.
-          if (logoSrc) {
+          if (logoSrc && !logoExhausted) {
             return (
               <div
                 className={cn(
