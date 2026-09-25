@@ -661,13 +661,14 @@ export function MarketingHome({
           {CAREER_PROFILE_QUIZ_ORDER.map((quizId) => {
             const meta = CAREER_PROFILE_QUIZZES[quizId];
             return (
-              <motion.div
-                key={quizId}
-                variants={fadeUp}
-                className="flex items-center gap-2 rounded-full border border-[#2a2a35] bg-[#13131a] py-2 pl-2.5 pr-4"
-              >
-                <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[13px]">{meta.icon}</span>
-                <span className="text-xs font-semibold text-white/80">{meta.title}</span>
+              <motion.div key={quizId} variants={fadeUp}>
+                <Link
+                  href={`/quiz/${quizId}`}
+                  className="flex items-center gap-2 rounded-full border border-[#2a2a35] bg-[#13131a] py-2 pl-2.5 pr-4 transition-colors hover:border-[#3a3a48] hover:bg-[#1a1a22]"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[13px]">{meta.icon}</span>
+                  <span className="text-xs font-semibold text-white/80">{meta.title}</span>
+                </Link>
               </motion.div>
             );
           })}
