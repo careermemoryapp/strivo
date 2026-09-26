@@ -131,6 +131,18 @@ function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
 }
 
+// Same idea as pct() but doesn't collapse a real, nonzero rate down to a
+// misleading "0%" -- the growth funnel's click-through rate is routinely
+// well under 1% (a handful of clicks out of thousands of visitors), and
+// "0%" reads as "nobody is clicking" when the true story is "a small
+// number of people are clicking." Only an exact zero prints as "0%".
+function pctFine(n: number): string {
+  if (n === 0) return "0%";
+  if (n < 0.001) return "<0.1%";
+  if (n < 0.01) return `${(n * 100).toFixed(1)}%`;
+  return `${Math.round(n * 100)}%`;
+}
+
 function formatUptime(seconds: number): string {
   const days = Math.floor(seconds / 86400);
   const hours = Math.floor((seconds % 86400) / 3600);
@@ -1180,38 +1192,113 @@ export default function AdminDashboardPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-                  {growthFunnel.stages.map((stage) => (
-                    <div key={stage.label} className="rounded-[14px] border border-[#f0ecf7] p-3.5">
-                      <p className="text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">{stage.label}</p>
-                      <p className="mt-1 text-2xl font-bold text-ink">
-                        {stage.configured ? (stage.value ?? 0).toLocaleString() : "—"}
-                      </p>
-                      <p className="mt-0.5 text-[10.5px] text-ink-faint">
-                        {stage.configured
-                          ? stage.conversionFromPrevious != null
-                            ? `${pct(stage.conversionFromPrevious)} of previous stage`
-                            : `Source: ${stage.source}`
-                          : `Not connected yet · ${stage.source}`}
-                      </p>
-                    </div>
-                  ))}
+                <div>
+                  {growthFunnel.stages.map((stage, i) => {
+                    const prev = i > 0 ? growthFunnel.stages[i - 1] : null;
+                    // Visual bar width: real % of visitors, floored at 3%
+                    // so a genuinely tiny-but-nonzero stage (e.g. 1 click
+                    // out of thousands of visits) still shows a sliver
+                    // instead of vanishing -- the text next to it always
+                    // shows the true number, never the floored width.
+                    const widthPct =
+                      stage.configured && stage.pctOfVisitors != null
+                        ? Math.max(3, Math.round(stage.pctOfVisitors * 100))
+                        : 100;
+                    return (
+                      <div key={stage.label}>
+                        {i > 0 && (
+                          <div className="flex items-center gap-2 py-1 pl-2">
+                            <span className="text-[#d8d2e8]">↓</span>
+                            <span className="text-[11px] text-ink-faint">
+                              {!stage.configured || !prev?.configured
+                                ? `${stage.label} isn't connected yet, so the drop-off from "${prev?.label}" can't be measured`
+                                : stage.conversionFromPrevious != null
+                                  ? `${pctFine(stage.conversionFromPrevious)} of "${prev?.label}" continued (${pctFine(1 - stage.conversionFromPrevious)} dropped off here)`
+                                  : null}
+                            </span>
+                          </div>
+                        )}
+                        <div className="rounded-[12px] border border-[#f0ecf7] p-3">
+                          <div className="mb-2 flex items-baseline justify-between gap-3">
+                            <p className="text-[12px] font-semibold text-[#3c3650]">{stage.label}</p>
+                            <div className="text-right">
+                              <span className="text-xl font-bold text-ink">
+                                {stage.configured ? (stage.value ?? 0).toLocaleString() : "—"}
+                              </span>
+                              {stage.configured && stage.pctOfVisitors != null && i > 0 && (
+                                <span className="ml-1.5 text-[10.5px] text-ink-faint">
+                                  ({pctFine(stage.pctOfVisitors)} of visitors)
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="h-[10px] overflow-hidden rounded-full bg-[#f3f0fa]">
+                            <div
+                              className="h-[10px] rounded-full"
+                              style={{
+                                width: `${widthPct}%`,
+                                background: stage.configured
+                                  ? "linear-gradient(90deg,#8b5cf6,#60a5fa)"
+                                  : "repeating-linear-gradient(45deg,#e3ddf0,#e3ddf0 4px,#efebf7 4px,#efebf7 8px)",
+                              }}
+                            />
+                          </div>
+                          {!stage.configured && (
+                            <p className="mt-1.5 text-[10.5px] text-ink-faint">Not connected yet · {stage.source}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {growthFunnel.clicksByLocation.length > 0 && (
-                  <div className="mt-4">
-                    <p className="mb-2 text-[11px] font-semibold text-[#3c3650]">Clicks by placement</p>
-                    <div className="space-y-2">
-                      {growthFunnel.clicksByLocation.map((l) => (
-                        <ProgressRow
-                          key={l.location}
-                          label={l.location}
-                          value={l.count}
-                          max={growthFunnel.clicksByLocation[0].count}
-                        />
-                      ))}
+
+                {(() => {
+                  const clickStage = growthFunnel.stages[1];
+                  return (
+                    clickStage.configured &&
+                    clickStage.pctOfVisitors != null &&
+                    clickStage.pctOfVisitors < 0.01 && (
+                      <p className="mt-3 text-[11px] text-ink-faint">
+                        Click tracking only started counting once it went live -- &quot;Clicked&quot; will look low
+                        until it&apos;s had a full {growthFunnel.days}-day window, not just the days since launch.
+                      </p>
+                    )
+                  );
+                })()}
+
+                <div className="mt-5 grid gap-4 sm:grid-cols-2">
+                  {growthFunnel.visitorsBySource.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold text-[#3c3650]">Where visitors come from</p>
+                      <div className="space-y-2">
+                        {growthFunnel.visitorsBySource.map((s) => (
+                          <ProgressRow
+                            key={s.source}
+                            label={s.source}
+                            value={s.count}
+                            max={growthFunnel.visitorsBySource[0].count}
+                          />
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                  {growthFunnel.clicksByLocation.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-[11px] font-semibold text-[#3c3650]">Clicks by placement</p>
+                      <div className="space-y-2">
+                        {growthFunnel.clicksByLocation.map((l) => (
+                          <ProgressRow
+                            key={l.location}
+                            label={l.location}
+                            value={l.count}
+                            max={growthFunnel.clicksByLocation[0].count}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {(!growthFunnel.stages[0].configured || !growthFunnel.singularConfigured) && (
                   <p className="mt-4 text-[11px] text-ink-faint">
                     {!growthFunnel.stages[0].configured &&

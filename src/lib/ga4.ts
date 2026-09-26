@@ -95,6 +95,12 @@ export type Ga4Summary = {
   // parameter: link_location) -- an optional one-time step; without it
   // this array is just empty, never wrong.
   clicksByLocation: { location: string; count: number }[];
+  // Sessions broken down by GA4's own channel grouping (Direct, Organic
+  // Search, Paid Social, Email, Referral, ...) -- a BUILT-IN dimension, no
+  // registration needed. This is the "where is my traffic actually coming
+  // from" view the founder has asked for since the very start of this
+  // funnel work (email blast vs. thestrategystory.com vs. social).
+  visitorsBySource: { source: string; count: number }[];
 };
 
 async function runReport(propertyId: string, token: string, body: unknown) {
@@ -122,6 +128,18 @@ export async function fetchGa4Summary(days: number): Promise<Ga4Summary> {
     metrics: [{ name: "sessions" }],
   });
   const sessions = Number((sessionsData.rows as Ga4Row[] | undefined)?.[0]?.metricValues?.[0]?.value ?? 0);
+
+  const sourceData = await runReport(propertyId, token, {
+    dateRanges: [dateRange],
+    dimensions: [{ name: "sessionDefaultChannelGroup" }],
+    metrics: [{ name: "sessions" }],
+  });
+  const visitorsBySource = ((sourceData.rows as Ga4Row[] | undefined) ?? [])
+    .map((r) => ({
+      source: r.dimensionValues?.[0]?.value || "(unassigned)",
+      count: Number(r.metricValues?.[0]?.value ?? 0),
+    }))
+    .sort((a, b) => b.count - a.count);
 
   // eventName is a built-in GA4 dimension (no registration needed).
   // customEvent:link_location is an event-scoped custom dimension -- see
@@ -162,5 +180,6 @@ export async function fetchGa4Summary(days: number): Promise<Ga4Summary> {
     clicksByLocation: [...byLocation.entries()]
       .map(([location, count]) => ({ location, count }))
       .sort((a, b) => b.count - a.count),
+    visitorsBySource,
   };
 }

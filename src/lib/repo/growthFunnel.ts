@@ -24,12 +24,20 @@ export type GrowthFunnelStage = {
   // Fraction (0-1) of the PREVIOUS stage that reached this one. null for
   // the first stage, or whenever either stage's source isn't connected.
   conversionFromPrevious: number | null;
+  // Fraction (0-1) of the FIRST stage (visitors) that reached this one --
+  // computed independently of the stage-to-stage chain above, so it still
+  // means something even when a stage in between (Installed) isn't wired
+  // up yet. This is what actually draws the funnel shape (bar width) and
+  // gives an honest "of all visitors" number the admin can act on even
+  // with a gap in the middle.
+  pctOfVisitors: number | null;
 };
 
 export type GrowthFunnel = {
   days: number;
   stages: GrowthFunnelStage[];
   clicksByLocation: { location: string; count: number }[];
+  visitorsBySource: { source: string; count: number }[];
   singularConfigured: boolean;
 };
 
@@ -50,6 +58,7 @@ export async function computeGrowthFunnel(days = 30): Promise<GrowthFunnel> {
   let visitors: number | null = null;
   let clicked: number | null = null;
   let clicksByLocation: { location: string; count: number }[] = [];
+  let visitorsBySource: { source: string; count: number }[] = [];
   const ga4ok = ga4Configured();
   if (ga4ok) {
     try {
@@ -57,6 +66,7 @@ export async function computeGrowthFunnel(days = 30): Promise<GrowthFunnel> {
       visitors = summary.sessions;
       clicked = summary.googlePlayClicks;
       clicksByLocation = summary.clicksByLocation;
+      visitorsBySource = summary.visitorsBySource;
     } catch (e) {
       // Degrade to "not configured"-looking (null) rather than crashing the
       // whole admin page -- same fail-open-to-a-blank-card convention as
@@ -79,13 +89,21 @@ export async function computeGrowthFunnel(days = 30): Promise<GrowthFunnel> {
   const singularConfigured = false;
 
   const stages: GrowthFunnelStage[] = [
-    { label: "Website visitors", value: visitors, source: "GA4", configured: ga4ok, conversionFromPrevious: null },
+    {
+      label: "Website visitors",
+      value: visitors,
+      source: "GA4",
+      configured: ga4ok,
+      conversionFromPrevious: null,
+      pctOfVisitors: visitors !== null ? 1 : null,
+    },
     {
       label: 'Clicked "Get the app"',
       value: clicked,
       source: "GA4",
       configured: ga4ok,
       conversionFromPrevious: conversionRate(clicked, visitors),
+      pctOfVisitors: conversionRate(clicked, visitors),
     },
     {
       label: "Installed the app",
@@ -93,6 +111,7 @@ export async function computeGrowthFunnel(days = 30): Promise<GrowthFunnel> {
       source: "Singular",
       configured: singularConfigured,
       conversionFromPrevious: conversionRate(installed, clicked),
+      pctOfVisitors: conversionRate(installed, visitors),
     },
     {
       label: "Signed up",
@@ -100,8 +119,9 @@ export async function computeGrowthFunnel(days = 30): Promise<GrowthFunnel> {
       source: "Strivo",
       configured: true,
       conversionFromPrevious: conversionRate(signedUp, installed),
+      pctOfVisitors: conversionRate(signedUp, visitors),
     },
   ];
 
-  return { days, stages, clicksByLocation, singularConfigured };
+  return { days, stages, clicksByLocation, visitorsBySource, singularConfigured };
 }
