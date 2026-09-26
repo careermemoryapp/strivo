@@ -1034,7 +1034,12 @@ export function MarketingHome({
         </div>
       </footer>
 
-      <StickyGetAppBar location="sticky_bar" headline="Never forget the story that gets you the offer." triggerRef={heroCtaRef} />
+      <StickyGetAppBar
+        location="sticky_bar"
+        headline="Never forget the story that gets you the offer."
+        incentive="Free for the first 1,000 users"
+        triggerRef={heroCtaRef}
+      />
     </div>
   );
 }

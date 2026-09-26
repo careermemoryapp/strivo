@@ -150,6 +150,7 @@ export default async function BlogIndexPage({
         location="blog_index_sticky_bar"
         href={SINGULAR_BLOG_LINK}
         headline="Never forget the story that gets you the offer."
+        incentive="Free for the first 1,000 users"
       />
     </div>
   );

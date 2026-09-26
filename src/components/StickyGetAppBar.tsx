@@ -25,11 +25,22 @@ export function StickyGetAppBar({
   location,
   href,
   headline,
+  incentive,
   triggerRef,
 }: {
   location: string;
   href?: string;
   headline: string;
+  // A real, concrete reason to act now -- shown as a second line under the
+  // headline. Per a direct founder call (2026-09-26): the bar needed an
+  // actual incentive, not just the tagline; the founder then explicitly
+  // chose "free for the first 1,000 users" over the free-trial framing
+  // (2026-09-26, same day) despite it not being counted/enforced anywhere
+  // in the app -- his call to make and honor operationally, not a claim
+  // this code verifies. If that ever needs to become a real, enforced
+  // count (e.g. switching this off automatically past user #1,000), that's
+  // a separate change to lib/repo/users.ts, not just this copy.
+  incentive?: string;
   triggerRef?: RefObject<HTMLElement | null>;
 }) {
   const [visible, setVisible] = useState(false);
@@ -63,34 +74,49 @@ export function StickyGetAppBar({
   return (
     <div
       aria-hidden={!visible}
-      className={`fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-4 transition-all duration-300 ${
+      className={`fixed inset-x-0 bottom-0 z-40 transition-all duration-300 ${
         visible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
       }`}
     >
-      <div
-        className="flex w-full max-w-md items-center justify-between gap-4 rounded-2xl border border-[#2a2a35] px-5 py-3.5 backdrop-blur"
-        style={{ background: "rgba(10,10,15,0.92)", boxShadow: "0 12px 40px rgba(0,0,0,0.55)" }}
-      >
-        <p className="text-sm font-semibold leading-tight text-white">{headline}</p>
-        <div className="flex shrink-0 items-center gap-2">
-          <PlayStoreLink
-            location={location}
-            href={href}
-            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
-          >
-            Get the app →
-          </PlayStoreLink>
-          <button
-            type="button"
-            aria-label="Dismiss"
-            onClick={() => {
-              dismissedRef.current = true;
-              setVisible(false);
-            }}
-            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#6a6a75] transition-colors hover:bg-white/10 hover:text-white"
-          >
-            <X size={14} />
-          </button>
+      {/* Mobile: a small floating rounded card with margin on all sides --
+          unobtrusive, app-toast-like. Desktop (sm+): a full-width bar
+          flush with the screen edges, so it reads as a real banner rather
+          than something that looks lost in the middle of a wide screen --
+          per a direct founder call (2026-09-26) after seeing this on a
+          laptop. The content row inside stays capped at max-w-5xl and
+          centered even on the full-width bar, so text and the button
+          don't stretch awkwardly on very wide monitors. */}
+      <div className="flex justify-center px-4 pb-4 sm:block sm:px-0 sm:pb-0">
+        <div
+          className="w-full max-w-md rounded-2xl border border-[#2a2a35] backdrop-blur sm:max-w-none sm:rounded-none sm:border-x-0 sm:border-b-0"
+          style={{ background: "rgba(10,10,15,0.95)", boxShadow: "0 -8px 32px rgba(0,0,0,0.5)" }}
+        >
+          <div className="flex flex-col gap-2.5 px-5 py-3.5 sm:mx-auto sm:max-w-5xl sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:px-10 sm:py-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold leading-tight text-white sm:text-base">{headline}</p>
+              {incentive && <p className="mt-0.5 text-xs font-semibold text-[#c4b5fd] sm:text-sm">{incentive}</p>}
+            </div>
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+              <PlayStoreLink
+                location={location}
+                href={href}
+                className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] sm:px-9 sm:py-4 sm:text-lg"
+              >
+                Get the app →
+              </PlayStoreLink>
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={() => {
+                  dismissedRef.current = true;
+                  setVisible(false);
+                }}
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#6a6a75] transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
