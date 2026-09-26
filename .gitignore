@@ -56,3 +56,9 @@ security-audit.json
 # via cron, read by the admin dashboard's Live security checks panel.
 # Server-generated data, not source.
 live-security-status.json
+
+# Temporary credential-handoff files -- see the admin GA4 setup incident:
+# a one-off file holding a service-account private key almost got committed
+# via GitHub Desktop. Anything named like this is never meant to be
+# committed, only copied into the server's own .env and deleted.
+*_delete_after_use.txt

@@ -9,6 +9,17 @@ export const APP_TAGLINE = "Your personal AI, built from your own experiences.";
 // listing URL ever changes.
 export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ai.strivo.app";
 
+// Singular (MMP) tracking link for the blog's "Get the app" buttons only
+// (created 2026-09-26, Custom Source "blog", link name "Blog CTA Buttons").
+// It logs the click in Singular, redirects to the exact same Play Store
+// listing as PLAY_STORE_URL above, and then matches a later install back to
+// this click via Android's Play Install Referrer -- something GA4 can never
+// do on its own (see PlayStoreLink.tsx's comment). Scoped to the blog
+// specifically because that's the traffic this was built to measure; the
+// homepage hero/nav links intentionally keep using the plain PLAY_STORE_URL
+// for now.
+export const SINGULAR_BLOG_LINK = "https://strivo.sng.link/Ddemo/rpqi7";
+
 export const HOME_SUBTITLE = "Capture today. Remember forever. Achieve more.";
 
 // Each quick action starts a new chat with `prompt` as the opening user

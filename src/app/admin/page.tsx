@@ -38,6 +38,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import type { AdminMetrics, AdminUserRow, CareerProfileFunnelPoint } from "@/lib/repo/admin";
+import type { GrowthFunnel } from "@/lib/repo/growthFunnel";
 import type { CareerProfileQuizId } from "@/lib/careerProfile";
 import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
@@ -386,6 +387,8 @@ export default function AdminDashboardPage() {
   const [checkedAuth, setCheckedAuth] = useState(false);
   const [health, setHealth] = useState<AdminHealth | null>(null);
   const [healthError, setHealthError] = useState(false);
+  const [growthFunnel, setGrowthFunnel] = useState<GrowthFunnel | null>(null);
+  const [growthFunnelError, setGrowthFunnelError] = useState(false);
   const [sentryIssues, setSentryIssues] = useState<SentryIssue[] | null>(null);
   const [sentryConfigured, setSentryConfigured] = useState(true);
   const [sentryError, setSentryError] = useState(false);
@@ -608,6 +611,19 @@ export default function AdminDashboardPage() {
     }
   }, [handleUnauthorized]);
 
+  const loadGrowthFunnel = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/growth-funnel");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setGrowthFunnelError(true);
+      const data = await res.json();
+      setGrowthFunnel(data.funnel ?? null);
+      setGrowthFunnelError(false);
+    } catch {
+      setGrowthFunnelError(true);
+    }
+  }, [handleUnauthorized]);
+
   const loadSentryIssues = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/sentry-errors");
@@ -788,6 +804,7 @@ export default function AdminDashboardPage() {
       loadTemplates(),
       loadUsers(""),
       loadHealth(),
+      loadGrowthFunnel(),
       loadSentryIssues(),
       loadSecurityStatus(),
       loadLiveSecurityStatus(),
@@ -1145,6 +1162,68 @@ export default function AdminDashboardPage() {
             Refreshes automatically every 30s. Public, minimal version at{" "}
             <code className="text-[10.5px]">/api/health</code> for external uptime monitors.
           </p>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+            Growth funnel · last {growthFunnel?.days ?? 30} days
+          </p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            {growthFunnelError ? (
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} className="text-red-600" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t load the funnel.</p>
+              </div>
+            ) : !growthFunnel ? (
+              <div className="flex justify-center py-2">
+                <Spinner />
+              </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+                  {growthFunnel.stages.map((stage) => (
+                    <div key={stage.label} className="rounded-[14px] border border-[#f0ecf7] p-3.5">
+                      <p className="text-[10.5px] font-semibold uppercase tracking-wide text-[#a8a2bd]">{stage.label}</p>
+                      <p className="mt-1 text-2xl font-bold text-ink">
+                        {stage.configured ? (stage.value ?? 0).toLocaleString() : "—"}
+                      </p>
+                      <p className="mt-0.5 text-[10.5px] text-ink-faint">
+                        {stage.configured
+                          ? stage.conversionFromPrevious != null
+                            ? `${pct(stage.conversionFromPrevious)} of previous stage`
+                            : `Source: ${stage.source}`
+                          : `Not connected yet · ${stage.source}`}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+                {growthFunnel.clicksByLocation.length > 0 && (
+                  <div className="mt-4">
+                    <p className="mb-2 text-[11px] font-semibold text-[#3c3650]">Clicks by placement</p>
+                    <div className="space-y-2">
+                      {growthFunnel.clicksByLocation.map((l) => (
+                        <ProgressRow
+                          key={l.location}
+                          label={l.location}
+                          value={l.count}
+                          max={growthFunnel.clicksByLocation[0].count}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {(!growthFunnel.stages[0].configured || !growthFunnel.singularConfigured) && (
+                  <p className="mt-4 text-[11px] text-ink-faint">
+                    {!growthFunnel.stages[0].configured &&
+                      "Visitor and click counts need GA4 connected (GA4_PROPERTY_ID + a service account). "}
+                    {!growthFunnel.singularConfigured &&
+                      "Install counts need Singular's Reporting API connected. "}
+                    Ask Claude for the setup steps.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
         </section>
 
         <section className="mb-8">

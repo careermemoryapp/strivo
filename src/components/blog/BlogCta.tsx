@@ -1,5 +1,5 @@
 import { PlayStoreLink } from "@/components/PlayStoreLink";
-import { APP_NAME } from "@/lib/config";
+import { APP_NAME, SINGULAR_BLOG_LINK } from "@/lib/config";
 
 // The banner every blog post ends with — the whole point of the blog is
 // to rank for career-search keywords and funnel that traffic into the
@@ -21,6 +21,7 @@ export function BlogCta() {
       </p>
       <PlayStoreLink
         location="blog_cta"
+        href={SINGULAR_BLOG_LINK}
         className="mt-6 inline-block rounded-full bg-white px-8 py-3.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
         style={{ boxShadow: "0 8px 24px rgba(255,255,255,0.15)" }}
       >

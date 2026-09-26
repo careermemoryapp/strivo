@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import { LogoMark } from "@/components/Logo";
 import { BlogCta } from "@/components/blog/BlogCta";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
-import { APP_NAME } from "@/lib/config";
+import { APP_NAME, SINGULAR_BLOG_LINK } from "@/lib/config";
 import { getBlogPostBySlug } from "@/lib/repo/blogPosts";
 
 export const dynamic = "force-dynamic";
@@ -55,7 +55,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           <LogoMark size={28} />
           <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
         </Link>
-        <PlayStoreLink location="blog_post_nav" className="text-xs font-medium text-[#888] hover:text-white">
+        <PlayStoreLink location="blog_post_nav" href={SINGULAR_BLOG_LINK} className="text-xs font-medium text-[#888] hover:text-white">
           Get the app →
         </PlayStoreLink>
       </header>

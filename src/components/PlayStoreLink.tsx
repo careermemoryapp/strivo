@@ -29,6 +29,7 @@ declare global {
 // event". That flip can only be done in the GA4 UI, not from code.
 export function PlayStoreLink({
   location,
+  href,
   className,
   style,
   children,
@@ -37,13 +38,18 @@ export function PlayStoreLink({
   // "nav", "blog_cta") -- lets GA4 tell the hero button apart from the nav
   // link apart from the blog CTA, instead of lumping every click together.
   location: string;
+  // Optional override for the destination -- defaults to the plain Play
+  // Store URL. Pass a Singular tracking link (see SINGULAR_BLOG_LINK in
+  // lib/config.ts) for placements where install attribution matters; the
+  // GA4 click event still fires the same way either way.
+  href?: string;
   className?: string;
   style?: CSSProperties;
   children: ReactNode;
 }) {
   return (
     <a
-      href={PLAY_STORE_URL}
+      href={href ?? PLAY_STORE_URL}
       target="_blank"
       rel="noopener noreferrer"
       className={className}

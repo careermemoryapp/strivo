@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
-import { APP_NAME } from "@/lib/config";
+import { APP_NAME, SINGULAR_BLOG_LINK } from "@/lib/config";
 import { listBlogPosts, BLOG_CATEGORIES } from "@/lib/repo/blogPosts";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +34,7 @@ export default async function BlogIndexPage({
         </Link>
         <div className="flex items-center gap-6">
           <span className="text-xs font-semibold text-white">Blog</span>
-          <PlayStoreLink location="blog_nav" className="text-xs font-medium text-[#888] hover:text-white">
+          <PlayStoreLink location="blog_nav" href={SINGULAR_BLOG_LINK} className="text-xs font-medium text-[#888] hover:text-white">
             Get the app →
           </PlayStoreLink>
         </div>
