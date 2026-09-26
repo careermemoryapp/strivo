@@ -99,6 +99,32 @@ function logoDomainFor(sourceUrl: string): string | null {
   return hostnameOf(sourceUrl);
 }
 
+// Adzuna's OWN redirect_url (the only field this app ever gets an apply
+// link from server-side -- see lib/adzuna.ts) sometimes points to a
+// genuine pass-through redirect (path /land/ad/...) that forwards the
+// browser straight to the real destination with no further action, and
+// sometimes to Adzuna's OWN hosted job-details page (path /details/...)
+// instead -- Adzuna's own choice per posting, confirmed live: a /details/
+// link opens adzuna.in itself, behind Adzuna's own "Apply for this job"
+// button and an email-capture popup ("No thanks, take me to the job"),
+// before the browser is finally sent on to the real employer site. A
+// founder report of "Apply just stops at Adzuna" was exactly this case,
+// not a broken link -- it does get there, just via one extra Adzuna-hosted
+// stop this app has no way to skip (there's no other field Adzuna's API
+// gives us to bypass it with). Labeling the button differently for this
+// case sets the right expectation instead of looking stuck.
+function isAdzunaHostedListing(sourceUrl: string): boolean {
+  const host = hostnameOf(sourceUrl);
+  if (!host) return false;
+  const isAdzuna = host === "adzuna.in" || host === "adzuna.com" || host.endsWith(".adzuna.in") || host.endsWith(".adzuna.com");
+  if (!isAdzuna) return false;
+  try {
+    return new URL(sourceUrl).pathname.startsWith("/details/");
+  } catch {
+    return false;
+  }
+}
+
 // Logo-by-domain image URL, via logo.dev -- no server round trip for the
 // image itself (the browser fetches this directly). This used to be
 // Clearbit's free logo.clearbit.com (no key needed at all), but Clearbit's
@@ -204,6 +230,7 @@ function OpportunityCardItem({
   const [logoFailed, setLogoFailed] = useState(false);
   const domain = opp.logoDomain ?? logoDomainFor(opp.sourceUrl);
   const logoSrc = domain ? logoUrlFor(domain) : null;
+  const viaAdzuna = isAdzunaHostedListing(opp.sourceUrl);
 
   useEffect(() => {
     // One animation frame after mount, not the same tick -- so the browser
@@ -419,9 +446,10 @@ function OpportunityCardItem({
           href={opp.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
+          title={viaAdzuna ? "Opens on Adzuna -- tap their own Apply button there to continue to the employer" : undefined}
           className="flex items-center gap-1.5 rounded-input bg-gradient-brand px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm active:scale-95 transition"
         >
-          Apply <ExternalLink size={13} />
+          {viaAdzuna ? "View on Adzuna" : "Apply"} <ExternalLink size={13} />
         </a>
       </div>
     </Card>

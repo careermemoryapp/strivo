@@ -457,6 +457,7 @@ export default function AdminDashboardPage() {
   const [oppUsage, setOppUsage] = useState<{
     poolSize: number;
     adzunaUsage: { callsThisMonth: number; callsToday: number; monthlyLimit: number; dailyLimit: number };
+    resolverProxyConfigured?: boolean;
   } | null>(null);
   const [oppFeedbackStats, setOppFeedbackStats] = useState<{
     relevant: number;
@@ -553,7 +554,13 @@ export default function AdminDashboardPage() {
       setOppResult(
         `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Verified direct link: ${json.resolvedDirectCount} · Shown via Adzuna's own redirect link: ${json.rawRedirectCount}${rawBreakdown} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
       );
-      if (json.adzunaUsage) setOppUsage({ poolSize: json.poolSize, adzunaUsage: json.adzunaUsage });
+      // Merges onto the existing state (keeping resolverProxyConfigured,
+      // which this response doesn't include) rather than replacing it
+      // outright -- refresh-pool/run's own JSON only ever carries
+      // poolSize/adzunaUsage, so a plain overwrite would flicker the proxy
+      // status back to "unknown" every time this button is clicked.
+      if (json.adzunaUsage)
+        setOppUsage((prev) => ({ ...prev, poolSize: json.poolSize, adzunaUsage: json.adzunaUsage }));
     } catch {
       setOppError("Couldn't run the refresh. It may still be running in the background -- check back in a few minutes.");
       loadOpportunitiesStatus();
@@ -1369,6 +1376,15 @@ export default function AdminDashboardPage() {
                   </p>
                 </div>
               </div>
+            )}
+            {oppUsage && (
+              <p className="mb-3 text-[12.5px] text-ink-soft">
+                Apply-link resolver proxy (lib/applyLinkResolver.ts):{" "}
+                <span className={oppUsage.resolverProxyConfigured ? "font-semibold text-success" : "font-semibold text-ink-faint"}>
+                  {oppUsage.resolverProxyConfigured ? "configured" : "not configured"}
+                </span>
+                {!oppUsage.resolverProxyConfigured && " -- add RESOLVER_PROXY_URL to the server's .env and redeploy, then use \"Test resolver\" below to confirm it's getting past Adzuna's block."}
+              </p>
             )}
             <p className="text-[13px] text-ink-soft">
               Rebuilds the shared job pool behind the Opportunities tab. Each click of Refresh runs ONE chunk —

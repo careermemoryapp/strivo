@@ -91,6 +91,27 @@ export { isAggregatorDomain };
 
 const RESOLVE_TIMEOUT_MS = 6000;
 
+// Optional: routes every resolution request (both the real one below and
+// the admin "Test resolver" debug probe, since both share impitClient)
+// through a residential-IP proxy -- the fix stage 5 of the investigation
+// above chose NOT to take at the time (paying for a proxy just for this
+// verification step), reconsidered after the founder kept running into
+// the practical effect of that call: an ever-growing share of the pool
+// showing Adzuna's own link instead of a direct one, as old resolved
+// postings age out and 100% of new ones fail this server's flagged-IP
+// block. RESOLVER_PROXY_URL is a full proxy connection string (e.g.
+// "http://username:password@gw.dataimpulse.com:823" -- exact host/port
+// comes from whichever residential-proxy provider's account this is,
+// never this app's own domain) -- see the comment on that env var in
+// .env.example for where to get one. Left unset, proxyUrl is undefined
+// and impit behaves exactly as before (direct from this server's own
+// IP) -- this is purely additive, not a required dependency.
+const RESOLVER_PROXY_URL = process.env.RESOLVER_PROXY_URL || undefined;
+
+export function resolverProxyConfigured(): boolean {
+  return !!RESOLVER_PROXY_URL;
+}
+
 // One shared instance -- reused (not re-created) across every resolution
 // in a refresh-pool run, matching impit's own guidance that one Impit
 // instance's connection pool is meant to be reused across requests.
@@ -107,6 +128,7 @@ const impitClient = new Impit({
   vanillaFallback: true,
   followRedirects: true,
   timeout: RESOLVE_TIMEOUT_MS,
+  proxyUrl: RESOLVER_PROXY_URL,
 });
 
 // Follows the redirect chain (GET, not HEAD -- several career sites 405 on

@@ -15,7 +15,7 @@ import {
   setJobLogo,
 } from "@/lib/repo/jobPostings";
 import { recordAdzunaCall, getAdzunaUsage } from "@/lib/repo/adzunaUsage";
-import { getRefreshChunkIndex, advanceRefreshChunkIndex } from "@/lib/repo/refreshPoolState";
+import { claimNextRefreshChunkIndex } from "@/lib/repo/refreshPoolState";
 import { classifyJobPostings, aiConfigured } from "@/lib/ai";
 import { lookupCompanyLogoDomain, logoDevConfigured } from "@/lib/logoLookup";
 
@@ -210,7 +210,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "ADZUNA_APP_ID/ADZUNA_APP_KEY not configured" }, { status: 500 });
   }
 
-  const chunkIndex = getRefreshChunkIndex();
+  // Claimed atomically, right here, before any of the async Adzuna/AI/
+  // logo.dev work below -- see claimNextRefreshChunkIndex's own comment
+  // for the race this closes (two overlapping invocations used to both
+  // read the same chunk index and both process it, wasting calls on a
+  // duplicate chunk while silently skipping the next one).
+  const chunkIndex = claimNextRefreshChunkIndex(TOTAL_CHUNKS);
   const chunkFunctions = FUNCTIONS.slice(chunkIndex * CHUNK_SIZE, (chunkIndex + 1) * CHUNK_SIZE);
 
   let queriesFailed = 0;
@@ -397,7 +402,8 @@ export async function POST(req: Request) {
     });
   }
 
-  advanceRefreshChunkIndex(TOTAL_CHUNKS);
+  // Chunk pointer was already advanced atomically by claimNextRefreshChunkIndex
+  // above, at claim time -- nothing to do here.
 
   return NextResponse.json({
     chunkIndex, // 0-based -- which chunk this invocation just processed
