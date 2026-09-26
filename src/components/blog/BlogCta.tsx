@@ -1,4 +1,5 @@
-import { PLAY_STORE_URL, APP_NAME } from "@/lib/config";
+import { PlayStoreLink } from "@/components/PlayStoreLink";
+import { APP_NAME } from "@/lib/config";
 
 // The banner every blog post ends with — the whole point of the blog is
 // to rank for career-search keywords and funnel that traffic into the
@@ -18,15 +19,13 @@ export function BlogCta() {
         Speak it once. Get the right interview story, resume bullet, or leadership example back, instantly. Free for
         2 months, no card needed.
       </p>
-      <a
-        href={PLAY_STORE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
+      <PlayStoreLink
+        location="blog_cta"
         className="mt-6 inline-block rounded-full bg-white px-8 py-3.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
         style={{ boxShadow: "0 8px 24px rgba(255,255,255,0.15)" }}
       >
         Get {APP_NAME} free →
-      </a>
+      </PlayStoreLink>
     </div>
   );
 }

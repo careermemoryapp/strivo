@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
-import { APP_NAME, PLAY_STORE_URL } from "@/lib/config";
+import { PlayStoreLink } from "@/components/PlayStoreLink";
+import { APP_NAME } from "@/lib/config";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES } from "@/lib/careerProfile";
 
 // Strivo's official social accounts — shown as icon links in the header
@@ -147,15 +148,13 @@ function TiltCard({ children, className = "", style }: { children: React.ReactNo
 function PillButton({ className = "" }: { className?: string }) {
   return (
     <Magnetic>
-      <a
-        href={PLAY_STORE_URL}
-        target="_blank"
-        rel="noopener noreferrer"
+      <PlayStoreLink
+        location="hero"
         className={`inline-block rounded-full bg-white px-9 py-4 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] ${className}`}
         style={{ boxShadow: "0 8px 24px rgba(255,255,255,0.15)" }}
       >
         Get the app →
-      </a>
+      </PlayStoreLink>
     </Magnetic>
   );
 }
@@ -554,9 +553,9 @@ export function MarketingHome({
             Blog
           </Link>
           <SocialLinks className="hidden sm:flex" />
-          <a href={PLAY_STORE_URL} target="_blank" rel="noopener noreferrer" className="text-xs font-medium text-[#888] hover:text-white">
+          <PlayStoreLink location="nav" className="text-xs font-medium text-[#888] hover:text-white">
             Get the app →
-          </a>
+          </PlayStoreLink>
         </div>
       </header>
 
