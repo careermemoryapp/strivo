@@ -1,12 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import * as Sentry from "@sentry/nextjs";
 import { FilePicker } from "@capawesome/capacitor-file-picker";
 import { Capacitor } from "@capacitor/core";
 import { Mic, Square, Sparkles, Copy, ClipboardCheck, ArrowRight, Award, FileUp, FileText } from "lucide-react";
 import { markExpectedResume } from "@/lib/nativePlatform";
+import { trackSingularSignUp } from "@/lib/singular";
 import { LogoMark } from "@/components/Logo";
 import { Spinner } from "@/components/Spinner";
 import { ErrorBanner } from "@/components/ErrorBanner";
@@ -61,6 +62,14 @@ export default function FirstRecordPage() {
 
   const content = mode === "voice" ? speech.fullText : typedText;
   const createDisabled = speech.listening || speech.transcribing || saving || !content.trim();
+
+  // Tell Singular a real signup happened, attributed back to whatever
+  // source (e.g. the website's tracking link) drove the install -- see
+  // trackSingularSignUp's own comment in lib/singular.ts for why THIS
+  // screen is the right, one-time trigger point.
+  useEffect(() => {
+    trackSingularSignUp();
+  }, []);
 
   function switchMode(next: Mode) {
     if (speech.listening || speech.transcribing) return;
