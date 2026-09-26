@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { LogoMark } from "@/components/Logo";
 import { BlogCta } from "@/components/blog/BlogCta";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
+import { StickyGetAppBar } from "@/components/StickyGetAppBar";
 import { APP_NAME, SINGULAR_BLOG_LINK } from "@/lib/config";
 import { getBlogPostBySlug } from "@/lib/repo/blogPosts";
 
@@ -50,12 +51,21 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     <div id="blog-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
+      {/* Sticky + a real button, not a gray text link -- see the same
+          comment in MarketingHome.tsx's header. This is the ONE CTA that
+          stays on screen for the entire time someone's reading a post,
+          which can run well past a screen's worth of scrolling before
+          they'd otherwise reach BlogCta at the bottom. */}
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
         <Link href="/" className="flex items-center gap-2.5">
           <LogoMark size={28} />
           <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
         </Link>
-        <PlayStoreLink location="blog_post_nav" href={SINGULAR_BLOG_LINK} className="text-xs font-medium text-[#888] hover:text-white">
+        <PlayStoreLink
+          location="blog_post_nav"
+          href={SINGULAR_BLOG_LINK}
+          className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+        >
           Get the app →
         </PlayStoreLink>
       </header>
@@ -92,6 +102,12 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           <a href="mailto:hello@strivo.ai" className="hover:text-white">Contact</a>
         </div>
       </footer>
+
+      <StickyGetAppBar
+        location="blog_post_sticky_bar"
+        href={SINGULAR_BLOG_LINK}
+        headline="Turn what you just read into your own story."
+      />
     </div>
   );
 }

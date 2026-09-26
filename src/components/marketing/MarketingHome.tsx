@@ -9,6 +9,7 @@ import {
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
+import { StickyGetAppBar } from "@/components/StickyGetAppBar";
 import { APP_NAME } from "@/lib/config";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES } from "@/lib/careerProfile";
 
@@ -485,6 +486,11 @@ export function MarketingHome({
   annualPriceLabel: string;
   annualListPriceLabel: string;
 }) {
+  // Watched by StickyGetAppBar below -- once this (the hero's big pill
+  // button) scrolls out of view, the sticky bar takes over as the visible
+  // CTA for the rest of the page.
+  const heroCtaRef = useRef<HTMLDivElement>(null);
+
   // Built inside the component (not as a module-level const) because
   // several answers reference the real, current pricing/trial props
   // instead of a hardcoded number that could drift out of sync with the
@@ -542,18 +548,28 @@ export function MarketingHome({
 
   return (
     <div id="marketing-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
-      {/* Nav */}
-      <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
+      {/* Nav -- sticky (2026-09-26, see the funnel diagnosis that day) so
+          "Get the app" stays on screen the whole time someone's on the
+          page, not just before they start scrolling. It's also a real
+          button now (solid white pill, matching the hero/closing CTAs)
+          instead of a low-contrast gray text link that was easy to miss
+          next to Blog/social. This is the one CTA present on literally
+          every page (home, blog list, every blog post) -- the highest-
+          leverage place to fix visibility. */}
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
         <Link href="/" className="flex items-center gap-2.5">
           <LogoMark size={28} />
           <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
         </Link>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5">
           <Link href="/blog" className="text-xs font-medium text-[#888] hover:text-white">
             Blog
           </Link>
           <SocialLinks className="hidden sm:flex" />
-          <PlayStoreLink location="nav" className="text-xs font-medium text-[#888] hover:text-white">
+          <PlayStoreLink
+            location="nav"
+            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+          >
             Get the app →
           </PlayStoreLink>
         </div>
@@ -587,7 +603,7 @@ export function MarketingHome({
           <motion.p variants={fadeUp} className="mx-auto mt-6 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:text-lg">
             Speak it once. Strivo captures it, organizes it, and hands it back exactly when an interview, resume, or review needs it.
           </motion.p>
-          <motion.div variants={fadeUp} className="mt-8">
+          <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-8">
             <PillButton />
           </motion.div>
           <motion.p variants={fadeUp} className="mt-3 text-xs text-[#5a5a66]">
@@ -1017,6 +1033,8 @@ export function MarketingHome({
           <a href="mailto:hello@strivo.ai" className="hover:text-white">Contact</a>
         </div>
       </footer>
+
+      <StickyGetAppBar location="sticky_bar" headline="Never forget the story that gets you the offer." triggerRef={heroCtaRef} />
     </div>
   );
 }

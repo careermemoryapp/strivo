@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
+import { StickyGetAppBar } from "@/components/StickyGetAppBar";
 import { APP_NAME, SINGULAR_BLOG_LINK } from "@/lib/config";
 import { listBlogPosts, BLOG_CATEGORIES } from "@/lib/repo/blogPosts";
 
@@ -26,15 +27,21 @@ export default async function BlogIndexPage({
 
   return (
     <div id="blog-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
-      {/* Nav */}
-      <header className="flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
+      {/* Nav -- sticky, and a real button, not a gray text link (see the
+          same comment in MarketingHome.tsx's header -- this is the CTA
+          that stays visible while someone browses the post list). */}
+      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
         <Link href="/" className="flex items-center gap-2.5">
           <LogoMark size={28} />
           <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
         </Link>
-        <div className="flex items-center gap-6">
+        <div className="flex items-center gap-5">
           <span className="text-xs font-semibold text-white">Blog</span>
-          <PlayStoreLink location="blog_nav" href={SINGULAR_BLOG_LINK} className="text-xs font-medium text-[#888] hover:text-white">
+          <PlayStoreLink
+            location="blog_nav"
+            href={SINGULAR_BLOG_LINK}
+            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+          >
             Get the app →
           </PlayStoreLink>
         </div>
@@ -138,6 +145,12 @@ export default async function BlogIndexPage({
           <a href="mailto:hello@strivo.ai" className="hover:text-white">Contact</a>
         </div>
       </footer>
+
+      <StickyGetAppBar
+        location="blog_index_sticky_bar"
+        href={SINGULAR_BLOG_LINK}
+        headline="Never forget the story that gets you the offer."
+      />
     </div>
   );
 }
