@@ -224,6 +224,19 @@ export function checkProductUpdateDripSecret(secret: string | null): boolean {
   return timingSafeStringEqual(secret, expected);
 }
 
+// Same idea again, for the daily Singular installs-refresh automation (see
+// /api/admin/singular-refresh) -- its own credential, separate from every
+// other secret above. Unlike most of these, this route is ALSO reachable
+// from the founder's own logged-in browser session (the "Refresh installs"
+// button on the admin Growth Funnel -- see isAdminAuthed above), the same
+// dual-auth shape as checkOpportunitiesRefreshSecret. Checked via a request
+// header (`x-singular-refresh-secret`).
+export function checkSingularRefreshSecret(secret: string | null): boolean {
+  const expected = process.env.SINGULAR_REFRESH_SECRET;
+  if (!expected || !secret) return false;
+  return timingSafeStringEqual(secret, expected);
+}
+
 // Same idea again, for the Career Wrapped "senior stakeholder" backfill
 // automation (see /api/career-wrapped/backfill/route.ts) -- its own
 // credential, separate from every other secret above. Unlike the other

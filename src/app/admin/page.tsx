@@ -1204,7 +1204,14 @@ export default function AdminDashboardPage() {
 
         <section className="mb-8">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
-            Growth funnel · last {growthFunnel?.days ?? 30} days
+            Growth funnel · since{" "}
+            {growthFunnel
+              ? new Date(`${growthFunnel.trackingStartDate}T00:00:00Z`).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  year: "numeric",
+                })
+              : "…"}
           </p>
           <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
             {growthFunnelError ? (
@@ -1306,8 +1313,9 @@ export default function AdminDashboardPage() {
                     clickStage.pctOfVisitors != null &&
                     clickStage.pctOfVisitors < 0.01 && (
                       <p className="mt-3 text-[11px] text-ink-faint">
-                        Click tracking only started counting once it went live -- &quot;Clicked&quot; will look low
-                        until it&apos;s had a full {growthFunnel.days}-day window, not just the days since launch.
+                        Only {growthFunnel.days} day{growthFunnel.days === 1 ? "" : "s"} of tracked data so far --
+                        &quot;Clicked&quot; and &quot;Installed&quot; will look low until more days accumulate, not
+                        because visitors aren&apos;t converting.
                       </p>
                     )
                   );

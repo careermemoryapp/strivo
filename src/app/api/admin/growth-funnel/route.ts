@@ -6,14 +6,12 @@ import { computeGrowthFunnel } from "@/lib/repo/growthFunnel";
 // visitors -> clicked "Get the app" -> installed -> signed up. Each stage
 // degrades independently to "not configured" rather than failing the whole
 // request (see computeGrowthFunnel's own comment).
-export async function GET(req: Request) {
+export async function GET() {
   if (!(await isAdminAuthed())) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const { searchParams } = new URL(req.url);
-  const days = Math.min(90, Math.max(1, Number(searchParams.get("days")) || 30));
   try {
-    const funnel = await computeGrowthFunnel(days);
+    const funnel = await computeGrowthFunnel();
     return NextResponse.json({ funnel });
   } catch (e) {
     console.error("Admin growth-funnel fetch failed:", e);

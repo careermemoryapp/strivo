@@ -14,7 +14,9 @@ import path from "node:path";
 
 export type SingularInstallsSnapshot = {
   checkedAt: string;
-  days: number;
+  // "YYYY-MM-DD" -- the fixed date this pull measured from (see
+  // growthFunnel.ts's FUNNEL_TRACKING_START), not a rolling day count.
+  sinceDate: string;
   source: string;
   clicks: number;
   installs: number;

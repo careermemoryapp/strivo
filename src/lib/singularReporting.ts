@@ -126,18 +126,18 @@ function parseReportRows(payload: unknown): Record<string, unknown>[] {
 export type SingularInstallsResult = { clicks: number; installs: number; rows: Record<string, unknown>[] };
 
 // Full create -> poll -> download -> parse flow for one custom source over
-// one date range. `source` should match the Source Name you gave the
-// tracking link in Singular (e.g. "blog" -- see the Blog CTA Buttons link
-// created 2026-09-26).
-export async function fetchSingularInstalls(days: number, source = "blog"): Promise<SingularInstallsResult> {
+// one date range. `startDate` is an explicit "YYYY-MM-DD" (matching
+// growthFunnel.ts's FUNNEL_TRACKING_START -- see its comment for why this
+// is a fixed date rather than a rolling "last N days" window) and `source`
+// should match the Source Name you gave the tracking link in Singular
+// (e.g. "blog" -- see the Blog CTA Buttons link created 2026-09-26).
+export async function fetchSingularInstalls(startDate: string, source = "blog"): Promise<SingularInstallsResult> {
   const apiKey = process.env.SINGULAR_REPORTING_API_KEY;
   if (!apiKey) throw new Error("SINGULAR_REPORTING_API_KEY is not configured");
 
-  const end = new Date();
-  const start = new Date(Date.now() - days * 86400000);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const endDate = new Date().toISOString().slice(0, 10);
 
-  const reportId = await createAsyncReport(apiKey, fmt(start), fmt(end), source);
+  const reportId = await createAsyncReport(apiKey, startDate, endDate, source);
   const downloadUrl = await pollUntilDone(apiKey, reportId);
 
   const downloadRes = await fetch(downloadUrl, { cache: "no-store" });

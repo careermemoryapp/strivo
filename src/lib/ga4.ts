@@ -118,10 +118,14 @@ async function runReport(propertyId: string, token: string, body: unknown) {
 
 type Ga4Row = { dimensionValues?: { value: string }[]; metricValues?: { value: string }[] };
 
-export async function fetchGa4Summary(days: number): Promise<Ga4Summary> {
+// startDate is an explicit "YYYY-MM-DD" (GA4's Data API only does
+// whole-calendar-day ranges, no hour/minute granularity) rather than a
+// relative "NdaysAgo" -- see growthFunnel.ts's FUNNEL_TRACKING_START for
+// why this needs to be a fixed date, not a rolling window.
+export async function fetchGa4Summary(startDate: string): Promise<Ga4Summary> {
   const token = await getAccessToken();
   const propertyId = process.env.GA4_PROPERTY_ID!;
-  const dateRange = { startDate: `${days}daysAgo`, endDate: "today" };
+  const dateRange = { startDate, endDate: "today" };
 
   const sessionsData = await runReport(propertyId, token, {
     dateRanges: [dateRange],
