@@ -146,12 +146,20 @@ function TiltCard({ children, className = "", style }: { children: React.ReactNo
   );
 }
 
+// The main "Get the app" CTA -- used in the hero and again in the closing
+// CTA section. Made substantially bigger on desktop (2026-09-26, per a
+// direct founder call after seeing the earlier size felt too small/easy to
+// miss): on mobile it stays a compact pill sized to its text; from the sm
+// breakpoint up it becomes a wide bar, roughly half the viewport width
+// (capped so it doesn't turn into something absurd on an ultrawide
+// monitor), so it reads as the obvious, unmissable primary action on the
+// page rather than one button among several.
 function PillButton({ className = "" }: { className?: string }) {
   return (
     <Magnetic>
       <PlayStoreLink
         location="hero"
-        className={`inline-block rounded-full bg-white px-9 py-4 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] ${className}`}
+        className={`inline-block rounded-full bg-white px-9 py-4 text-base font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] sm:block sm:w-[50vw] sm:max-w-3xl sm:px-0 sm:py-7 sm:text-center sm:text-2xl ${className}`}
         style={{ boxShadow: "0 8px 24px rgba(255,255,255,0.15)" }}
       >
         Get the app →
