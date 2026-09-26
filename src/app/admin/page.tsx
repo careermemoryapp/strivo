@@ -401,6 +401,8 @@ export default function AdminDashboardPage() {
   const [healthError, setHealthError] = useState(false);
   const [growthFunnel, setGrowthFunnel] = useState<GrowthFunnel | null>(null);
   const [growthFunnelError, setGrowthFunnelError] = useState(false);
+  const [singularRefreshing, setSingularRefreshing] = useState(false);
+  const [singularRefreshError, setSingularRefreshError] = useState<string | null>(null);
   const [sentryIssues, setSentryIssues] = useState<SentryIssue[] | null>(null);
   const [sentryConfigured, setSentryConfigured] = useState(true);
   const [sentryError, setSentryError] = useState(false);
@@ -635,6 +637,30 @@ export default function AdminDashboardPage() {
       setGrowthFunnelError(true);
     }
   }, [handleUnauthorized]);
+
+  // Singular's Reporting API is async (create report -> poll -> download,
+  // can take seconds to a couple of minutes -- see singularReporting.ts),
+  // so unlike the rest of the funnel it isn't refreshed on every page load.
+  // This is the "Refresh installs" button's handler: it triggers one full
+  // create/poll/download/parse run server-side, then re-pulls the whole
+  // funnel so the new cached number (and installedCheckedAt) shows up.
+  const runSingularRefresh = useCallback(async () => {
+    setSingularRefreshing(true);
+    setSingularRefreshError(null);
+    try {
+      const res = await fetch("/api/admin/singular-refresh", { method: "POST" });
+      if (res.status === 401) return handleUnauthorized();
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.error || "Singular refresh failed.");
+      }
+      await loadGrowthFunnel();
+    } catch (e) {
+      setSingularRefreshError(e instanceof Error ? e.message : "Singular refresh failed.");
+    } finally {
+      setSingularRefreshing(false);
+    }
+  }, [handleUnauthorized, loadGrowthFunnel]);
 
   const loadSentryIssues = useCallback(async () => {
     try {
@@ -1243,8 +1269,29 @@ export default function AdminDashboardPage() {
                               }}
                             />
                           </div>
-                          {!stage.configured && (
-                            <p className="mt-1.5 text-[10.5px] text-ink-faint">Not connected yet · {stage.source}</p>
+                          {stage.source === "Singular" ? (
+                            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+                              <button
+                                onClick={runSingularRefresh}
+                                disabled={singularRefreshing}
+                                className="flex items-center gap-1 rounded-full border border-[#e3ddf0] px-2 py-0.5 text-[10.5px] font-semibold text-[#6d54c9] transition hover:bg-[#f3f0fa] disabled:opacity-50"
+                              >
+                                <RefreshCw size={11} className={singularRefreshing ? "animate-spin" : ""} />
+                                {singularRefreshing ? "Checking Singular…" : stage.configured ? "Refresh installs" : "Check installs now"}
+                              </button>
+                              <span className="text-[10.5px] text-ink-faint">
+                                {stage.configured && growthFunnel.installedCheckedAt
+                                  ? `Last checked ${new Date(growthFunnel.installedCheckedAt).toLocaleString()}`
+                                  : "Not connected yet · Singular (this can take a minute the first time)"}
+                              </span>
+                            </div>
+                          ) : (
+                            !stage.configured && (
+                              <p className="mt-1.5 text-[10.5px] text-ink-faint">Not connected yet · {stage.source}</p>
+                            )
+                          )}
+                          {stage.source === "Singular" && singularRefreshError && (
+                            <p className="mt-1.5 text-[10.5px] text-red-600">{singularRefreshError}</p>
                           )}
                         </div>
                       </div>

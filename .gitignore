@@ -62,3 +62,8 @@ live-security-status.json
 # via GitHub Desktop. Anything named like this is never meant to be
 # committed, only copied into the server's own .env and deleted.
 *_delete_after_use.txt
+
+# Singular Reporting API cache -- written by /api/admin/singular-refresh,
+# read by the admin Growth Funnel's "Installed" stage. Server-generated
+# data, not source, same convention as security-audit.json above.
+singular-installs-snapshot.json

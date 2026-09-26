@@ -1,5 +1,6 @@
 import { getDb } from "@/lib/db";
 import { ga4Configured, fetchGa4Summary } from "@/lib/ga4";
+import { readSingularInstallsSnapshot } from "@/lib/singularInstallsSnapshot";
 
 // The blog-to-signup growth funnel shown on the admin dashboard (see
 // GrowthFunnel section in admin/page.tsx) -- one row per stage, each
@@ -39,6 +40,11 @@ export type GrowthFunnel = {
   clicksByLocation: { location: string; count: number }[];
   visitorsBySource: { source: string; count: number }[];
   singularConfigured: boolean;
+  // When the "Installed" number was last refreshed (see
+  // singularInstallsSnapshot.ts) -- null when no successful refresh has
+  // run yet. Unlike the other stages, this doesn't update on every page
+  // load, so the UI needs to show its own freshness honestly.
+  installedCheckedAt: string | null;
 };
 
 function signupsInWindow(days: number): number {
@@ -76,17 +82,18 @@ export async function computeGrowthFunnel(days = 30): Promise<GrowthFunnel> {
     }
   }
 
-  // Singular's Reporting API isn't wired up yet -- deliberately left as
-  // "not configured" (rather than a guessed integration) until there's a
-  // real SINGULAR_REPORTING_API_KEY to make one verified test call
-  // against. Singular's request/response shape needs to be confirmed
-  // against an actual response before this reads real numbers into a page
-  // the founder is making spend/messaging decisions from -- see the
-  // conversation this was set up in. Swap this block for a real
-  // fetchSingularInstalls() call (same shape as the GA4 block above) once
-  // that's done.
-  const installed: number | null = null;
-  const singularConfigured = false;
+  // Singular's Reporting API is async (create report -> poll -> download,
+  // can take seconds to minutes -- see singularReporting.ts), so it isn't
+  // fetched live on every page load like GA4/the DB queries above. Instead
+  // an admin triggers a refresh (POST /api/admin/singular-refresh) and the
+  // result is cached here -- see singularInstallsSnapshot.ts. "Configured"
+  // means a successful refresh has run at least once, not just that the API
+  // key is present, since a snapshot is what this stage actually needs to
+  // show a number at all.
+  const snapshot = readSingularInstallsSnapshot();
+  const installed = snapshot?.installs ?? null;
+  const singularConfigured = snapshot !== null;
+  const installedCheckedAt = snapshot?.checkedAt ?? null;
 
   const stages: GrowthFunnelStage[] = [
     {
@@ -123,5 +130,5 @@ export async function computeGrowthFunnel(days = 30): Promise<GrowthFunnel> {
     },
   ];
 
-  return { days, stages, clicksByLocation, visitorsBySource, singularConfigured };
+  return { days, stages, clicksByLocation, visitorsBySource, singularConfigured, installedCheckedAt };
 }
