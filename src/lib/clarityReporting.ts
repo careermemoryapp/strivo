@@ -5,25 +5,51 @@
 // every day (direct founder request, 2026-09-27).
 //
 // Reference: https://learn.microsoft.com/en-us/clarity/setup-and-installation/clarity-data-export-api
-// (fetched 2026-09-27). IMPORTANT: only ONE metric's response shape is
-// actually documented there -- Traffic, whose `information` rows have
-// totalSessionCount / totalBotSessionCount / distantUserCount /
-// PagesPerSessionPercentage / plus a key named after whichever dimension
-// was requested (e.g. "Device"). The docs explicitly warn "Additional
-// metrics and dimensions may be included in the full API response" and
-// give no field names at all for any other metric (ScrollDepth,
-// EngagementTime, DeadClickCount, RageClickCount, ExcessiveScroll,
-// QuickbackClick, ScriptErrorCount, ErrorClickCount, PopularPages, ...).
-// So this parses Traffic properly (the one shape that's confirmed) and
-// falls back to a GENERIC summary for every other metric -- it sums
-// whatever numeric fields actually come back instead of guessing field
-// names, same defensive-parsing approach as singularReporting.ts and for
-// the same reason: an honest "here's what came back" beats a
-// confident-looking number built on a guessed key that happens to be
-// wrong. The first real run of this should be watched closely -- if a
-// metric's summary line looks off, the raw response is kept in the
-// snapshot (see clarityInsightsSnapshot.ts) so the parsing can be fixed
-// without spending another request.
+// (fetched 2026-09-27) PLUS a real live response captured the same day
+// (see the shapes below) -- Microsoft's own docs only document Traffic's
+// fields and explicitly warn "Additional metrics and dimensions may be
+// included in the full API response." The first real run confirmed the
+// following shapes; anything Clarity adds later that isn't one of these
+// still gets a generic fallback (summarizeGeneric) rather than being
+// silently dropped.
+//
+// Confirmed shapes (2026-09-27, one real /project-live-insights pull, no
+// dimension requested):
+//   Traffic          -- documented by Microsoft: totalSessionCount,
+//                        totalBotSessionCount, distantUserCount,
+//                        PagesPerSessionPercentage, + a dimension-named key
+//   DeadClickCount, RageClickCount, ExcessiveScroll, QuickbackClick,
+//   ScriptErrorCount, ErrorClickCount
+//                     -- all six share one shape: sessionsCount,
+//                        sessionsWithMetricPercentage,
+//                        sessionsWithoutMetricPercentage, pagesViews,
+//                        subTotal
+//   ScrollDepth       -- { averageScrollDepth }
+//   EngagementTime    -- { totalTime, activeTime }
+//   Browser, Device, OS, Country/Region, PageTitle, ReferrerUrl,
+//   PopularPages
+//                     -- WITHOUT a dimension parameter, each of these came
+//                        back as a single row that just restates the
+//                        overall session count Traffic already reports --
+//                        no per-browser/per-page breakdown at all (that
+//                        only happens when the metric's own name is passed
+//                        as a dimension value, e.g. dimension1=Device,
+//                        which is exactly what the second call below
+//                        does for Device). Skipped from the no-dimension
+//                        pull's output for that reason -- not
+//                        uninteresting, just redundant without a
+//                        dimension, and rendering them raw (as this code
+//                        originally did) just showed a confusing
+//                        "sessionsCount: 61" with no category attached.
+//
+// This parses all of the above properly and falls back to a GENERIC
+// summary (sums whatever numeric fields exist) only for a metric name that
+// isn't one of these -- same defensive-parsing approach as
+// singularReporting.ts and for the same reason: an honest "here's what
+// came back" beats a confident-looking number built on a guessed key that
+// happens to be wrong. If a summary line ever looks off, the raw response
+// is kept in the snapshot (see clarityInsightsSnapshot.ts) so the parsing
+// can be fixed without spending another request.
 //
 // Hard limits (per Microsoft's docs, "Limitations and usage quotas"): max
 // 10 requests/project/day (shared with any manual digging done directly on
@@ -91,9 +117,37 @@ function summarizeTraffic(rows: Record<string, unknown>[], numOfDays: number): s
   return [`${formatCount(real)} real sessions in the ${windowLabel} (${formatCount(bots)} filtered out as bot traffic).`];
 }
 
-// Every other metric: field names aren't documented, so this renders
-// generically -- sum whatever numeric fields exist across the returned
-// rows and show them by name, rather than assuming a specific shape.
+// Metrics that only say anything beyond the overall session count when
+// broken down by a dimension -- see the header comment for how this was
+// confirmed. Skipped entirely when parsing the no-dimension pull.
+const SKIP_WITHOUT_DIMENSION = new Set([
+  "Browser",
+  "Device",
+  "OS",
+  "Country/Region",
+  "PageTitle",
+  "ReferrerUrl",
+  "PopularPages",
+]);
+
+// The six click/scroll/error "quality" metrics share one confirmed shape
+// (see header comment): sessionsWithMetricPercentage is the % of sessions
+// that hit the issue, subTotal is the raw occurrence count. Reported
+// together as one line rather than six, so a clean day reads as one
+// reassuring sentence instead of six near-identical zero lines.
+const QUALITY_METRIC_LABELS: Record<string, string> = {
+  DeadClickCount: "dead clicks",
+  RageClickCount: "rage clicks",
+  ExcessiveScroll: "excessive scrolling",
+  QuickbackClick: "quick-backs",
+  ScriptErrorCount: "script errors",
+  ErrorClickCount: "error clicks",
+};
+
+// Every other metric: field names aren't documented or confirmed, so this
+// renders generically -- sum whatever numeric fields exist across the
+// returned rows and show them by name, rather than assuming a specific
+// shape. Only reached for a metric name this module doesn't recognize yet.
 function summarizeGeneric(metricName: string, rows: Record<string, unknown>[]): string[] {
   if (rows.length === 0) return [];
   const totals = new Map<string, number>();
@@ -124,10 +178,55 @@ export async function fetchClarityInsights(): Promise<FetchedClarityInsights> {
   const [overall, byDevice] = await Promise.all([fetchOnce(token, numOfDays), fetchOnce(token, numOfDays, "Device")]);
 
   const insights: string[] = [];
+  const qualityFlags: string[] = [];
+  let scrollDepthLine: string | null = null;
+  let engagementLine: string | null = null;
+  const extra: string[] = [];
+
   for (const metric of overall) {
-    if (metric.metricName === "Traffic") insights.push(...summarizeTraffic(metric.information, numOfDays));
-    else insights.push(...summarizeGeneric(metric.metricName, metric.information));
+    if (metric.metricName === "Traffic") {
+      insights.push(...summarizeTraffic(metric.information, numOfDays));
+      continue;
+    }
+    if (SKIP_WITHOUT_DIMENSION.has(metric.metricName)) continue;
+
+    if (metric.metricName in QUALITY_METRIC_LABELS) {
+      const row = metric.information[0];
+      const pct = row ? numberFrom(row.sessionsWithMetricPercentage) : null;
+      const count = row ? numberFrom(row.subTotal) : null;
+      if (pct !== null && pct > 0) {
+        const countPart = count !== null && count > 0 ? `, ${formatCount(count)} total` : "";
+        qualityFlags.push(`${QUALITY_METRIC_LABELS[metric.metricName]} (${Math.round(pct)}% of sessions${countPart})`);
+      }
+      continue;
+    }
+
+    if (metric.metricName === "ScrollDepth") {
+      const depth = numberFrom(metric.information[0]?.averageScrollDepth);
+      if (depth !== null) scrollDepthLine = `Average scroll depth: ${Math.round(depth)}%.`;
+      continue;
+    }
+
+    if (metric.metricName === "EngagementTime") {
+      const active = numberFrom(metric.information[0]?.activeTime);
+      const total = numberFrom(metric.information[0]?.totalTime);
+      if (active !== null && total !== null) {
+        engagementLine = `Average engagement: ${Math.round(active)}s active of ${Math.round(total)}s per session.`;
+      }
+      continue;
+    }
+
+    extra.push(...summarizeGeneric(metric.metricName, metric.information));
   }
+
+  insights.push(
+    qualityFlags.length > 0
+      ? `Session quality flags: ${qualityFlags.join(", ")}.`
+      : "No dead clicks, rage clicks, script errors, or other UX issues detected in the last 24h."
+  );
+  if (scrollDepthLine) insights.push(scrollDepthLine);
+  if (engagementLine) insights.push(engagementLine);
+  insights.push(...extra);
 
   const trafficByDevice = byDevice.find((m) => m.metricName === "Traffic");
   if (trafficByDevice) {
