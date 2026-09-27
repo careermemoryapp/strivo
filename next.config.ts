@@ -9,6 +9,20 @@ const nextConfig: NextConfig = {
   // why that in-place overwrite was causing real, if rare, errors.
   distDir: process.env.NEXT_DIST_DIR || ".next",
 
+  // The EC2 server this builds on has under 1GB of RAM, and `next build`'s
+  // own TypeScript type-check step has gotten SIGKILLed by the kernel's
+  // out-of-memory protection during a deploy (confirmed 2026-09-27 --
+  // compiled fine, then killed mid-typecheck, leaving the site briefly
+  // down since deploy.sh had already deleted the old build). This is safe
+  // to turn off here specifically because CLAUDE.md's own hard rule
+  // already requires `npx tsc --noEmit` to be run and clean before any
+  // change is considered done -- so type errors are still always caught,
+  // just once (locally, before ever reaching the server) instead of twice.
+  // If that separate tsc gate is ever dropped, turn this back on.
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+
   // pdf-parse (via pdfjs-dist) resolves its worker script relative to its
   // own module location at runtime. Webpack/Turbopack normally bundle
   // dependencies into hashed chunk files, which breaks that relative path
