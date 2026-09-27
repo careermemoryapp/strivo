@@ -21,6 +21,8 @@ import {
   RefreshCw,
   Video,
   Flame,
+  Lightbulb,
+  Clock,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import {
@@ -42,6 +44,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { cn } from "@/lib/utils";
 import type { AdminMetrics, AdminUserRow, CareerProfileFunnelPoint } from "@/lib/repo/admin";
 import type { GrowthFunnel } from "@/lib/repo/growthFunnel";
+import type { ClarityInsightsSnapshot } from "@/lib/clarityInsightsSnapshot";
 import type { CareerProfileQuizId } from "@/lib/careerProfile";
 import type { Nudge } from "@/lib/repo/nudges";
 import type { NudgeSegment } from "@/lib/repo/pushTokens";
@@ -406,6 +409,11 @@ export default function AdminDashboardPage() {
   const [growthFunnelError, setGrowthFunnelError] = useState(false);
   const [singularRefreshing, setSingularRefreshing] = useState(false);
   const [singularRefreshError, setSingularRefreshError] = useState<string | null>(null);
+  const [clarityInsights, setClarityInsights] = useState<ClarityInsightsSnapshot | null>(null);
+  const [clarityInsightsConfigured, setClarityInsightsConfigured] = useState(true);
+  const [clarityInsightsError, setClarityInsightsError] = useState(false);
+  const [clarityRefreshing, setClarityRefreshing] = useState(false);
+  const [clarityRefreshError, setClarityRefreshError] = useState<string | null>(null);
   const [sentryIssues, setSentryIssues] = useState<SentryIssue[] | null>(null);
   const [sentryConfigured, setSentryConfigured] = useState(true);
   const [sentryError, setSentryError] = useState(false);
@@ -665,6 +673,44 @@ export default function AdminDashboardPage() {
     }
   }, [handleUnauthorized, loadGrowthFunnel]);
 
+  const loadClarityInsights = useCallback(async () => {
+    try {
+      const res = await fetch("/api/admin/clarity-insights");
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) return setClarityInsightsError(true);
+      const data = await res.json();
+      setClarityInsights(data.snapshot ?? null);
+      setClarityInsightsConfigured(!!data.configured);
+      setClarityInsightsError(false);
+    } catch {
+      setClarityInsightsError(true);
+    }
+  }, [handleUnauthorized]);
+
+  // Clarity's Data Export API is capped at 10 requests/project/day (shared
+  // with any manual digging done directly on clarity.microsoft.com), so
+  // unlike most of this dashboard this is NOT refreshed on every page
+  // load -- an admin clicks "Refresh" (throttled server-side too, see
+  // /api/admin/clarity-insights) to pull a fresh read; every other load
+  // just shows the cached snapshot.
+  const runClarityRefresh = useCallback(async () => {
+    setClarityRefreshing(true);
+    setClarityRefreshError(null);
+    try {
+      const res = await fetch("/api/admin/clarity-insights", { method: "POST" });
+      if (res.status === 401) return handleUnauthorized();
+      const json = await res.json().catch(() => null);
+      if (!res.ok) {
+        throw new Error(json?.error || "Clarity refresh failed.");
+      }
+      setClarityInsights(json.snapshot ?? null);
+    } catch (e) {
+      setClarityRefreshError(e instanceof Error ? e.message : "Clarity refresh failed.");
+    } finally {
+      setClarityRefreshing(false);
+    }
+  }, [handleUnauthorized]);
+
   const loadSentryIssues = useCallback(async () => {
     try {
       const res = await fetch("/api/admin/sentry-errors");
@@ -846,6 +892,7 @@ export default function AdminDashboardPage() {
       loadUsers(""),
       loadHealth(),
       loadGrowthFunnel(),
+      loadClarityInsights(),
       loadSentryIssues(),
       loadSecurityStatus(),
       loadLiveSecurityStatus(),
@@ -1403,6 +1450,63 @@ export default function AdminDashboardPage() {
                 </a>
               ))}
             </div>
+          </div>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+            Daily insights · Clarity
+          </p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            <p className="mb-3 text-[11.5px] text-ink-faint">
+              A same-page pull of real visitor numbers from the last 24h -- sessions, device mix, and
+              whatever else Clarity includes -- so you don&apos;t have to open the dashboard above just to
+              check. Recording summaries and heatmap click-rankings aren&apos;t available through
+              Clarity&apos;s API, so those still need a manual look (ask Claude, or use the links above)
+              -- this panel only covers the numbers Clarity exposes for automated pulls.
+            </p>
+            {!clarityInsightsConfigured ? (
+              <p className="text-[11.5px] text-ink-faint">
+                Not connected yet -- Clarity Data Export API. Ask Claude for the setup steps.
+              </p>
+            ) : clarityInsightsError ? (
+              <div className="flex items-center gap-2">
+                <AlertTriangle size={14} className="text-red-600" />
+                <p className="text-sm font-semibold text-red-600">Couldn&apos;t load Clarity insights.</p>
+              </div>
+            ) : (
+              <>
+                {clarityInsights && clarityInsights.insights.length > 0 ? (
+                  <ul className="space-y-2">
+                    {clarityInsights.insights.map((line, i) => (
+                      <li key={i} className="flex items-start gap-2 text-[12.5px] leading-relaxed text-ink">
+                        <Lightbulb size={13} className="mt-0.5 shrink-0 text-[#8b5cf6]" />
+                        <span>{line}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-[11.5px] text-ink-faint">No insights pulled yet -- click refresh below.</p>
+                )}
+                <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-[#f5f2fa] pt-3">
+                  <button
+                    onClick={runClarityRefresh}
+                    disabled={clarityRefreshing}
+                    className="flex items-center gap-1 rounded-full border border-[#e3ddf0] px-2 py-0.5 text-[10.5px] font-semibold text-[#6d54c9] transition hover:bg-[#f3f0fa] disabled:opacity-50"
+                  >
+                    <RefreshCw size={11} className={clarityRefreshing ? "animate-spin" : ""} />
+                    {clarityRefreshing ? "Checking Clarity…" : "Refresh insights"}
+                  </button>
+                  {clarityInsights?.checkedAt && (
+                    <span className="flex items-center gap-1 text-[10.5px] text-ink-faint">
+                      <Clock size={11} />
+                      Last checked {new Date(clarityInsights.checkedAt).toLocaleString()}
+                    </span>
+                  )}
+                </div>
+                {clarityRefreshError && <p className="mt-2 text-[11px] text-red-600">{clarityRefreshError}</p>}
+              </>
+            )}
           </div>
         </section>
 

@@ -67,3 +67,8 @@ live-security-status.json
 # read by the admin Growth Funnel's "Installed" stage. Server-generated
 # data, not source, same convention as security-audit.json above.
 singular-installs-snapshot.json
+
+# Clarity Data Export API cache -- written by /api/admin/clarity-insights,
+# read by the admin dashboard's "Daily insights" panel. Server-generated
+# data, not source, same convention as singular-installs-snapshot.json above.
+clarity-insights-snapshot.json
