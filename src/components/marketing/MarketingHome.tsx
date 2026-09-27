@@ -182,39 +182,49 @@ function PhoneFrame({ children, width = 210, glow }: { children: React.ReactNode
   );
 }
 
-function HomeScreenMock() {
-  const actions = [
-    { title: "Prepare for an interview", icon: "◎" },
-    { title: "Update my resume", icon: "▤" },
-    { title: "Find leadership examples", icon: "◆" },
-  ];
+// Real screen recording of the app being used -- recording a memory, Strivo
+// tagging/saving it, then pulling that memory into an interview-ready
+// answer -- replacing the hand-coded static mockup below (HomeScreenMock)
+// so the hero shows the actual product instead of a recreation of it.
+// Added 2026-09-27 per a direct founder call: a static "recreation" screen
+// undersold what the app actually does; seeing it happen reads as more
+// real and more convincing than a still image ever could.
+//
+// The source clip (a WhatsApp-shared screen recording) had its own
+// marketing title card at the start and a "Download Strivo Now" card at
+// the end -- both trimmed out (see the video's own file for the exact cut
+// points) so this shows ONLY real, live app UI, start to finish, with a
+// clean loop point. Audio was stripped entirely (autoplay muted is
+// required by every browser anyway, and this is a silent screen recording
+// with no narration worth keeping).
+//
+// autoPlay+muted+loop+playsInline is what makes a video autoplay inline on
+// mobile Safari/Chrome without a tap -- omitting `muted` silently blocks
+// autoplay entirely. `poster` is the video's own first frame, exported
+// separately, so the hero paints instantly at the right size/color before
+// the (small, ~470KB) video file finishes loading.
+function AppDemoVideo() {
   return (
-    <PhoneFrame width={230} glow="0 40px 90px rgba(124,58,237,0.25), 0 0 0 1px rgba(255,255,255,0.06)">
-      <div className="px-3.5 pb-5 pt-4" style={{ background: "linear-gradient(160deg,#1c1435,#2a1550,#150c2e)" }}>
-        <p className="text-[10px] text-[#c9bdf0]">Good evening</p>
-        <p className="mt-0.5 text-sm font-bold text-white">Shikhar</p>
-        <div className="mt-3 flex items-center gap-1.5 rounded-xl bg-[#1c1830] px-3 py-2.5">
-          <span className="text-[9px] text-[#c9bdf0]">✦</span>
-          <span className="text-[10px] text-white/40">Ask anything — career advice…</span>
-        </div>
-      </div>
-      <div className="bg-white px-3 py-3.5">
-        <div className="rounded-[13px] border border-[#ece5f5] bg-gradient-to-br from-[#efeaf9] to-[#f5ecec] p-3 text-center">
-          <div className="mx-auto mb-1.5 flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs text-[#8b5cf6]" style={{ boxShadow: "0 4px 10px rgba(139,92,246,0.2)" }}>●</div>
-          <p className="text-[10px] font-bold text-[#3c3650]">What&apos;s on your mind today?</p>
-          <div className="mt-1.5 inline-block rounded-full px-3 py-1.5 text-[9px] font-bold text-white" style={{ background: "linear-gradient(135deg,#a78bfa,#60a5fa)" }}>
-            Start recording
-          </div>
-        </div>
-        <p className="mb-1 mt-3 text-[8px] font-bold tracking-wide text-[#a8a2bd]">OR ACCOMPLISH TODAY</p>
-        {actions.map((a, i) => (
-          <div key={a.title} className={`flex items-center gap-2 py-2 ${i === 0 ? "border-t border-[#f0ecf7]" : "border-t border-[#f0ecf7]"} ${i === actions.length - 1 ? "border-b" : ""}`}>
-            <div className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-md bg-[#f2effa] text-[10px] text-[#8b5cf6]">{a.icon}</div>
-            <p className="text-[9.5px] font-semibold text-[#3c3650]">{a.title}</p>
-          </div>
-        ))}
-      </div>
-    </PhoneFrame>
+    <div
+      className="overflow-hidden rounded-[32px] border-[7px] border-[#1c1c24]"
+      style={{
+        width: 240,
+        background: "#0a0a0f",
+        boxShadow: "0 40px 90px rgba(124,58,237,0.25), 0 0 0 1px rgba(255,255,255,0.06)",
+      }}
+    >
+      <video
+        src="/videos/strivo-app-demo.mp4"
+        poster="/videos/strivo-app-demo-poster.jpg"
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        className="block w-full"
+        aria-label="Screen recording of the Strivo app: recording a spoken memory, Strivo saving and tagging it, then using it to write an interview-ready answer"
+      />
+    </div>
   );
 }
 
@@ -628,8 +638,8 @@ export function MarketingHome({
           transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
           className="mt-12 flex flex-col items-center"
         >
-          <HomeScreenMock />
-          <p className="mt-3 text-xs text-[#c9bdf0]">The actual Strivo home screen</p>
+          <AppDemoVideo />
+          <p className="mt-3 text-xs text-[#c9bdf0]">Watch it turn a memory into an interview-ready answer</p>
         </motion.div>
       </section>
 
