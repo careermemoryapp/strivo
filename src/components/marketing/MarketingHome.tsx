@@ -323,6 +323,62 @@ function ChatScreenMock() {
   );
 }
 
+// A compact recreation of the real Opportunities tab (see
+// app/(app)/opportunities/OpportunitiesClient.tsx) -- the dark header +
+// trust badge, then the "Top match" card with its fit badge, reason
+// callout, and Fit/Apply row. Uses a fictional example role/company
+// (matching the fictional example content used in the other three phone
+// mocks above -- RecordScreenMock etc. don't show anyone's real memory
+// data either) rather than any real, live-matched job, since a real
+// listing is per-user and can change or expire.
+function OpportunitiesScreenMock() {
+  return (
+    <PhoneFrame width={200} glow="0 24px 60px rgba(0,0,0,0.35)">
+      <div className="flex flex-col" style={{ height: 340 }}>
+        <div className="px-4 pb-3 pt-4" style={{ background: "linear-gradient(160deg,#241c3d,#1a1430)" }}>
+          <p className="text-[13px] font-extrabold text-white">Opportunities</p>
+          <div className="mt-2 inline-flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-[7.5px] font-medium text-white/75">
+            🛡 Never job portals — apply direct
+          </div>
+        </div>
+        <div className="flex-1 bg-white px-3.5 pb-3 pt-3 text-left">
+          <p className="mb-2 text-[9px] font-semibold text-[#5b6478]">✦ 6 roles matched to you</p>
+          <div
+            className="rounded-xl p-2.5"
+            style={{ background: "linear-gradient(135deg,#ede9fe,#ffffff 55%)", boxShadow: "0 0 0 1px rgba(124,58,237,0.2)" }}
+          >
+            <span
+              className="mb-1.5 inline-flex items-center gap-1 rounded-full px-2 py-[3px] text-[7px] font-extrabold uppercase tracking-wide text-white"
+              style={{ background: "linear-gradient(135deg,#4f6ef7,#7c3aed)" }}
+            >
+              ♛ Top match
+            </span>
+            <div className="flex items-start gap-2">
+              <div
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-white"
+                style={{ background: "linear-gradient(135deg,#4f6ef7,#7c3aed)" }}
+              >
+                M
+              </div>
+              <div>
+                <p className="text-[10px] font-bold leading-tight text-[#0f172a]">Senior PM, Growth</p>
+                <span className="mt-1 inline-block rounded-full bg-[#ede9fe] px-1.5 py-[2px] text-[7px] font-bold text-[#7c3aed]">✦ Strong fit</span>
+              </div>
+            </div>
+            <div className="mt-2 rounded-lg bg-[#ede9fe]/60 p-1.5">
+              <p className="text-[7.5px] leading-snug text-[#0f172a]">Your Q3 pricing overhaul lines up with exactly what this role owns.</p>
+            </div>
+            <div className="mt-2 flex items-center justify-between border-t border-[#ece5f5] pt-2">
+              <span className="rounded-full border border-[#ece5f5] px-2 py-1 text-[7px] font-semibold text-[#5b6478]">👍 Fit</span>
+              <span className="rounded-md px-2 py-1 text-[7.5px] font-bold text-white" style={{ background: "linear-gradient(135deg,#4f6ef7,#7c3aed)" }}>Apply ↗</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </PhoneFrame>
+  );
+}
+
 // A single expand/collapse FAQ row. Animated with a CSS grid-rows trick
 // (0fr -> 1fr) rather than framer-motion's height:auto, which needs to
 // measure the element on every open/close -- the grid trick animates
@@ -732,7 +788,7 @@ export function MarketingHome({
           HOW IT WORKS
         </motion.p>
         <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mb-12 mt-2 text-center text-2xl font-bold tracking-tight">
-          Three steps, start to finish
+          Four steps, start to finish
         </motion.h2>
         <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.15 }} variants={stagger} className="relative flex flex-wrap justify-center gap-9">
           <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 200 }}>
@@ -749,6 +805,11 @@ export function MarketingHome({
             <ChatScreenMock />
             <p className="mt-4 text-sm font-bold">3. Chat</p>
             <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Ask for it back — anytime, in your own words.</p>
+          </motion.div>
+          <motion.div variants={fadeUp} className="flex flex-col items-center text-center" style={{ width: 200 }}>
+            <OpportunitiesScreenMock />
+            <p className="mt-4 text-sm font-bold">4. Find opportunities</p>
+            <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Jobs matched to your real history, with the reason you&apos;re a fit.</p>
           </motion.div>
         </motion.div>
       </section>
