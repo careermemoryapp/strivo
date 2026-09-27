@@ -1,6 +1,7 @@
 "use client";
 import { usePathname } from "next/navigation";
 import GoogleAnalytics from "./GoogleAnalytics";
+import ClarityAnalytics from "./ClarityAnalytics";
 import CookieConsent from "./CookieConsent";
 import { isNativeApp } from "@/lib/nativePlatform";
 
@@ -30,6 +31,7 @@ export default function Analytics() {
   return (
     <>
       <GoogleAnalytics />
+      <ClarityAnalytics />
       <CookieConsent />
     </>
   );
