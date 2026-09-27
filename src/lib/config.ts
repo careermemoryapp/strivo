@@ -9,16 +9,31 @@ export const APP_TAGLINE = "Your personal AI, built from your own experiences.";
 // listing URL ever changes.
 export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ai.strivo.app";
 
-// Singular (MMP) tracking link for the blog's "Get the app" buttons only
-// (created 2026-09-26, Custom Source "blog", link name "Blog CTA Buttons").
+// Singular (MMP) tracking link for every "Get the app" button sitewide
+// (created 2026-09-26, Custom Source "blog", link name "Blog CTA Buttons" --
+// the Custom Source name in Singular is still literally "blog" since
+// renaming it would mean creating a brand-new link in Singular's UI, which
+// only the founder can do there; the name is just a label and doesn't
+// affect what it measures).
 // It logs the click in Singular, redirects to the exact same Play Store
 // listing as PLAY_STORE_URL above, and then matches a later install back to
 // this click via Android's Play Install Referrer -- something GA4 can never
-// do on its own (see PlayStoreLink.tsx's comment). Scoped to the blog
-// specifically because that's the traffic this was built to measure; the
-// homepage hero/nav links intentionally keep using the plain PLAY_STORE_URL
-// for now.
-export const SINGULAR_BLOG_LINK = "https://strivo.sng.link/Ddemo/rpqi7";
+// do on its own (see PlayStoreLink.tsx's comment).
+//
+// Widened 2026-09-27 from "blog only" to every placement (homepage hero,
+// nav, sticky bar, blog) after discovering the admin Growth Funnel's
+// "Installed the app" stage was hardcoded to only count installs through
+// this link, but the homepage's own CTAs -- where almost all real clicks
+// happen -- were still using the plain, untracked PLAY_STORE_URL below.
+// Real installs were happening (confirmed directly in Singular's own
+// Reports dashboard) but landing under Source "Organic" (no referrer at
+// all) instead of being attributable to the website, so the funnel always
+// showed 0. Every "Get the app" button site-wide now uses this link instead
+// so a click from anywhere on the site can actually be traced through to an
+// install. Visual appearance of every button is unchanged -- this only
+// swaps the destination URL, which still redirects to the same Play Store
+// listing either way.
+export const SINGULAR_TRACKING_LINK = "https://strivo.sng.link/Ddemo/rpqi7";
 
 export const HOME_SUBTITLE = "Capture today. Remember forever. Achieve more.";
 

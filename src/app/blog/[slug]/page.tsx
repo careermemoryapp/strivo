@@ -4,7 +4,7 @@ import { LogoMark } from "@/components/Logo";
 import { BlogCta } from "@/components/blog/BlogCta";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
-import { APP_NAME, SINGULAR_BLOG_LINK } from "@/lib/config";
+import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
 import { getBlogPostBySlug } from "@/lib/repo/blogPosts";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +63,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         </Link>
         <PlayStoreLink
           location="blog_post_nav"
-          href={SINGULAR_BLOG_LINK}
+          href={SINGULAR_TRACKING_LINK}
           className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
         >
           Get the app →
@@ -105,7 +105,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
       <StickyGetAppBar
         location="blog_post_sticky_bar"
-        href={SINGULAR_BLOG_LINK}
+        href={SINGULAR_TRACKING_LINK}
         headline="Turn what you just read into your own story."
         incentive="Free for the first 1,000 users"
       />

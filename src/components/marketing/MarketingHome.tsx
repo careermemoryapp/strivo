@@ -10,7 +10,7 @@ import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
-import { APP_NAME } from "@/lib/config";
+import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES } from "@/lib/careerProfile";
 
 // Strivo's official social accounts — shown as icon links in the header
@@ -159,6 +159,7 @@ function PillButton({ className = "" }: { className?: string }) {
     <Magnetic>
       <PlayStoreLink
         location="hero"
+        href={SINGULAR_TRACKING_LINK}
         className={`inline-block rounded-full bg-white px-9 py-4 text-base font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] sm:block sm:w-[50vw] sm:max-w-3xl sm:px-0 sm:py-7 sm:text-center sm:text-2xl ${className}`}
         style={{ boxShadow: "0 8px 24px rgba(255,255,255,0.15)" }}
       >
@@ -576,6 +577,7 @@ export function MarketingHome({
           <SocialLinks className="hidden sm:flex" />
           <PlayStoreLink
             location="nav"
+            href={SINGULAR_TRACKING_LINK}
             className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
           >
             Get the app →
@@ -1044,6 +1046,7 @@ export function MarketingHome({
 
       <StickyGetAppBar
         location="sticky_bar"
+        href={SINGULAR_TRACKING_LINK}
         headline="Never forget the story that gets you the offer."
         incentive="Free for the first 1,000 users"
         triggerRef={heroCtaRef}

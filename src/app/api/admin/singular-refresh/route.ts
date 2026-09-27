@@ -36,14 +36,19 @@ export async function POST(req: Request) {
   // override is still accepted for ad-hoc checks, but the daily cron and
   // the dashboard's own button both rely on the default.
   const sinceDate = searchParams.get("since") || funnelTrackingStartDate();
-  const source = searchParams.get("source") || "blog";
+  // No default source filter -- "Installed the app" should count every
+  // install, not just the ones Singular could tie back to one specific
+  // tracking link (see fetchSingularInstalls's comment in
+  // singularReporting.ts for why that undercounted). An explicit
+  // `?source=` is still honored for an ad-hoc single-source check.
+  const source = searchParams.get("source") || undefined;
 
   try {
     const result = await fetchSingularInstalls(sinceDate, source);
     const snapshot: SingularInstallsSnapshot = {
       checkedAt: new Date().toISOString(),
       sinceDate,
-      source,
+      source: source ?? "all",
       clicks: result.clicks,
       installs: result.installs,
     };

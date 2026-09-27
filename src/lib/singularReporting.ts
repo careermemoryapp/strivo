@@ -35,7 +35,7 @@ const BASE = "https://api.singular.net/api/v2.0";
 
 type SingularEnvelope<T> = { status: number; substatus?: number; value?: T; error_message?: string };
 
-async function createAsyncReport(apiKey: string, startDate: string, endDate: string, source: string): Promise<string> {
+async function createAsyncReport(apiKey: string, startDate: string, endDate: string, source?: string): Promise<string> {
   const url = new URL(`${BASE}/create_async_report`);
   url.searchParams.set("api_key", apiKey);
   const body = new URLSearchParams({
@@ -45,8 +45,12 @@ async function createAsyncReport(apiKey: string, startDate: string, endDate: str
     end_date: endDate,
     time_breakdown: "all",
     format: "json",
-    source, // filter to just this custom source, e.g. "blog" -- also Singular's own recommendation (one source per query)
   });
+  // `source` filters to one Custom Source (e.g. "blog") when passed.
+  // Omitted entirely (not just empty) when the caller wants EVERY source --
+  // "source" still comes back as a dimension on each row either way, so the
+  // per-source breakdown is never lost, just not filtered down to one.
+  if (source) body.set("source", source);
   const res = await fetch(url.toString(), {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -125,13 +129,23 @@ function parseReportRows(payload: unknown): Record<string, unknown>[] {
 
 export type SingularInstallsResult = { clicks: number; installs: number; rows: Record<string, unknown>[] };
 
-// Full create -> poll -> download -> parse flow for one custom source over
-// one date range. `startDate` is an explicit "YYYY-MM-DD" (matching
-// growthFunnel.ts's FUNNEL_TRACKING_START -- see its comment for why this
-// is a fixed date rather than a rolling "last N days" window) and `source`
-// should match the Source Name you gave the tracking link in Singular
-// (e.g. "blog" -- see the Blog CTA Buttons link created 2026-09-26).
-export async function fetchSingularInstalls(startDate: string, source = "blog"): Promise<SingularInstallsResult> {
+// Full create -> poll -> download -> parse flow over one date range.
+// `startDate` is an explicit "YYYY-MM-DD" (matching growthFunnel.ts's
+// FUNNEL_TRACKING_START -- see its comment for why this is a fixed date
+// rather than a rolling "last N days" window).
+//
+// `source` is left undefined by default -- meaning "every source, summed
+// together" -- rather than hardcoded to "blog" (the Source Name of the one
+// Singular tracking link -- see SINGULAR_TRACKING_LINK in lib/config.ts).
+// Changed 2026-09-27: every "Get the app" button sitewide now uses that
+// same tracking link, but a click can still legitimately land under a
+// different Source (e.g. "Organic", if Android's install referrer ever
+// fails to pass through, or a visitor installs via a raw/copy-pasted Play
+// Store URL rather than clicking a button on the site) -- filtering to just
+// "blog" would silently drop those and undercount again. Passing an
+// explicit `source` here still works for an ad-hoc single-source check
+// (e.g. via the `?source=` override on the refresh route).
+export async function fetchSingularInstalls(startDate: string, source?: string): Promise<SingularInstallsResult> {
   const apiKey = process.env.SINGULAR_REPORTING_API_KEY;
   if (!apiKey) throw new Error("SINGULAR_REPORTING_API_KEY is not configured");
 

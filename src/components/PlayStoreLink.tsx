@@ -39,7 +39,7 @@ export function PlayStoreLink({
   // link apart from the blog CTA, instead of lumping every click together.
   location: string;
   // Optional override for the destination -- defaults to the plain Play
-  // Store URL. Pass a Singular tracking link (see SINGULAR_BLOG_LINK in
+  // Store URL. Pass a Singular tracking link (see SINGULAR_TRACKING_LINK in
   // lib/config.ts) for placements where install attribution matters; the
   // GA4 click event still fires the same way either way.
   href?: string;

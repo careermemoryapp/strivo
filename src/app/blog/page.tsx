@@ -2,7 +2,7 @@ import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
-import { APP_NAME, SINGULAR_BLOG_LINK } from "@/lib/config";
+import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
 import { listBlogPosts, BLOG_CATEGORIES } from "@/lib/repo/blogPosts";
 
 export const dynamic = "force-dynamic";
@@ -39,7 +39,7 @@ export default async function BlogIndexPage({
           <span className="text-xs font-semibold text-white">Blog</span>
           <PlayStoreLink
             location="blog_nav"
-            href={SINGULAR_BLOG_LINK}
+            href={SINGULAR_TRACKING_LINK}
             className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
           >
             Get the app →
@@ -148,7 +148,7 @@ export default async function BlogIndexPage({
 
       <StickyGetAppBar
         location="blog_index_sticky_bar"
-        href={SINGULAR_BLOG_LINK}
+        href={SINGULAR_TRACKING_LINK}
         headline="Never forget the story that gets you the offer."
         incentive="Free for the first 1,000 users"
       />
