@@ -149,7 +149,7 @@ export default async function BlogIndexPage({
       <StickyGetAppBar
         location="blog_index_sticky_bar"
         href={SINGULAR_TRACKING_LINK}
-        headline="Never forget the story that gets you the offer."
+        headline="You're doing the work. You're just not getting credit for it."
         incentive="Free for the first 1,000 users"
       />
     </div>

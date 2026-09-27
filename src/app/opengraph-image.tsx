@@ -74,12 +74,14 @@ export default function OpengraphImage() {
         <div
           style={{
             marginTop: 16,
-            fontSize: 32,
+            fontSize: 30,
             color: "#a0a0ac",
             position: "relative",
+            maxWidth: 920,
+            textAlign: "center",
           }}
         >
-          Never forget the story that gets you the offer.
+          You&apos;re doing the work. You&apos;re just not getting credit for it.
         </div>
       </div>
     ),

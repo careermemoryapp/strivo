@@ -611,17 +611,17 @@ export function MarketingHome({
             YOUR AI CAREER MEMORY
           </motion.p>
           <motion.h1 variants={fadeUp} className="mx-auto text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
-            Never forget the story
+            You&apos;re doing the work.
             <br />
             <span
               className="bg-clip-text text-transparent"
               style={{ backgroundImage: "linear-gradient(90deg,#6d8bff,#c266f2,#e879f9)" }}
             >
-              that gets you the offer.
+              You&apos;re just not getting credit for it.
             </span>
           </motion.h1>
           <motion.p variants={fadeUp} className="mx-auto mt-6 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:text-lg">
-            Speak it once. Strivo captures it, organizes it, and hands it back exactly when an interview, resume, or review needs it.
+            Not because you&apos;re not good enough — because nobody remembers to write it down. Strivo does, automatically.
           </motion.p>
           <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-8">
             <PillButton />
@@ -1057,7 +1057,7 @@ export function MarketingHome({
       <StickyGetAppBar
         location="sticky_bar"
         href={SINGULAR_TRACKING_LINK}
-        headline="Never forget the story that gets you the offer."
+        headline="You're doing the work. You're just not getting credit for it."
         incentive="Free for the first 1,000 users"
         triggerRef={heroCtaRef}
       />
