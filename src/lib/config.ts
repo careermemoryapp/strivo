@@ -35,6 +35,22 @@ export const PLAY_STORE_URL = "https://play.google.com/store/apps/details?id=ai.
 // listing either way.
 export const SINGULAR_TRACKING_LINK = "https://strivo.sng.link/Ddemo/rpqi7";
 
+// Microsoft Clarity project ("Strivo Homepage"), added 2026-09-27 for
+// heatmaps + session recordings of the marketing site -- see
+// ClarityAnalytics.tsx (loads the tracking tag) and the admin dashboard's
+// "Website behavior" section (links out to the dashboard itself; Clarity's
+// actual heatmap/recording viewer isn't embeddable here, so the admin panel
+// just deep-links into it rather than re-building it).
+export const CLARITY_PROJECT_ID = "yoow5s3zuo";
+// Sub-paths guessed from the nav tab labels (Getting Started ->
+// "gettingstarted" was confirmed directly in the browser) -- if any of
+// these three land on the wrong tab once data is flowing, the top nav
+// inside Clarity itself (Dashboard / Recordings / Heatmaps) is the
+// reliable way to get to the right place regardless.
+export const CLARITY_DASHBOARD_URL = `https://clarity.microsoft.com/projects/view/${CLARITY_PROJECT_ID}/dashboard`;
+export const CLARITY_RECORDINGS_URL = `https://clarity.microsoft.com/projects/view/${CLARITY_PROJECT_ID}/recordings`;
+export const CLARITY_HEATMAPS_URL = `https://clarity.microsoft.com/projects/view/${CLARITY_PROJECT_ID}/heatmaps`;
+
 export const HOME_SUBTITLE = "Capture today. Remember forever. Achieve more.";
 
 // Each quick action starts a new chat with `prompt` as the opening user

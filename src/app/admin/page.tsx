@@ -19,6 +19,8 @@ import {
   ThumbsUp,
   ThumbsDown,
   RefreshCw,
+  Video,
+  Flame,
 } from "lucide-react";
 import { formatDistanceToNow, format } from "date-fns";
 import {
@@ -31,6 +33,7 @@ import {
   Tooltip,
   Legend,
 } from "recharts";
+import { CLARITY_DASHBOARD_URL, CLARITY_RECORDINGS_URL, CLARITY_HEATMAPS_URL } from "@/lib/config";
 import { LogoMark } from "@/components/Logo";
 import { Button } from "@/components/Button";
 import { Spinner } from "@/components/Spinner";
@@ -1365,6 +1368,41 @@ export default function AdminDashboardPage() {
                 )}
               </>
             )}
+          </div>
+        </section>
+
+        <section className="mb-8">
+          <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+            Website behavior · Microsoft Clarity
+          </p>
+          <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+            <p className="mb-3 text-[11.5px] text-ink-faint">
+              The funnel above shows HOW MANY visitors drop off at each step. These show WHY --
+              heatmaps of where people click/scroll, and session recordings of real visits. Added
+              2026-09-27; can take up to 2 hours after a visit before it shows up.
+            </p>
+            <div className="grid gap-2.5 sm:grid-cols-3">
+              {[
+                { href: CLARITY_DASHBOARD_URL, icon: Activity, label: "Dashboard", desc: "Overview & trends" },
+                { href: CLARITY_RECORDINGS_URL, icon: Video, label: "Recordings", desc: "Watch real visits" },
+                { href: CLARITY_HEATMAPS_URL, icon: Flame, label: "Heatmaps", desc: "Click & scroll maps" },
+              ].map((link) => (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2.5 rounded-[12px] border border-[#f5f2fa] p-3 hover:border-[#ece5f5]"
+                >
+                  <link.icon size={15} className="shrink-0 text-[#8b5cf6]" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-semibold text-ink">{link.label}</p>
+                    <p className="truncate text-[10.5px] text-ink-faint">{link.desc}</p>
+                  </div>
+                  <ExternalLink size={12} className="shrink-0 text-[#a8a2bd]" />
+                </a>
+              ))}
+            </div>
           </div>
         </section>
 

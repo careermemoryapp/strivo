@@ -1,11 +1,14 @@
 "use client";
 import Script from "next/script";
+import { CLARITY_PROJECT_ID } from "@/lib/config";
 
 // Microsoft Clarity -- heatmaps + session recordings for the marketing
 // site, added 2026-09-27 to answer "5,000 visitors, only 4-5 downloads --
 // where in the homepage is everyone dropping off?" (GA4 can say HOW MANY
 // clicked "Get the app"; it can't show WHY the rest didn't). Project:
-// "Strivo Homepage" in the founder's Clarity account.
+// "Strivo Homepage" in the founder's Clarity account -- see
+// CLARITY_PROJECT_ID in lib/config.ts (also used by the admin dashboard's
+// link-out to Clarity's own Recordings/Heatmaps views).
 //
 // Loaded the same way as GA4 (see GoogleAnalytics.tsx) -- unconditional,
 // no consent-gate -- for the same reason: this is anonymized behavioral
@@ -13,7 +16,6 @@ import Script from "next/script";
 // Clarity additionally masks all sensitive page content by default. Kept
 // as its own component (rather than folded into GoogleAnalytics.tsx) so
 // either tag can be swapped or removed independently later.
-const CLARITY_PROJECT_ID = "yoow5s3zuo";
 
 export default function ClarityAnalytics() {
   return (
