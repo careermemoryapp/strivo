@@ -339,7 +339,10 @@ function isRecentEnough(job: JobPosting): boolean {
 function isCacheFresh(
   cache: ReturnType<typeof getCachedOpportunities>,
   memoryCount: number,
-  wantsPersonalized: boolean
+  wantsPersonalized: boolean,
+  // Timestamp of the CURRENT suggested_roles row (null if this person has
+  // none) -- see the comment below for why this is checked at all.
+  rolesGeneratedAt: string | null
 ): boolean {
   if (cache.length === 0) return false;
   const row = cache[0];
@@ -350,6 +353,22 @@ function isCacheFresh(
   const ageMs = Date.now() - new Date(row.generated_at).getTime();
   if (ageMs > CACHE_MAX_AGE_DAYS * 24 * 60 * 60 * 1000) return false;
   if (isPersonalized && memoryCount - row.memory_count_at_generation >= RECOMPUTE_AFTER_NEW_MEMORIES) return false;
+  // Direct founder report (2026-09-28): the inline roles-refresh added
+  // above this function (see its own comment in getOpportunitiesForUser)
+  // -- and the admin's manual regenerate-roles endpoint -- can both hand
+  // this person a freshly regenerated suggested_roles row WITHOUT their
+  // memory count having moved at all since this opportunities cache was
+  // last generated. The memory-count check above only catches "you added
+  // memories since your list was built" -- it has no way to notice "your
+  // named roles changed out from under an otherwise-untouched cache," so a
+  // cache built one minute before a roles refresh was still being served,
+  // untouched, as "fresh" indefinitely. Comparing timestamps directly
+  // closes that gap: whenever suggested_roles is newer than this cached
+  // list, the list was built from a since-superseded profile and must be
+  // recomputed, regardless of whether the memory count itself changed.
+  if (isPersonalized && rolesGeneratedAt && new Date(rolesGeneratedAt).getTime() > new Date(row.generated_at).getTime()) {
+    return false;
+  }
   return true;
 }
 
@@ -411,7 +430,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   const feedbackMap = getFeedbackMap(userId);
 
   const cache = getCachedOpportunities(userId);
-  if (isCacheFresh(cache, memoryCount, wantsPersonalized)) {
+  if (isCacheFresh(cache, memoryCount, wantsPersonalized, suggestedRoles?.generatedAt ?? null)) {
     return {
       personalized: cache[0].personalized === 1,
       memoryCount,
