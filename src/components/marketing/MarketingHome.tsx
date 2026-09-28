@@ -147,19 +147,22 @@ function TiltCard({ children, className = "", style }: { children: React.ReactNo
 }
 
 // The main "Get the app" CTA -- used in the hero and again in the closing
-// CTA section. Made substantially bigger on desktop (2026-09-26, per a
-// direct founder call after seeing the earlier size felt too small/easy to
-// miss): on mobile it stays a compact pill sized to its text; from the sm
-// breakpoint up it becomes a wide bar, roughly half the viewport width
-// (capped so it doesn't turn into something absurd on an ultrawide
-// monitor), so it reads as the obvious, unmissable primary action on the
-// page rather than one button among several.
+// CTA section.
+//
+// No longer wrapped in <Magnetic> (removed 2026-09-28, direct founder
+// report: "why are these buttons not stable" -- shaking/jittery on mouse
+// move). Magnetic's lean effect was tuned for the single wide pill button
+// this used to be (up to 50vw on desktop) -- a large target where small
+// mouse movements produced a gentle, barely-perceptible lean. Once this
+// became two small side-by-side store badges (same day, same founder call:
+// no popup, show both platforms as badges), the same spring math was
+// applied to a much smaller bounding box, so the identical mouse movement
+// now produces a proportionally much bigger, jittery-looking offset --
+// exactly the instability reported. Static badges (no lean/follow effect)
+// also just reads more like real app-store badges, which was the other
+// half of that same request.
 function PillButton({ className = "" }: { className?: string }) {
-  return (
-    <Magnetic>
-      <PlayStoreLink location="hero" href={SINGULAR_TRACKING_LINK} size="lg" className={className} />
-    </Magnetic>
-  );
+  return <PlayStoreLink location="hero" href={SINGULAR_TRACKING_LINK} size="lg" className={className} />;
 }
 
 // --- Phone mockups — faithful recreations of the real app screens -------

@@ -148,7 +148,7 @@ export async function computeGrowthFunnel(): Promise<GrowthFunnel> {
       pctOfVisitors: visitors !== null ? 1 : null,
     },
     {
-      label: 'Clicked "Get the app"',
+      label: 'Clicked "Play Store"',
       value: clicked,
       source: "GA4",
       configured: ga4ok,

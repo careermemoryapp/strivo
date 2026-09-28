@@ -16,10 +16,15 @@
 // quietly working already. See the !wantsPersonalized branch below and
 // OpportunitiesClient.tsx's locked-state card for the actual copy.
 
-import { countMemories } from "@/lib/repo/memories";
+import { countMemories, listNewestMemories } from "@/lib/repo/memories";
 import { getUserById } from "@/lib/repo/users";
 import { detectCityFromText } from "@/lib/geo";
-import { getLatestSuggestedRolesForUser, MIN_TOTAL_MEMORIES } from "@/lib/repo/suggestedRoles";
+import {
+  getLatestSuggestedRolesForUser,
+  shouldGenerateSuggestedRoles,
+  createSuggestedRoles,
+  MIN_TOTAL_MEMORIES,
+} from "@/lib/repo/suggestedRoles";
 import { OPPORTUNITY_INDUSTRIES_LIST, OPPORTUNITY_SENIORITY_LIST } from "@/lib/config";
 import { getJobPreferences, hasStatedPreferences, type JobPreferences } from "@/lib/repo/jobPreferences";
 import {
@@ -32,7 +37,7 @@ import {
   listFeedbackedJobIds,
   getFeedbackMap,
 } from "@/lib/repo/userOpportunities";
-import { rankOpportunities, type OpportunityCandidate } from "@/lib/ai";
+import { rankOpportunities, generateSuggestedRoles, type OpportunityCandidate } from "@/lib/ai";
 
 export type OpportunityCard = {
   id: string; // job_postings.id -- used for the feedback endpoint
@@ -111,6 +116,13 @@ const MAX_JOB_AGE_DAYS = 15;
 // was generated, even if it isn't stale by age yet -- new evidence should
 // visibly change the list, not sit unused until the next scheduled refresh.
 const RECOMPUTE_AFTER_NEW_MEMORIES = 3;
+
+// Same recency-ordered sample size "Roles you're ready for" itself uses --
+// see ROLE_SAMPLE_SIZE's own comment in app/api/growth-narrative/run/route.ts
+// for why this is one bigger sample rather than two small batches. Kept as
+// its own copy here (not imported -- that file has no exports), same as
+// api/growth-narrative/regenerate-roles/route.ts's own copy.
+const ROLE_SAMPLE_SIZE = 20;
 
 function toCard(
   job: JobPosting,
@@ -343,6 +355,43 @@ function isCacheFresh(
 
 export async function getOpportunitiesForUser(userId: string): Promise<OpportunitiesResult> {
   const memoryCount = countMemories(userId);
+
+  // Direct founder call (2026-09-28): "Roles you're ready for" used to
+  // ONLY regenerate on the monthly growth-narrative/roles batch (see
+  // shouldGenerateSuggestedRoles in lib/repo/suggestedRoles.ts and
+  // app/api/growth-narrative/run) -- so someone who kept recording memories
+  // between monthly runs (one real account went from a handful up to 83
+  // memories) still had their Opportunities matches computed off a much
+  // thinner, months-stale roles read the whole time. The RECOMPUTE_AFTER_
+  // NEW_MEMORIES check below was re-running the match/rank step often
+  // enough, just against that same stale profile every time -- more memories
+  // never actually changed which jobs this person's evidence pointed at.
+  // Fixed by checking the exact same eligibility gate right here, on the
+  // request path a person actually takes after recording new memories
+  // (opening this tab), instead of waiting on the next monthly batch to
+  // notice. Same gate, same thresholds (still needs 8+ new memories since
+  // the last generation, or 30+ days elapsed with 3+ new ones) -- this only
+  // moves WHEN that inline AI call can fire, not how often across the user
+  // base, so it doesn't change the aggregate AI-cost profile the monthly
+  // batch was already tuned for. Best-effort: on failure, or if the model
+  // genuinely finds nothing new worth naming, this silently falls back to
+  // whatever suggested_roles already has on file -- exactly what the batch
+  // job (and the admin's manual regenerate-roles endpoint) already do.
+  if (shouldGenerateSuggestedRoles(userId)) {
+    const roleMemories = listNewestMemories(userId, ROLE_SAMPLE_SIZE);
+    if (roleMemories.length > 0) {
+      const generated = await generateSuggestedRoles(roleMemories);
+      if (generated && generated.roles.length > 0) {
+        createSuggestedRoles({
+          userId,
+          roles: generated.roles,
+          memoryCountAtGeneration: roleMemories.length,
+          overallSeniority: generated.seniority,
+        });
+      }
+    }
+  }
+
   const suggestedRoles = getLatestSuggestedRolesForUser(userId);
   const roles = suggestedRoles?.roles ?? [];
   const prefs = getJobPreferences(userId);

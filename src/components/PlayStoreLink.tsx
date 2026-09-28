@@ -49,23 +49,34 @@ declare global {
 // single-line "Play Store" badge -- two full-height stacked badges don't fit
 // next to the logo and Blog link at phone width without wrapping the whole
 // header (confirmed with a local screenshot at 390px before this was added).
+//
+// Colors/shape -- restyled 2026-09-28, direct founder call ("give a feel of
+// ... wherever there is a button of Play Store and Apple Store"): rounded
+// rectangles (not full pills) on a near-black badge, matching the general
+// silhouette real app-store download badges share, without reproducing
+// either company's actual logo or wordmark artwork (that's Google's/Apple's
+// trademarked mark, not something to copy pixel-for-pixel). Both badges
+// share the same dark family so they read as a matched pair; Play Store
+// stays full-brightness/white text since it's live, App Store drops to
+// dimmed text and a dashed border since it isn't clickable yet -- the
+// "coming soon" state should look visually quieter, not just say it.
 const SIZE = {
   sm: {
-    badge: "gap-1 rounded-full px-2.5 py-1.5",
+    badge: "gap-1 rounded-lg px-2.5 py-1.5",
     wrapperGap: "gap-1.5",
     icon: 12,
     eyebrow: null,
     label: "text-xs",
   },
   md: {
-    badge: "gap-2 rounded-full px-5 py-2.5",
+    badge: "gap-2 rounded-lg px-5 py-2.5",
     wrapperGap: "gap-2.5",
     icon: 15,
     eyebrow: "text-[8px]",
     label: "text-sm",
   },
   lg: {
-    badge: "gap-2.5 rounded-full px-6 py-3.5 sm:px-8 sm:py-4",
+    badge: "gap-2.5 rounded-xl px-6 py-3.5 sm:px-8 sm:py-4",
     wrapperGap: "gap-2.5",
     icon: 18,
     eyebrow: "text-[8px] sm:text-[9px]",
@@ -109,12 +120,12 @@ export function PlayStoreLink({
             page_path: window.location.pathname,
           });
         }}
-        className={`inline-flex items-center bg-white font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] ${s.badge}`}
+        className={`inline-flex items-center border border-white/15 bg-black text-white transition-transform hover:-translate-y-0.5 hover:border-white/30 active:scale-[0.98] ${s.badge}`}
       >
-        <Play size={s.icon} fill="#0a0a0f" strokeWidth={0} />
+        <Play size={s.icon} fill="#4ade80" stroke="#4ade80" strokeWidth={1} />
         {s.eyebrow ? (
           <span className="flex flex-col items-start leading-none">
-            <span className={`font-semibold uppercase tracking-wide opacity-60 ${s.eyebrow}`}>Available on</span>
+            <span className={`font-semibold uppercase tracking-wide text-white/60 ${s.eyebrow}`}>Available on</span>
             <span className={`font-bold ${s.label}`}>Play Store</span>
           </span>
         ) : (
@@ -123,7 +134,7 @@ export function PlayStoreLink({
       </a>
       <div
         aria-disabled="true"
-        className={`inline-flex cursor-default items-center border border-white/15 text-[#8a8592] ${s.badge}`}
+        className={`inline-flex cursor-default items-center border border-dashed border-white/15 bg-black text-[#6a6672] ${s.badge}`}
       >
         <Clock size={s.icon} strokeWidth={1.75} />
         {s.eyebrow ? (
