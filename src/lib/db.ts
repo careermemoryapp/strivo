@@ -855,6 +855,25 @@ function migrate(db: DatabaseSync) {
       chunk_index INTEGER NOT NULL,
       updated_at TEXT NOT NULL
     );
+
+    -- Emails collected from the "iOS coming soon" prompt (see
+    -- components/PlayStoreLink.tsx and api/ios-waitlist). Added
+    -- 2026-09-28: the site's "Get the app" button always linked straight to
+    -- the Play Store for every visitor, so an iOS/Mac visitor who clicked it
+    -- landed on a listing they can't install from -- wasted click, no way
+    -- to follow up with them later. PlayStoreLink now detects iOS/Mac
+    -- client-side and swaps the link for this waitlist prompt instead.
+    -- UNIQUE on email (not a real foreign key -- these people don't have
+    -- Strivo accounts) so a visitor resubmitting the form is a harmless
+    -- no-op (see addToIosWaitlist's ON CONFLICT) rather than a duplicate
+    -- row.
+    CREATE TABLE IF NOT EXISTS ios_waitlist (
+      id TEXT PRIMARY KEY,
+      email TEXT NOT NULL UNIQUE,
+      location TEXT,
+      page_path TEXT,
+      created_at TEXT NOT NULL
+    );
   `);
 
   // --- Incremental migrations for columns/data added after initial launch ---

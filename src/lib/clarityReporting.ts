@@ -72,10 +72,28 @@ async function fetchOnce(token: string, numOfDays: 1 | 2 | 3, dimension1?: strin
   const url = new URL(BASE);
   url.searchParams.set("numOfDays", String(numOfDays));
   if (dimension1) url.searchParams.set("dimension1", dimension1);
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    cache: "no-store",
-  });
+  // Added 2026-09-28: the admin panel's "Refresh insights" button was
+  // surfacing the frontend's generic "Clarity refresh failed." fallback
+  // (see runClarityRefresh in admin/page.tsx) instead of a real reason --
+  // that fallback only shows when the POST response body isn't valid JSON
+  // at all, which happens when something between here and the browser
+  // times out the request before this function returns anything (the
+  // route.ts try/catch always resolves valid JSON on its own, so a plain
+  // hang was the only remaining explanation). A 15s timeout here turns
+  // that silent hang into a real, readable error instead.
+  let res: Response;
+  try {
+    res = await fetch(url.toString(), {
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      cache: "no-store",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    if (e instanceof Error && e.name === "TimeoutError") {
+      throw new Error("Clarity Data Export API didn't respond within 15s -- Clarity may be having issues, or the daily request cap (10/project/day, shared with clarity.microsoft.com) was hit.");
+    }
+    throw new Error(`Couldn't reach the Clarity Data Export API: ${e instanceof Error ? e.message : String(e)}`);
+  }
   const json: unknown = await res.json().catch(() => null);
   if (!res.ok || !Array.isArray(json)) {
     const rawText = json === null ? await res.text().catch(() => "") : JSON.stringify(json);
