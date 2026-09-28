@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { Play, Clock } from "lucide-react";
+import type { CSSProperties } from "react";
 import { PLAY_STORE_URL } from "@/lib/config";
 
 declare global {
@@ -10,7 +10,7 @@ declare global {
   }
 }
 
-// Every "Get the app" / Play Store link on the marketing site and blog goes
+// Every "Get the app" placement on the marketing site and blog renders
 // through this component instead of a raw <a href={PLAY_STORE_URL}>. It
 // fires a `google_play_click` GA4 event on click, tagged with WHICH link was
 // clicked (location) and the page it was clicked from.
@@ -21,208 +21,122 @@ declare global {
 // whether visitors were even clicking through toward the Play Store, let
 // alone installing once they got there (GA4 can't see the install itself --
 // that only shows up in Play Console's own acquisition/referrer reports).
-// Without this event, "people visit but don't download" was a guess, not a
-// measured fact.
 //
 // One-time manual step after this is deployed and has received at least one
 // real click: GA4 Admin -> Data display -> Events -> find `google_play_click`
 // in the list (can take a few hours to first appear) -> toggle "Mark as key
 // event". That flip can only be done in the GA4 UI, not from code.
 //
-// iOS/iPadOS handling -- added 2026-09-28, direct founder call: this link
-// used to go straight to the Play Store for EVERY visitor, so an iPhone/iPad
-// visitor who clicked it landed on a listing they can't install from --
-// wasted click, no way to follow up with them once iOS ships. Now detected
-// client-side (isIOSDevice below) and swapped for an "iOS coming soon" email
-// capture instead (see api/ios-waitlist and repo/iosWaitlist.ts). Detection
-// is gated behind useIsClient (below) so server-rendered HTML always matches
-// the client's first paint -- the Play Store link is what server-rendered
-// HTML and non-iOS visitors always see; only iOS/iPadOS visitors flip to the
-// waitlist prompt, right after hydration.
-function isIOSDevice(): boolean {
-  if (typeof navigator === "undefined") return false;
-  const ua = navigator.userAgent;
-  if (/iPad|iPhone|iPod/.test(ua)) return true;
-  // iPadOS 13+ identifies itself as "Macintosh" (desktop-Safari UA
-  // spoofing) -- touch capability is the only reliable way left to tell an
-  // iPad apart from an actual Mac.
-  return navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1;
-}
-
-// Client/hydration-safe flag: true only once React has hydrated in the
-// browser, false during SSR and the first client render (so server and
-// client markup match, then flips right after). useSyncExternalStore's
-// getServerSnapshot/getSnapshot split is the sanctioned way to do this --
-// a plain `useEffect(() => setState(true), [])` works too but triggers an
-// extra cascading render this codebase's lint rules flag.
-function subscribeNoop() {
-  return () => {};
-}
-function useIsClient(): boolean {
-  return useSyncExternalStore(
-    subscribeNoop,
-    () => true,
-    () => false
-  );
-}
+// iOS/App Store handling -- rewritten 2026-09-28, direct founder call: an
+// earlier version of this component detected iOS/iPadOS visitors and swapped
+// the whole button for an email-capture "join the waitlist" popup. The
+// founder's follow-up call that same day was explicit -- no popup. Instead,
+// EVERY visitor (regardless of device) now sees two badges side by side
+// wherever this used to render one button: a working "Play Store" link, and
+// a non-clickable "App Store -- Coming soon" badge next to it. Simpler than
+// device detection (nothing to get wrong across browsers/OSes), and honest
+// about both platforms to everyone rather than guessing from the user agent.
+// The iOS waitlist email-capture backend (ios_waitlist table, addToIosWaitlist,
+// /api/ios-waitlist) is left in place unused rather than torn out -- it's
+// inert (nothing calls it) and cheap to revive later if a waitlist prompt
+// ever comes back in some other form; it does not run or collect anything on
+// its own.
+//
+// `size` controls the badges' scale so this drops cleanly into every
+// placement's existing prominence: "lg" for the homepage hero, "md" for the
+// sticky bar and blog end-of-post CTA, "sm" for compact nav bars. "sm" also
+// drops the two-line "Available on / Play Store" eyebrow layout for a
+// single-line "Play Store" badge -- two full-height stacked badges don't fit
+// next to the logo and Blog link at phone width without wrapping the whole
+// header (confirmed with a local screenshot at 390px before this was added).
+const SIZE = {
+  sm: {
+    badge: "gap-1 rounded-full px-2.5 py-1.5",
+    wrapperGap: "gap-1.5",
+    icon: 12,
+    eyebrow: null,
+    label: "text-xs",
+  },
+  md: {
+    badge: "gap-2 rounded-full px-5 py-2.5",
+    wrapperGap: "gap-2.5",
+    icon: 15,
+    eyebrow: "text-[8px]",
+    label: "text-sm",
+  },
+  lg: {
+    badge: "gap-2.5 rounded-full px-6 py-3.5 sm:px-8 sm:py-4",
+    wrapperGap: "gap-2.5",
+    icon: 18,
+    eyebrow: "text-[8px] sm:text-[9px]",
+    label: "text-sm sm:text-base",
+  },
+} as const;
 
 export function PlayStoreLink({
   location,
   href,
+  size = "md",
   className,
   style,
-  children,
 }: {
-  // Short, stable label for which specific link this is (e.g. "hero",
+  // Short, stable label for which specific placement this is (e.g. "hero",
   // "nav", "blog_cta") -- lets GA4 tell the hero button apart from the nav
   // link apart from the blog CTA, instead of lumping every click together.
   location: string;
-  // Optional override for the destination -- defaults to the plain Play
-  // Store URL. Pass a Singular tracking link (see SINGULAR_TRACKING_LINK in
-  // lib/config.ts) for placements where install attribution matters; the
-  // GA4 click event still fires the same way either way. Ignored on
-  // iOS/iPadOS, which never reaches the Play Store link at all.
+  // Optional override for the Play Store badge's destination -- defaults to
+  // the plain Play Store URL. Pass a Singular tracking link (see
+  // SINGULAR_TRACKING_LINK in lib/config.ts) for placements where install
+  // attribution matters; the GA4 click event still fires the same way
+  // either way.
   href?: string;
+  size?: "sm" | "md" | "lg";
+  // Applied to the OUTER wrapper (both badges) -- spacing/margin/shadow,
+  // not per-badge sizing. Use `size` for how big the badges themselves are.
   className?: string;
   style?: CSSProperties;
-  children: ReactNode;
 }) {
-  const [modalOpen, setModalOpen] = useState(false);
-  const isClient = useIsClient();
-  const isIOS = isClient && isIOSDevice();
-
-  if (!isIOS) {
-    return (
+  const s = SIZE[size];
+  return (
+    <div className={`inline-flex flex-wrap items-center justify-center ${s.wrapperGap} ${className ?? ""}`} style={style}>
       <a
         href={href ?? PLAY_STORE_URL}
         target="_blank"
         rel="noopener noreferrer"
-        className={className}
-        style={style}
         onClick={() => {
           window.gtag?.("event", "google_play_click", {
             link_location: location,
             page_path: window.location.pathname,
           });
         }}
+        className={`inline-flex items-center bg-white font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] ${s.badge}`}
       >
-        {children}
-      </a>
-    );
-  }
-
-  return (
-    <>
-      <button
-        type="button"
-        className={className}
-        style={style}
-        onClick={() => {
-          window.gtag?.("event", "ios_waitlist_prompt_shown", {
-            link_location: location,
-            page_path: window.location.pathname,
-          });
-          setModalOpen(true);
-        }}
-      >
-        iOS coming soon
-      </button>
-      {/* Portaled to document.body -- several placements this renders from
-          (the hero's Magnetic wrapper, the sticky bar's slide-in transition)
-          sit inside an ancestor with a CSS transform, which would otherwise
-          hijack `position: fixed` and trap the modal in the wrong spot. */}
-      {isClient && modalOpen && createPortal(<IOSWaitlistModal location={location} onClose={() => setModalOpen(false)} />, document.body)}
-    </>
-  );
-}
-
-function IOSWaitlistModal({ location, onClose }: { location: string; onClose: () => void }) {
-  const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
-
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault();
-    setStatus("submitting");
-    setErrorMsg("");
-    try {
-      const res = await fetch("/api/ios-waitlist", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, location, pagePath: window.location.pathname }),
-      });
-      const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string };
-      if (!res.ok) {
-        setStatus("error");
-        setErrorMsg(data.error ?? "Something went wrong. Please try again.");
-        return;
-      }
-      window.gtag?.("event", "ios_waitlist_signup", {
-        link_location: location,
-        page_path: window.location.pathname,
-      });
-      setStatus("success");
-    } catch {
-      setStatus("error");
-      setErrorMsg("Something went wrong. Please try again.");
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 px-4" onClick={onClose}>
-      <div
-        className="relative w-full max-w-sm rounded-2xl border border-[#2a2a35] bg-[#0f0d16] p-6 text-center shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={onClose}
-          className="absolute right-3 top-3 flex h-7 w-7 items-center justify-center rounded-full text-[#8a8592] transition-colors hover:bg-white/10 hover:text-white"
-        >
-          ✕
-        </button>
-
-        {status === "success" ? (
-          <>
-            <p className="text-lg font-bold text-white">You&apos;re on the list</p>
-            <p className="mt-2 text-sm leading-relaxed text-[#a8a2b3]">
-              We&apos;ll email you the moment Strivo is ready on iOS.
-            </p>
-          </>
+        <Play size={s.icon} fill="#0a0a0f" strokeWidth={0} />
+        {s.eyebrow ? (
+          <span className="flex flex-col items-start leading-none">
+            <span className={`font-semibold uppercase tracking-wide opacity-60 ${s.eyebrow}`}>Available on</span>
+            <span className={`font-bold ${s.label}`}>Play Store</span>
+          </span>
         ) : (
-          <>
-            <p className="text-lg font-bold text-white">iOS coming soon</p>
-            <p className="mt-2 text-sm leading-relaxed text-[#a8a2b3]">
-              Strivo is Android-only right now. Leave your email and we&apos;ll let you know the moment iOS is ready.
-            </p>
-            <form onSubmit={handleSubmit} className="mt-5 flex flex-col gap-2.5">
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@email.com"
-                className="w-full rounded-full border border-[#2a2a35] bg-[#17141f] px-4 py-3 text-center text-sm text-white placeholder:text-[#6a6475] focus:border-[#6d8bff] focus:outline-none"
-              />
-              {status === "error" && <p className="text-xs font-medium text-[#ff6b6b]">{errorMsg}</p>}
-              <button
-                type="submit"
-                disabled={status === "submitting"}
-                className="w-full rounded-full bg-white px-5 py-3 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] disabled:opacity-60"
-              >
-                {status === "submitting" ? "Joining…" : "Join the waitlist"}
-              </button>
-            </form>
-          </>
+          <span className={`font-bold ${s.label}`}>Play Store</span>
+        )}
+      </a>
+      <div
+        aria-disabled="true"
+        className={`inline-flex cursor-default items-center border border-white/15 text-[#8a8592] ${s.badge}`}
+      >
+        <Clock size={s.icon} strokeWidth={1.75} />
+        {s.eyebrow ? (
+          <span className="flex flex-col items-start leading-none">
+            <span className={`font-semibold uppercase tracking-wide opacity-70 ${s.eyebrow}`}>Coming soon on</span>
+            <span className={`font-bold ${s.label}`}>App Store</span>
+          </span>
+        ) : (
+          // Compact "sm" badge -- shortened from "App Store · Soon" (measured
+          // too wide to fit beside "Play Store" without wrapping in the
+          // homepage nav at a 390px-wide phone; confirmed with a local
+          // screenshot before landing on this shorter label).
+          <span className={`font-bold ${s.label}`}>iOS soon</span>
         )}
       </div>
     </div>

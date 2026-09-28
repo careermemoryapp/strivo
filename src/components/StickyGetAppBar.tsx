@@ -97,13 +97,7 @@ export function StickyGetAppBar({
               {incentive && <p className="mt-0.5 text-xs font-semibold text-[#c4b5fd] sm:text-sm">{incentive}</p>}
             </div>
             <div className="flex shrink-0 items-center gap-2 sm:gap-3">
-              <PlayStoreLink
-                location={location}
-                href={href}
-                className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] sm:px-9 sm:py-4 sm:text-lg"
-              >
-                Get the app →
-              </PlayStoreLink>
+              <PlayStoreLink location={location} href={href} size="sm" />
               <button
                 type="button"
                 aria-label="Dismiss"

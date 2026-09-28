@@ -157,14 +157,7 @@ function TiltCard({ children, className = "", style }: { children: React.ReactNo
 function PillButton({ className = "" }: { className?: string }) {
   return (
     <Magnetic>
-      <PlayStoreLink
-        location="hero"
-        href={SINGULAR_TRACKING_LINK}
-        className={`inline-block rounded-full bg-white px-9 py-4 text-base font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98] sm:block sm:w-[50vw] sm:max-w-3xl sm:px-0 sm:py-7 sm:text-center sm:text-2xl ${className}`}
-        style={{ boxShadow: "0 8px 24px rgba(255,255,255,0.15)" }}
-      >
-        Get the app →
-      </PlayStoreLink>
+      <PlayStoreLink location="hero" href={SINGULAR_TRACKING_LINK} size="lg" className={className} />
     </Magnetic>
   );
 }
@@ -631,23 +624,20 @@ export function MarketingHome({
           next to Blog/social. This is the one CTA present on literally
           every page (home, blog list, every blog post) -- the highest-
           leverage place to fix visibility. */}
-      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
-        <Link href="/" className="flex items-center gap-2.5">
+      <header
+        className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-5 py-5 sm:px-8"
+        style={{ background: "#0a0a0f" }}
+      >
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <LogoMark size={28} />
-          <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
+          <span className="hidden text-[15px] font-extrabold tracking-tight sm:inline">{APP_NAME.toUpperCase()}</span>
         </Link>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 sm:gap-5">
           <Link href="/blog" className="text-xs font-medium text-[#888] hover:text-white">
             Blog
           </Link>
           <SocialLinks className="hidden sm:flex" />
-          <PlayStoreLink
-            location="nav"
-            href={SINGULAR_TRACKING_LINK}
-            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
-          >
-            Get the app →
-          </PlayStoreLink>
+          <PlayStoreLink location="nav" href={SINGULAR_TRACKING_LINK} size="sm" />
         </div>
       </header>
 

@@ -56,18 +56,15 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
           stays on screen for the entire time someone's reading a post,
           which can run well past a screen's worth of scrolling before
           they'd otherwise reach BlogCta at the bottom. */}
-      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
-        <Link href="/" className="flex items-center gap-2.5">
+      <header
+        className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-5 py-5 sm:px-8"
+        style={{ background: "#0a0a0f" }}
+      >
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <LogoMark size={28} />
-          <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
+          <span className="hidden text-[15px] font-extrabold tracking-tight sm:inline">{APP_NAME.toUpperCase()}</span>
         </Link>
-        <PlayStoreLink
-          location="blog_post_nav"
-          href={SINGULAR_TRACKING_LINK}
-          className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
-        >
-          Get the app →
-        </PlayStoreLink>
+        <PlayStoreLink location="blog_post_nav" href={SINGULAR_TRACKING_LINK} size="sm" />
       </header>
 
       <article className="px-8 py-14 sm:px-12" style={{ background: "#0a0a0f" }}>

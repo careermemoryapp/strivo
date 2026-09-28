@@ -19,14 +19,7 @@ export function BlogCta() {
         Speak it once. Get the right interview story, resume bullet, or leadership example back, instantly. Free for
         2 months, no card needed.
       </p>
-      <PlayStoreLink
-        location="blog_cta"
-        href={SINGULAR_TRACKING_LINK}
-        className="mt-6 inline-block rounded-full bg-white px-8 py-3.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
-        style={{ boxShadow: "0 8px 24px rgba(255,255,255,0.15)" }}
-      >
-        Get {APP_NAME} free →
-      </PlayStoreLink>
+      <PlayStoreLink location="blog_cta" href={SINGULAR_TRACKING_LINK} size="md" className="mt-6" />
     </div>
   );
 }

@@ -30,20 +30,17 @@ export default async function BlogIndexPage({
       {/* Nav -- sticky, and a real button, not a gray text link (see the
           same comment in MarketingHome.tsx's header -- this is the CTA
           that stays visible while someone browses the post list). */}
-      <header className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
-        <Link href="/" className="flex items-center gap-2.5">
+      <header
+        className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-5 py-5 sm:px-8"
+        style={{ background: "#0a0a0f" }}
+      >
+        <Link href="/" className="flex shrink-0 items-center gap-2.5">
           <LogoMark size={28} />
-          <span className="text-[15px] font-extrabold tracking-tight">{APP_NAME.toUpperCase()}</span>
+          <span className="hidden text-[15px] font-extrabold tracking-tight sm:inline">{APP_NAME.toUpperCase()}</span>
         </Link>
-        <div className="flex items-center gap-5">
+        <div className="flex items-center gap-3 sm:gap-5">
           <span className="text-xs font-semibold text-white">Blog</span>
-          <PlayStoreLink
-            location="blog_nav"
-            href={SINGULAR_TRACKING_LINK}
-            className="rounded-full bg-white px-5 py-2.5 text-sm font-bold text-[#0a0a0f] transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
-          >
-            Get the app →
-          </PlayStoreLink>
+          <PlayStoreLink location="blog_nav" href={SINGULAR_TRACKING_LINK} size="sm" />
         </div>
       </header>
 
