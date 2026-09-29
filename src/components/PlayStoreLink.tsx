@@ -1,7 +1,7 @@
 "use client";
 
-import { Play } from "lucide-react";
-import { useState, type CSSProperties, type MouseEvent } from "react";
+import { Play, X } from "lucide-react";
+import { useEffect, useState, type CSSProperties, type MouseEvent } from "react";
 import QRCode from "react-qr-code";
 import { PLAY_STORE_URL } from "@/lib/config";
 
@@ -55,27 +55,9 @@ declare global {
 // broader... make it bigger") -- both the compact nav badge and the hero
 // button read as too small relative to the rest of the page.
 const SIZE = {
-  sm: {
-    badge: "gap-2 rounded-full px-5 py-2.5",
-    icon: 15,
-    sub: null,
-    label: "text-sm",
-    qr: 84,
-  },
-  md: {
-    badge: "gap-2 rounded-full px-5 py-2.5",
-    icon: 16,
-    sub: "text-[10px]",
-    label: "text-sm",
-    qr: 96,
-  },
-  lg: {
-    badge: "gap-2.5 rounded-full px-9 py-4 sm:px-11 sm:py-5",
-    icon: 21,
-    sub: "text-[11px] sm:text-xs",
-    label: "text-lg sm:text-xl",
-    qr: 116,
-  },
+  sm: { badge: "gap-2 rounded-full px-5 py-2.5", icon: 15, sub: null, label: "text-sm" },
+  md: { badge: "gap-2 rounded-full px-5 py-2.5", icon: 16, sub: "text-[10px]", label: "text-sm" },
+  lg: { badge: "gap-2.5 rounded-full px-9 py-4 sm:px-11 sm:py-5", icon: 21, sub: "text-[11px] sm:text-xs", label: "text-lg sm:text-xl" },
 } as const;
 
 export function PlayStoreLink({
@@ -92,7 +74,7 @@ export function PlayStoreLink({
   // Optional override for the button's destination -- defaults to the plain
   // Play Store URL. Pass a Singular tracking link (see SINGULAR_TRACKING_LINK
   // in lib/config.ts) for placements where install attribution matters; the
-  // GA4 click event still fires the same way either way. The QR code below
+  // GA4 click event still fires the same way either way. The QR modal below
   // encodes this exact same destination, so a scan still carries install
   // attribution.
   href?: string;
@@ -118,11 +100,11 @@ export function PlayStoreLink({
   //
   // Fix: detect whether this is an Android device (the only platform that
   // can actually install from this link) and, if not, swap the click's
-  // effect from "navigate to a dead end" to "reveal a QR code right here"
-  // -- so the click itself produces an install-capable next step (scan
-  // with an actual phone) instead of a Play Store page with nothing to
-  // press. iOS gets the same QR prompt: there's no Play Store there
-  // either, and pointing at an actual phone is still the honest answer.
+  // effect from "navigate to a dead end" to "reveal a QR code" -- so the
+  // click itself produces an install-capable next step (scan with an
+  // actual phone) instead of a Play Store page with nothing to press. iOS
+  // gets the same QR prompt: there's no Play Store there either, and
+  // pointing at an actual phone is still the honest answer.
   // Determined once, lazily, in the `useState` initializer rather than an
   // effect -- `isAndroid` never feeds into what gets rendered (it's only
   // read inside `handleClick`), so there's no hydration-mismatch risk in
@@ -134,6 +116,29 @@ export function PlayStoreLink({
   const [isAndroid] = useState(() => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent));
   const [showQr, setShowQr] = useState(false);
 
+  // Rewritten 2026-09-29, second founder pass, from a screenshot + voice
+  // note: the first version revealed the QR code inline, stacked directly
+  // below the button. On the homepage hero that pushed it past the bottom
+  // of the viewport -- the founder clicked "Get Strivo Free", saw nothing
+  // change on screen, and assumed the button was broken. It only became
+  // visible after scrolling, which isn't an instinct a first-time visitor
+  // has after a click that looks like it did nothing.
+  //
+  // Fix: render the QR as a centered fixed-position modal instead of
+  // inline content. `position: fixed` centers it in the viewport itself,
+  // not relative to the button's position in the page flow -- so it's
+  // guaranteed to land in view immediately on click, whether the button
+  // clicked is the compact nav badge at the top of the page, the hero CTA,
+  // or the sticky bottom bar. Closes on backdrop click, the X, or Escape.
+  useEffect(() => {
+    if (!showQr) return;
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") setShowQr(false);
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [showQr]);
+
   function handleClick(e: MouseEvent<HTMLAnchorElement>) {
     window.gtag?.("event", "google_play_click", {
       link_location: location,
@@ -141,12 +146,12 @@ export function PlayStoreLink({
     });
     if (!isAndroid) {
       e.preventDefault();
-      setShowQr((v) => !v);
+      setShowQr(true);
     }
   }
 
   return (
-    <div className="inline-flex flex-col items-center">
+    <>
       <a
         href={destination}
         target="_blank"
@@ -170,15 +175,30 @@ export function PlayStoreLink({
         )}
       </a>
       {showQr && (
-        <div className="mt-3 flex flex-col items-center gap-2 rounded-2xl border border-[#2a2a35] bg-[#100f17] p-4 shadow-xl">
-          <p className="max-w-[160px] text-center text-xs font-semibold leading-snug text-[#c9bdf0]">
-            Scan with your phone to install
-          </p>
-          <div className="rounded-lg bg-white p-2">
-            <QRCode value={destination} size={s.qr} />
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-6 backdrop-blur-sm"
+          onClick={() => setShowQr(false)}
+        >
+          <div
+            className="relative flex w-full max-w-[300px] flex-col items-center gap-3 rounded-3xl border border-[#2a2a35] bg-[#100f17] p-7 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setShowQr(false)}
+              aria-label="Close"
+              className="absolute right-4 top-4 text-[#8a8a99] transition-colors hover:text-white"
+            >
+              <X size={20} />
+            </button>
+            <p className="mt-2 text-center text-base font-bold leading-snug text-white">Scan with your phone to install</p>
+            <p className="text-center text-xs leading-relaxed text-[#a0a0ac]">Open your phone&apos;s camera and point it at this code</p>
+            <div className="mt-1 rounded-xl bg-white p-3">
+              <QRCode value={destination} size={168} />
+            </div>
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
