@@ -36,6 +36,7 @@
     "posthog-js": "^1.434.0",
     "react": "19.2.8",
     "react-dom": "19.2.8",
+    "react-qr-code": "^2.2.0",
     "recharts": "^3.10.1",
     "singular_cordova_sdk": "^1.9.0",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
