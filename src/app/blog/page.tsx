@@ -146,7 +146,7 @@ export default async function BlogIndexPage({
       <StickyGetAppBar
         location="blog_index_sticky_bar"
         href={SINGULAR_TRACKING_LINK}
-        headline="You're doing the work. You're just not getting credit for it."
+        headline="You'll forget most of what you did today. Strivo remembers it for you."
         incentive="Free for the first 1,000 users"
       />
     </div>

@@ -660,17 +660,17 @@ export function MarketingHome({
             YOUR AI CAREER MEMORY
           </motion.p>
           <motion.h1 variants={fadeUp} className="mx-auto text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
-            You&apos;re doing the work.
+            You&apos;ll forget most of what you did today.
             <br />
             <span
               className="bg-clip-text text-transparent"
               style={{ backgroundImage: "linear-gradient(90deg,#6d8bff,#c266f2,#e879f9)" }}
             >
-              You&apos;re just not getting credit for it.
+              Strivo remembers it for you.
             </span>
           </motion.h1>
           <motion.p variants={fadeUp} className="mx-auto mt-6 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:text-lg">
-            Not because you&apos;re not good enough — because nobody remembers to write it down. Strivo does, automatically.
+            Speak your wins the moment they happen. So when an interview, resume, or performance review comes up, the story&apos;s already there — not buried in a memory you can&apos;t quite reconstruct.
           </motion.p>
           <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-8">
             <PillButton />
@@ -678,6 +678,11 @@ export function MarketingHome({
           <motion.p variants={fadeUp} className="mt-3 text-xs text-[#5a5a66]">
             Free for {trialMonths} months · no card needed
           </motion.p>
+          <motion.div variants={fadeUp} className="mx-auto mt-8 flex max-w-lg flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-[#8a8a99] sm:text-sm">
+            <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Interview tomorrow</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Updating your resume</span>
+            <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Performance review</span>
+          </motion.div>
         </motion.div>
 
         <motion.div
@@ -1111,7 +1116,7 @@ export function MarketingHome({
       <StickyGetAppBar
         location="sticky_bar"
         href={SINGULAR_TRACKING_LINK}
-        headline="You're doing the work. You're just not getting credit for it."
+        headline="You'll forget most of what you did today. Strivo remembers it for you."
         incentive="Free for the first 1,000 users"
         triggerRef={heroCtaRef}
       />
