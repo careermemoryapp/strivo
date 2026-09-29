@@ -49,6 +49,22 @@ export function StickyGetAppBar({
   // isn't permanently hidden after one close.
   const dismissedRef = useRef(false);
 
+  // Added 2026-09-29: any PlayStoreLink's QR install modal -- including
+  // this bar's own "Get the App" button -- broadcasts a
+  // `strivo:qr-modal-toggle` window event when it opens/closes (see the
+  // comment in PlayStoreLink.tsx). Hide the bar for as long as one is open
+  // instead of leaving it sitting dim behind the modal's blurred backdrop,
+  // where a founder screenshot showed it reading as "the bar disappeared"
+  // rather than "it's behind the popup".
+  const [qrModalOpen, setQrModalOpen] = useState(false);
+  useEffect(() => {
+    function onToggle(e: Event) {
+      setQrModalOpen((e as CustomEvent<{ open: boolean }>).detail.open);
+    }
+    window.addEventListener("strivo:qr-modal-toggle", onToggle);
+    return () => window.removeEventListener("strivo:qr-modal-toggle", onToggle);
+  }, []);
+
   useEffect(() => {
     if (triggerRef?.current) {
       const el = triggerRef.current;
@@ -73,9 +89,9 @@ export function StickyGetAppBar({
 
   return (
     <div
-      aria-hidden={!visible}
+      aria-hidden={!visible || qrModalOpen}
       className={`fixed inset-x-0 bottom-0 z-40 transition-all duration-300 ${
-        visible ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
+        visible && !qrModalOpen ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
       }`}
     >
       {/* Mobile: a small floating rounded card with margin on all sides --

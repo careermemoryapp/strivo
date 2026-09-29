@@ -139,6 +139,18 @@ export function PlayStoreLink({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [showQr]);
 
+  // Added 2026-09-29, same pass: StickyGetAppBar renders behind this modal
+  // (lower z-index) so it doesn't stop being "sticky", but the modal's dark
+  // blurred backdrop makes it barely legible under there -- easy to read as
+  // "the sticky bar disappeared" rather than "it's behind the popup".
+  // Broadcast the modal's open/closed state on `window` so StickyGetAppBar
+  // (a sibling component with no shared parent state) can hide itself
+  // cleanly while a QR modal -- from itself or any other PlayStoreLink on
+  // the page -- is open, instead of sitting half-visible behind it.
+  useEffect(() => {
+    window.dispatchEvent(new CustomEvent("strivo:qr-modal-toggle", { detail: { open: showQr } }));
+  }, [showQr]);
+
   function handleClick(e: MouseEvent<HTMLAnchorElement>) {
     window.gtag?.("event", "google_play_click", {
       link_location: location,
