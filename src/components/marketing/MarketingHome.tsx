@@ -644,8 +644,12 @@ export function MarketingHome({
         </div>
       </header>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden px-8 pb-16 pt-16 text-center sm:pt-24" style={{ background: "#0a0a0f" }}>
+      {/* Hero -- top padding tightened 2026-09-29 (direct founder feedback,
+          working from a screenshot showing the CTA button, incentive line,
+          and the three use-case bullets all landing above the fold): the
+          gap under the sticky header was pushing that whole stack below the
+          first screen on a typical laptop viewport. */}
+      <section className="relative overflow-hidden px-8 pb-16 pt-6 text-center sm:pt-8" style={{ background: "#0a0a0f" }}>
         <div
           className="pointer-events-none absolute left-1/2 top-[-120px] -translate-x-1/2"
           style={{
@@ -656,7 +660,7 @@ export function MarketingHome({
           }}
         />
         <motion.div initial="hidden" animate="show" variants={stagger} className="relative">
-          <motion.p variants={fadeUp} className="mb-5 text-xs font-semibold tracking-[0.2em] text-brand-primary">
+          <motion.p variants={fadeUp} className="mb-3 text-xs font-semibold tracking-[0.2em] text-brand-primary">
             YOUR AI CAREER MEMORY
           </motion.p>
           <motion.h1 variants={fadeUp} className="mx-auto text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
@@ -669,16 +673,16 @@ export function MarketingHome({
               Strivo remembers it for you.
             </span>
           </motion.h1>
-          <motion.p variants={fadeUp} className="mx-auto mt-6 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:text-lg">
+          <motion.p variants={fadeUp} className="mx-auto mt-4 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:text-lg">
             Speak your wins the moment they happen. So when an interview, resume, or performance review comes up, the story&apos;s already there — not buried in a memory you can&apos;t quite reconstruct.
           </motion.p>
-          <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-8">
+          <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-6">
             <PillButton />
           </motion.div>
-          <motion.p variants={fadeUp} className="mt-3 text-xs text-[#5a5a66]">
+          <motion.p variants={fadeUp} className="mt-2 text-xs text-[#5a5a66]">
             Free for {trialMonths} months · no card needed
           </motion.p>
-          <motion.div variants={fadeUp} className="mx-auto mt-8 flex max-w-lg flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-[#8a8a99] sm:text-sm">
+          <motion.div variants={fadeUp} className="mx-auto mt-5 flex max-w-lg flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-[#8a8a99] sm:text-sm">
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Interview tomorrow</span>
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Updating your resume</span>
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Performance review</span>

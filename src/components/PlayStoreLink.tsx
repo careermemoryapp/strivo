@@ -50,12 +50,15 @@ declare global {
 // "Get the App" label -- the full two-line version doesn't fit next to the
 // logo and Blog link at phone width without wrapping the header (confirmed
 // with a local screenshot at 390px before this was added).
+// Sizes bumped 2026-09-29 (direct founder feedback: "make the button a bit
+// broader... make it bigger") -- both the compact nav badge and the hero
+// button read as too small relative to the rest of the page.
 const SIZE = {
   sm: {
-    badge: "gap-1.5 rounded-full px-3 py-1.5",
-    icon: 13,
+    badge: "gap-2 rounded-full px-5 py-2.5",
+    icon: 15,
     sub: null,
-    label: "text-xs",
+    label: "text-sm",
   },
   md: {
     badge: "gap-2 rounded-full px-5 py-2.5",
@@ -64,10 +67,10 @@ const SIZE = {
     label: "text-sm",
   },
   lg: {
-    badge: "gap-2.5 rounded-full px-7 py-3.5 sm:px-9 sm:py-4",
-    icon: 19,
-    sub: "text-[10px] sm:text-[11px]",
-    label: "text-base sm:text-lg",
+    badge: "gap-2.5 rounded-full px-9 py-4 sm:px-11 sm:py-5",
+    icon: 21,
+    sub: "text-[11px] sm:text-xs",
+    label: "text-lg sm:text-xl",
   },
 } as const;
 
