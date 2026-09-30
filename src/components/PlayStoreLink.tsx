@@ -2,6 +2,7 @@
 
 import { Play, X } from "lucide-react";
 import { useEffect, useState, type CSSProperties, type MouseEvent } from "react";
+import { createPortal } from "react-dom";
 import QRCode from "react-qr-code";
 import { PLAY_STORE_URL } from "@/lib/config";
 
@@ -186,31 +187,52 @@ export function PlayStoreLink({
           <span className={`font-bold ${s.label}`}>Get the App</span>
         )}
       </a>
-      {showQr && (
-        <div
-          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-6 backdrop-blur-sm"
-          onClick={() => setShowQr(false)}
-        >
+      {/* Rewritten 2026-09-30, found live: rendered inline here, this modal
+          is a DOM descendant of whatever placement it's used from. For the
+          sticky bar that's a problem specifically -- StickyGetAppBar hides
+          itself (see its own 2026-09-29 comment) with a `translate`
+          transform on its wrapper. Per the CSS spec, an ancestor with a
+          `transform` becomes the containing block for any `position: fixed`
+          descendant, so once the sticky bar started hiding, this modal's
+          `fixed inset-0` stopped being "fixed to the viewport" and became
+          fixed to that now-shrinking, fading wrapper instead -- the modal
+          and the bar vanished together, exactly as reported ("it just
+          totally disappears along with the bar and the QR code"). A portal
+          straight to `document.body` sidesteps the whole class of bug: the
+          modal is never a descendant of ANY placement's wrapper (hero, nav,
+          sticky bar, blog CTA), so no ancestor's transform, opacity, or
+          overflow can ever clip or reposition it again. Guarded on
+          `document` because this file also renders on the server, where
+          `document` doesn't exist -- harmless, since `showQr` starts false
+          and nothing can be clicked before hydration anyway. */}
+      {showQr &&
+        typeof document !== "undefined" &&
+        createPortal(
           <div
-            className="relative flex w-full max-w-[300px] flex-col items-center gap-3 rounded-3xl border border-[#2a2a35] bg-[#100f17] p-7 shadow-2xl"
-            onClick={(e) => e.stopPropagation()}
+            className="fixed inset-0 z-[200] flex items-center justify-center bg-black/75 p-6 backdrop-blur-sm"
+            onClick={() => setShowQr(false)}
           >
-            <button
-              type="button"
-              onClick={() => setShowQr(false)}
-              aria-label="Close"
-              className="absolute right-4 top-4 text-[#8a8a99] transition-colors hover:text-white"
+            <div
+              className="relative flex w-full max-w-[300px] flex-col items-center gap-3 rounded-3xl border border-[#2a2a35] bg-[#100f17] p-7 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
             >
-              <X size={20} />
-            </button>
-            <p className="mt-2 text-center text-base font-bold leading-snug text-white">Scan with your phone to install</p>
-            <p className="text-center text-xs leading-relaxed text-[#a0a0ac]">Open your phone&apos;s camera and point it at this code</p>
-            <div className="mt-1 rounded-xl bg-white p-3">
-              <QRCode value={destination} size={168} />
+              <button
+                type="button"
+                onClick={() => setShowQr(false)}
+                aria-label="Close"
+                className="absolute right-4 top-4 text-[#8a8a99] transition-colors hover:text-white"
+              >
+                <X size={20} />
+              </button>
+              <p className="mt-2 text-center text-base font-bold leading-snug text-white">Scan with your phone to install</p>
+              <p className="text-center text-xs leading-relaxed text-[#a0a0ac]">Open your phone&apos;s camera and point it at this code</p>
+              <div className="mt-1 rounded-xl bg-white p-3">
+                <QRCode value={destination} size={168} />
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </>
   );
 }
