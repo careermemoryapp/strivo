@@ -22,17 +22,21 @@ import { sendProductUpdateEmail } from "@/lib/email";
 // server (confirmed 2026-09-10: `38 3 * * *`, i.e. 3:38 UTC = 9:08 IST,
 // daily) fires once a day regardless; this constant alone decides whether
 // any given user is actually due on a given day's run. Since the cron is
-// daily, a gate ABOVE 24h (like this one) means every other daily run
-// actually sends to a given user -- true alternate-day cadence from a
-// single once-a-day cron, no separate every-other-day schedule needed.
+// daily, a gate ABOVE 48h (like this one) means only every third daily run
+// actually sends to a given user -- true every-3-day cadence from a single
+// once-a-day cron, no separate every-3-day schedule needed.
 //
 // 2026-09-10: founder's call, confirmed alternate-day (back from a brief
 // same-day revert to 20h/daily -- see git history if that's ever needed
-// again). ~44h rather than exactly 48h so the cron has room to land a
-// little early/late run-to-run without a send ever slipping to a 3-day gap.
-// Sequence/content order (posts[user.product_update_sent_count]) is
-// untouched by this -- only the cadence between sends changed.
-const REPEAT_SEND_GATE_MS = 44 * 60 * 60 * 1000; // ~44h -- alternate-day cadence
+// again).
+//
+// 2026-09-30: founder's call -- alternate-day was too many emails. Moved to
+// every 3 days (send Monday -> next send Thursday, not before). ~68h rather
+// than exactly 72h so the cron has room to land a little early/late
+// run-to-run without a send ever slipping to a 4-day gap. Sequence/content
+// order (posts[user.product_update_sent_count]) is untouched by this --
+// only the cadence between sends changed.
+const REPEAT_SEND_GATE_MS = 68 * 60 * 60 * 1000; // ~68h -- every-3-day cadence
 
 // Strivo's target market is India — same IST convention as
 // weekly-recap/run's sevenDaysAgoIstMidnightUtc (and lib/retrieval.ts,
