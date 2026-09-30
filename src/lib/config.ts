@@ -355,6 +355,60 @@ export const CAREER_PROFILE_EVENTS = [
   "career_profile_add_memory_clicked",
 ] as const;
 
+// Added 2026-09-30, direct founder call, after the admin Growth Funnel
+// showed 12 installs but only 7 signups (58% of installers never made it
+// to an account) with no way to say why -- GA4/Clarity are deliberately
+// excluded from the native app (see Analytics.tsx's comment), and
+// PostHog (lib/posthog.ts) only starts tracking a person once they're
+// ALREADY signed in, so the entire "opened the app for the first time ->
+// created an account" journey had zero instrumentation. These events
+// bracket that exact gap, one per screen/step of the (auth) route
+// group's flow (see welcome/page.tsx and login/page.tsx for where each
+// fires) -- "signed up" itself doesn't need its own event here since
+// that's already the existing "Signed up" growth-funnel stage (a row
+// actually landing in the users table), not something that needs a
+// separate client-fired event.
+//
+// Every one of these fires ONLY when isNativeApp() is true (see
+// nativePlatform.ts) -- deliberately scoped to exactly the installed-app
+// population this question is about, so an ordinary web visitor
+// stumbling onto /login in a browser never mixes into these counts.
+export const ONBOARDING_EVENTS = [
+  // WelcomePage mounts -- the first screen a signed-out person sees when
+  // they open the app. Roughly answers "of the people who installed, how
+  // many actually opened the app at all".
+  "onboarding_welcome_viewed",
+  // LoginPage mounts (reached either by the welcome screen's 5s
+  // auto-advance or a tap to skip ahead).
+  "onboarding_login_viewed",
+  // The moment someone taps "Continue with Google" -- fired before the
+  // system-browser hand-off in handleGoogle(), so it counts the tap
+  // itself regardless of what happens next.
+  "onboarding_google_tapped",
+  // Browser.open() for the Google sign-in hand-off resolved successfully
+  // -- the system browser was actually presented.
+  "onboarding_google_browser_opened",
+  // Browser.open() threw (see handleGoogle's catch block -- most likely
+  // an old app build missing the @capacitor/browser plugin). Should stay
+  // at/near zero; a nonzero count here means some installed devices
+  // structurally can't complete sign-in at all, not just that people are
+  // choosing not to.
+  "onboarding_google_browser_open_failed",
+  // The app resumed from the background while still sitting on
+  // /login -- fires from the SAME listener already added 2026-09-29 to
+  // fix the "stuck grey button" bug (see that comment in login/page.tsx).
+  // This is the single most direct signal for "went to the system
+  // browser for Google sign-in and came back without finishing it",
+  // though it isn't perfectly pure -- it also fires if someone just
+  // manually backgrounds and reopens the app from the login screen
+  // without ever tapping a sign-in button, so treat this as "at most
+  // this many abandoned sign-in", not an exact count. A successful
+  // sign-in navigates this WebView to /home before this listener would
+  // ever see the return-to-foreground, so a real completed sign-in never
+  // fires this.
+  "onboarding_resumed_incomplete",
+] as const;
+
 export const NEW_CHAT_TEMPLATES = [
   { category: "Interview", title: "Interview Preparation", prompt: "I want to prepare for an interview." },
   { category: "Resume", title: "Resume Builder", prompt: "I want to update my resume." },

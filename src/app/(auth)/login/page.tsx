@@ -11,6 +11,7 @@ import { ErrorBanner } from "@/components/ErrorBanner";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME } from "@/lib/config";
 import { isNativeApp, markExpectedResume } from "@/lib/nativePlatform";
+import { trackEvent } from "@/lib/trackEvent";
 
 function GoogleIcon() {
   return (
@@ -68,6 +69,16 @@ function LoginForm() {
   // (already proven to work in a real browser) just runs as-is.
   const callbackUrl = searchParams.get("callbackUrl") || "/home";
 
+  // Added 2026-09-30 -- see ONBOARDING_EVENTS' comment in lib/config.ts.
+  // isNativeApp()-gated for the same reason as welcome/page.tsx's own
+  // "viewed" event: this page is also reachable from a real browser (the
+  // mobile-bridge round trip, or just someone signing in from
+  // strivo.ai/login on desktop), and only the installed-app path is what
+  // this instrumentation is trying to see.
+  useEffect(() => {
+    if (isNativeApp()) trackEvent("onboarding_login_viewed");
+  }, []);
+
   // handleGoogle/handleApple below set `loading` true right before handing
   // off to the system browser, and only reset it in a `finally` that runs
   // once Browser.open() itself resolves (i.e., once the browser has been
@@ -85,6 +96,13 @@ function LoginForm() {
     if (!isNativeApp()) return;
     const handle = CapacitorApp.addListener("resume", () => {
       setLoading(false);
+      // Added 2026-09-30 -- fires every time the app resumes while still on
+      // this page, which includes a clean cancel (backed out of the Google
+      // tab) but ALSO an ordinary backgrounding (switched apps, screen
+      // locked) with sign-in still pending -- there's no way to tell those
+      // apart from this event alone. Read as "still on the login screen
+      // after a trip to the background," not strictly "abandoned."
+      trackEvent("onboarding_resumed_incomplete");
     });
     return () => {
       handle.then((h) => h.remove());
@@ -108,6 +126,12 @@ function LoginForm() {
     // MainActivity.java + /api/auth/mobile-bridge + /api/auth/mobile-consume.
     if (isNativeApp()) {
       const bridgeUrl = `${window.location.origin}/mobile-google-start`;
+      // Added 2026-09-30 -- see ONBOARDING_EVENTS' comment in lib/config.ts.
+      // Fired the moment the button is tapped, before the system-browser
+      // hand-off, so a later missing "browser_opened" event can be read as
+      // "tapped Google but Browser.open() never came back" rather than "never
+      // tapped it at all."
+      trackEvent("onboarding_google_tapped");
       try {
         // Opening the system browser backgrounds the app the same way the
         // native file picker does, and returning from it fires the exact
@@ -118,6 +142,7 @@ function LoginForm() {
         // likely why sign-in sometimes needed several tries.
         markExpectedResume();
         await Browser.open({ url: bridgeUrl });
+        trackEvent("onboarding_google_browser_opened");
       } catch {
         // Most likely cause: this device still has an older build of the
         // app installed that predates the @capacitor/browser plugin being
@@ -127,6 +152,7 @@ function LoginForm() {
         setError(
           "Couldn't open the sign-in page. Make sure you have the latest version of the app installed."
         );
+        trackEvent("onboarding_google_browser_open_failed");
       } finally {
         setLoading(false);
       }

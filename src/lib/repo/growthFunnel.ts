@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 import { ga4Configured, fetchGa4Summary } from "@/lib/ga4";
 import { readSingularInstallsSnapshot } from "@/lib/singularInstallsSnapshot";
+import { computeOnboardingFunnel, type OnboardingFunnel } from "@/lib/repo/onboardingFunnel";
 
 // The blog-to-signup growth funnel shown on the admin dashboard (see
 // GrowthFunnel section in admin/page.tsx) -- one row per stage, each
@@ -80,6 +81,12 @@ export type GrowthFunnel = {
   // run yet. Unlike the other stages, this doesn't update on every page
   // load, so the UI needs to show its own freshness honestly.
   installedCheckedAt: string | null;
+  // Added 2026-09-30 -- see onboardingFunnel.ts's own top comment. Kept as
+  // its own nested object (own trackingStartIso, own signedUp count) rather
+  // than merged into `stages` above, since it's scoped to a different,
+  // later start date and would misleadingly imply it shares the same
+  // tracking window as everything else in this funnel.
+  onboarding: OnboardingFunnel;
 };
 
 function signupsSinceTrackingStart(): number {
@@ -181,5 +188,6 @@ export async function computeGrowthFunnel(): Promise<GrowthFunnel> {
     visitorsBySource,
     singularConfigured,
     installedCheckedAt,
+    onboarding: computeOnboardingFunnel(),
   };
 }

@@ -1418,6 +1418,45 @@ export default function AdminDashboardPage() {
           </div>
         </section>
 
+        {growthFunnel && (
+          <section className="mb-8">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
+              Onboarding · install to sign-up · since{" "}
+              {new Date(growthFunnel.onboarding.trackingStartIso).toLocaleDateString(undefined, {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              })}
+            </p>
+            <div className="rounded-[16px] border border-[#f0ecf7] bg-surface p-4">
+              <p className="mb-3 text-[11.5px] text-ink-faint">
+                Added 2026-09-30 to see what happens between someone installing the app and
+                actually signing up -- GA4 and Clarity don&apos;t run inside the native app, so this
+                is the only visibility into that gap. Only counts activity since the moment this
+                shipped, not the full Growth funnel window above, so it&apos;ll look thin for the
+                first few days.
+              </p>
+              {(() => {
+                const maxCount = Math.max(1, ...growthFunnel.onboarding.steps.map((s) => s.count));
+                return (
+                  <div className="space-y-2.5">
+                    {growthFunnel.onboarding.steps.map((step) => (
+                      <ProgressRow key={step.event} label={step.label} value={step.count} max={maxCount} />
+                    ))}
+                    <ProgressRow label="Signed up" value={growthFunnel.onboarding.signedUp} max={maxCount} />
+                  </div>
+                );
+              })()}
+              <p className="mt-3 text-[10.5px] text-ink-faint">
+                &quot;Returned to app without finishing&quot; fires whenever someone comes back to the
+                sign-in screen after backgrounding the app -- that includes a real cancel, but also
+                an ordinary app-switch or screen lock with sign-in still pending, so treat it as
+                &quot;didn&apos;t finish in one go&quot; rather than a precise abandon count.
+              </p>
+            </div>
+          </section>
+        )}
+
         <section className="mb-8">
           <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-[#a8a2bd]">
             Website behavior · Microsoft Clarity

@@ -4,6 +4,8 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { LogoMark } from "@/components/Logo";
 import { APP_NAME, APP_TAGLINE } from "@/lib/config";
+import { isNativeApp } from "@/lib/nativePlatform";
+import { trackEvent } from "@/lib/trackEvent";
 
 // The very first thing a signed-out person sees when they open the app —
 // a full-bleed animated moment before landing on the Continue with Google
@@ -16,6 +18,14 @@ const AUTO_ADVANCE_MS = 5000;
 
 export default function WelcomePage() {
   const router = useRouter();
+
+  // Added 2026-09-30 -- see ONBOARDING_EVENTS' comment in lib/config.ts for
+  // why this exists (the installed-app -> signed-up gap had zero
+  // instrumentation). isNativeApp()-gated so a stray web visitor landing
+  // here never mixes into what's specifically an installed-app question.
+  useEffect(() => {
+    if (isNativeApp()) trackEvent("onboarding_welcome_viewed");
+  }, []);
 
   useEffect(() => {
     const timer = setTimeout(() => router.replace("/login"), AUTO_ADVANCE_MS);
