@@ -660,7 +660,7 @@ export function MarketingHome({
           }}
         />
         <motion.div initial="hidden" animate="show" variants={stagger} className="relative">
-          <motion.p variants={fadeUp} className="mb-4 text-xs font-semibold tracking-[0.2em] text-brand-primary sm:mb-3">
+          <motion.p variants={fadeUp} className="mb-6 text-xs font-semibold tracking-[0.2em] text-brand-primary sm:mb-3">
             YOUR AI CAREER MEMORY
           </motion.p>
           <motion.h1 variants={fadeUp} className="mx-auto text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
@@ -673,16 +673,16 @@ export function MarketingHome({
               Strivo remembers it for you.
             </span>
           </motion.h1>
-          <motion.p variants={fadeUp} className="mx-auto mt-5 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:mt-4 sm:text-lg">
+          <motion.p variants={fadeUp} className="mx-auto mt-7 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:mt-4 sm:text-lg">
             Speak your wins the moment they happen. So when an interview, resume, or performance review comes up, the story&apos;s already there — not buried in a memory you can&apos;t quite reconstruct.
           </motion.p>
-          <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-7 sm:mt-6">
+          <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-10 sm:mt-6">
             <PillButton />
           </motion.div>
-          <motion.p variants={fadeUp} className="mt-3 text-xs text-[#5a5a66] sm:mt-2">
+          <motion.p variants={fadeUp} className="mt-5 text-xs text-[#5a5a66] sm:mt-2">
             Free for {trialMonths} months · no card needed
           </motion.p>
-          <motion.div variants={fadeUp} className="mx-auto mt-6 flex max-w-lg flex-wrap items-center justify-center gap-x-5 gap-y-3 text-xs text-[#8a8a99] sm:mt-5 sm:gap-x-6 sm:gap-y-2 sm:text-sm">
+          <motion.div variants={fadeUp} className="mx-auto mt-9 flex max-w-lg flex-wrap items-center justify-center gap-x-5 gap-y-4 text-xs text-[#8a8a99] sm:mt-5 sm:gap-x-6 sm:gap-y-2 sm:text-sm">
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Interview tomorrow</span>
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Updating your resume</span>
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Performance review</span>
