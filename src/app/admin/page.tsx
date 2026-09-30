@@ -1432,14 +1432,26 @@ export default function AdminDashboardPage() {
               <p className="mb-3 text-[11.5px] text-ink-faint">
                 Added 2026-09-30 to see what happens between someone installing the app and
                 actually signing up -- GA4 and Clarity don&apos;t run inside the native app, so this
-                is the only visibility into that gap. Only counts activity since the moment this
-                shipped, not the full Growth funnel window above, so it&apos;ll look thin for the
-                first few days.
+                is the only visibility into that gap. The steps below &quot;Installed&quot; only count
+                activity since the moment this shipped, so for the first few days they&apos;ll look
+                thin next to the Installed number above them, which still reflects the wider
+                Growth funnel window -- that gap closes on its own as new installs happen from
+                here on.
               </p>
               {(() => {
-                const maxCount = Math.max(1, ...growthFunnel.onboarding.steps.map((s) => s.count));
+                // "Installed" itself isn't an onboarding event -- it's the
+                // same Singular-backed count as the Growth funnel's own
+                // "Installed the app" stage above, repeated here as this
+                // section's own starting row so the whole install -> ...
+                // -> signed-up sequence reads top-to-bottom in one place
+                // instead of making you scroll back up to the funnel above
+                // to see where this list even starts from.
+                const installedStage = growthFunnel.stages.find((s) => s.label === "Installed the app");
+                const installedCount = installedStage?.configured ? (installedStage.value ?? 0) : 0;
+                const maxCount = Math.max(1, installedCount, ...growthFunnel.onboarding.steps.map((s) => s.count));
                 return (
                   <div className="space-y-2.5">
+                    <ProgressRow label="Installed" value={installedCount} max={maxCount} />
                     {growthFunnel.onboarding.steps.map((step) => (
                       <ProgressRow key={step.event} label={step.label} value={step.count} max={maxCount} />
                     ))}
