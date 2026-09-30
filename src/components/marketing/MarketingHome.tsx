@@ -664,13 +664,13 @@ export function MarketingHome({
             YOUR AI CAREER MEMORY
           </motion.p>
           <motion.h1 variants={fadeUp} className="mx-auto text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
-            You&apos;ll forget most of what you did today.
+            You&apos;re missing out on your next opportunity.
             <br />
             <span
               className="mt-3 block bg-clip-text text-transparent sm:mt-0 sm:inline"
               style={{ backgroundImage: "linear-gradient(90deg,#6d8bff,#c266f2,#e879f9)" }}
             >
-              Strivo remembers it for you.
+              Strivo prepares you for it.
             </span>
           </motion.h1>
           <motion.p variants={fadeUp} className="mx-auto mt-7 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:mt-4 sm:text-lg">
@@ -1120,7 +1120,7 @@ export function MarketingHome({
       <StickyGetAppBar
         location="sticky_bar"
         href={SINGULAR_TRACKING_LINK}
-        headline="You'll forget most of what you did today. Strivo remembers it for you."
+        headline="You're missing out on your next opportunity. Strivo prepares you for it."
         incentive="Free for the first 1,000 users"
         triggerRef={heroCtaRef}
       />

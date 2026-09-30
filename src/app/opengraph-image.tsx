@@ -81,7 +81,7 @@ export default function OpengraphImage() {
             textAlign: "center",
           }}
         >
-          You&apos;ll forget most of what you did today. Strivo remembers it for you.
+          You&apos;re missing out on your next opportunity. Strivo prepares you for it.
         </div>
       </div>
     ),
