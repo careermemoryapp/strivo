@@ -649,7 +649,7 @@ export function MarketingHome({
           and the three use-case bullets all landing above the fold): the
           gap under the sticky header was pushing that whole stack below the
           first screen on a typical laptop viewport. */}
-      <section className="relative overflow-hidden px-8 pb-16 pt-6 text-center sm:pt-8" style={{ background: "#0a0a0f" }}>
+      <section className="relative flex min-h-[100svh] flex-col overflow-hidden px-8 pb-16 pt-6 text-center sm:block sm:min-h-0 sm:pt-8" style={{ background: "#0a0a0f" }}>
         <div
           className="pointer-events-none absolute left-1/2 top-[-120px] -translate-x-1/2"
           style={{
@@ -659,15 +659,15 @@ export function MarketingHome({
             filter: "blur(10px)",
           }}
         />
-        <motion.div initial="hidden" animate="show" variants={stagger} className="relative">
-          <motion.p variants={fadeUp} className="mb-6 text-xs font-semibold tracking-[0.2em] text-brand-primary sm:mb-3">
+        <motion.div initial="hidden" animate="show" variants={stagger} className="relative flex flex-1 flex-col sm:block">
+          <motion.p variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.2em] text-brand-primary sm:mb-3">
             YOUR AI CAREER MEMORY
           </motion.p>
           <motion.h1 variants={fadeUp} className="mx-auto text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
             You&apos;ll forget most of what you did today.
             <br />
             <span
-              className="bg-clip-text text-transparent"
+              className="mt-3 block bg-clip-text text-transparent sm:mt-0 sm:inline"
               style={{ backgroundImage: "linear-gradient(90deg,#6d8bff,#c266f2,#e879f9)" }}
             >
               Strivo remembers it for you.
@@ -682,7 +682,7 @@ export function MarketingHome({
           <motion.p variants={fadeUp} className="mt-5 text-xs text-[#5a5a66] sm:mt-2">
             Free for {trialMonths} months · no card needed
           </motion.p>
-          <motion.div variants={fadeUp} className="mx-auto mt-9 flex max-w-lg flex-wrap items-center justify-center gap-x-5 gap-y-4 text-xs text-[#8a8a99] sm:mt-5 sm:gap-x-6 sm:gap-y-2 sm:text-sm">
+          <motion.div variants={fadeUp} className="mx-auto mt-auto flex max-w-lg flex-wrap items-center justify-center gap-x-5 gap-y-4 pt-8 text-xs text-[#8a8a99] sm:mt-5 sm:gap-x-6 sm:gap-y-2 sm:pt-0 sm:text-sm">
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Interview tomorrow</span>
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Updating your resume</span>
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Performance review</span>
