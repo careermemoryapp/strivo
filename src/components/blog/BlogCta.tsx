@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
 
@@ -20,6 +21,15 @@ export function BlogCta() {
         2 months, no card needed.
       </p>
       <PlayStoreLink location="blog_cta" href={SINGULAR_TRACKING_LINK} size="md" className="mt-6" />
+      {/* Added 2026-10-01: a lower-commitment first step for anyone not
+          ready to install an app from a blog post -- the no-login quiz at
+          /quiz was previously only linked from the homepage. */}
+      <Link
+        href="/quiz"
+        className="mt-4 block text-xs text-[#6a6a75] underline-offset-2 hover:text-white hover:underline"
+      >
+        Not ready to install? Take the free 2-minute career quiz instead &rarr;
+      </Link>
     </div>
   );
 }

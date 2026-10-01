@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { Download, Link as LinkIcon, Check, Share2 } from "lucide-react";
-import { APP_NAME } from "@/lib/config";
+import { PlayStoreLink } from "@/components/PlayStoreLink";
+import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
 import { isNativeApp, markExpectedResume } from "@/lib/nativePlatform";
 
 type CardRow = { quizId: string; eyebrow: string; title: string };
@@ -150,6 +151,23 @@ export function CareerProfileCardPublicClient({ shareId, cardData, imageUrl }: {
         >
           Discover yours — take the quiz on {APP_NAME}.ai
         </a>
+
+        {/* Added 2026-10-01: this page previously only funneled people
+            back into taking the quiz themselves -- it never once mentioned
+            the actual app, despite being the page both the quiz-taker AND
+            everyone they share the card with (LinkedIn/X/WhatsApp) land
+            on. */}
+        <div
+          className="mt-6 rounded-2xl border border-[#2a2a35] p-5 text-center"
+          style={{ background: "linear-gradient(135deg,#160a26,#0a0a0f)" }}
+        >
+          <p className="text-sm font-semibold text-white">This quiz is a 2-minute snapshot.</p>
+          <p className="mt-1 text-xs leading-relaxed text-white/60">
+            {APP_NAME} remembers your real wins — the ones from actual projects and interviews, not five
+            multiple-choice questions. Free for 2 months, no card needed.
+          </p>
+          <PlayStoreLink location="career_card_cta" href={SINGULAR_TRACKING_LINK} size="md" className="mt-4" />
+        </div>
       </div>
     </div>
   );

@@ -180,6 +180,14 @@ body:has(#cw-root) {
   animation: fade-in-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
+@keyframes testimonial-marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-testimonial-marquee {
+  animation: testimonial-marquee 32s linear infinite;
+}
+
 @keyframes float-blob {
   0%, 100% { transform: translate(0, 0) scale(1); }
   50% { transform: translate(12px, -14px) scale(1.06); }

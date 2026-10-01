@@ -77,10 +77,15 @@ export function StickyGetAppBar({
       observer.observe(el);
       return () => observer.disconnect();
     }
-    // Fallback for pages with no hero CTA to key off -- show after
-    // scrolling roughly one screen's worth down.
+    // Fallback for pages with no hero CTA to key off. Lowered from 480
+    // to 150 on 2026-10-01 -- Clarity showed average scroll depth across
+    // the site is only ~14%, so most visitors on these pages (blog list,
+    // blog posts) were leaving before ever crossing 480px and never saw
+    // this bar at all, despite it carrying the only real incentive line
+    // ("free for the first 1,000 users") most of them would ever see.
+    // 150px is roughly "started reading," not "finished a screen."
     function onScroll() {
-      if (!dismissedRef.current) setVisible(window.scrollY > 480);
+      if (!dismissedRef.current) setVisible(window.scrollY > 150);
     }
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();

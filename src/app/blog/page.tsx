@@ -44,6 +44,11 @@ export default async function BlogIndexPage({
         </div>
       </header>
 
+      {/* Added 2026-10-01 -- see the matching comment in blog/[slug]/page.tsx. */}
+      <div className="border-b border-[#1e1e26] px-5 py-2 text-center text-[11px] font-semibold tracking-wide text-[#c4b5fd] sm:px-8" style={{ background: "#0a0a0f" }}>
+        Free for 2 months · no card needed
+      </div>
+
       {/* Hero */}
       <section className="relative overflow-hidden border-b border-[#1e1e26] px-8 py-20 text-center sm:py-28" style={{ background: "#0a0a0f" }}>
         <div

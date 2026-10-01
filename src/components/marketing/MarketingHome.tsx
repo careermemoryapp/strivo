@@ -540,11 +540,38 @@ const COMPARISON_POINTS = [
   },
 ];
 
-// Deliberately not fabricated testimonials attributed to made-up people --
-// Strivo is early-stage and doesn't have verified user quotes to publish
-// yet. An honest founder's-note section fills the same spot on the page
-// without inventing social proof (see the "Why I built this" section
-// below, which replaced a TESTIMONIALS array of fictional names/quotes).
+// Four real testimonials -- sourced directly from people who actually
+// used the app (a Play Store review, a WhatsApp message, a recap call),
+// quoted in their own words with their name/role as confirmed by the
+// founder (2026-10-01). Order is the founder's choice, not rating-sorted.
+const HERO_TESTIMONIALS = [
+  {
+    initial: "B",
+    name: "Bhupender K.",
+    role: "Program Manager",
+    quote:
+      "It can tell me stories about my own career — things I didn't even realize I could leverage.",
+  },
+  {
+    initial: "R",
+    name: "Rakesh G.",
+    role: "Director",
+    quote:
+      "I've been using Strivo since the early testing days — genuinely useful, not just another AI chatbot. You record a moment as it happens, and it's ready as a resume line or interview story when you need it.",
+  },
+  {
+    initial: "S",
+    name: "Sudhakar J.",
+    role: "Chief Digital Officer",
+    quote: "You make your career a project — set up the memory, and it remembers you. A good initiative.",
+  },
+  {
+    initial: "A",
+    name: "Arjun V.",
+    role: "Director",
+    quote: "The idea seems novel and promising.",
+  },
+];
 
 export function MarketingHome({
   trialMonths,
@@ -673,6 +700,50 @@ export function MarketingHome({
               Strivo prepares you for it.
             </span>
           </motion.h1>
+
+          {/* Real testimonials -- see HERO_TESTIMONIALS above. Uniform
+              card size/color (brand gradient avatar, not per-person
+              colors) so the row reads as one aligned strip rather than a
+              patchwork -- direct founder feedback (2026-10-01) after the
+              first pass used mismatched widths and colorful avatars. */}
+          <motion.div variants={fadeUp} className="mx-auto mt-8 w-full max-w-3xl sm:mt-6">
+            <p className="mb-2.5 text-center text-[10px] font-bold tracking-[0.16em] text-[#6a6a75]">
+              WHAT PEOPLE ARE SAYING
+            </p>
+            <div
+              className="w-full overflow-hidden"
+              style={{
+                WebkitMaskImage: "linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)",
+                maskImage: "linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)",
+              }}
+            >
+              <div className="animate-testimonial-marquee flex w-max gap-3.5">
+                {[...HERO_TESTIMONIALS, ...HERO_TESTIMONIALS].map((t, i) => (
+                  <div
+                    key={`${t.name}-${i}`}
+                    className="flex h-[168px] w-60 shrink-0 flex-col justify-center rounded-2xl border border-[#2a2a35] p-4"
+                    style={{ background: "linear-gradient(160deg,#15121c,#0e0c12)", boxShadow: "0 10px 26px rgba(0,0,0,0.3)" }}
+                  >
+                    <div className="mb-2.5 flex items-center gap-2.5">
+                      <div
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold text-white"
+                        style={{ background: "linear-gradient(135deg,#7c3aed,#4f6ef7)" }}
+                      >
+                        {t.initial}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-[12.5px] font-bold text-white">{t.name}</p>
+                        <p className="truncate text-[10.5px] text-[#8a8a99]">{t.role}</p>
+                      </div>
+                    </div>
+                    <p className="mb-1.5 text-[11px] tracking-[1.5px] text-[#fbbf24]">&#9733;&#9733;&#9733;&#9733;&#9733;</p>
+                    <p className="text-[12px] leading-relaxed text-[#d4d4db]">{t.quote}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+
           <motion.p variants={fadeUp} className="mx-auto mt-7 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:mt-4 sm:text-lg">
             Speak your wins the moment they happen. So when an interview, resume, or performance review comes up, the story&apos;s already there — not buried in a memory you can&apos;t quite reconstruct.
           </motion.p>
