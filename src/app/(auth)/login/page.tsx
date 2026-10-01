@@ -204,8 +204,8 @@ function LoginForm() {
         <div className="mb-4" style={{ filter: "drop-shadow(0 8px 20px rgba(124,58,237,0.25))" }}>
           <LogoMark size={76} />
         </div>
-        <h1 className="text-2xl font-semibold text-ink">Welcome back</h1>
-        <p className="mt-1 text-sm text-ink-soft">Log in to {APP_NAME}</p>
+        <h1 className="text-2xl font-semibold text-ink">Let&apos;s get started</h1>
+        <p className="mt-1 text-sm text-ink-soft">One tap to start building your career memory</p>
       </div>
 
       {error && <ErrorBanner message={error} />}

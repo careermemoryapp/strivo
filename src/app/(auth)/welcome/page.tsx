@@ -72,6 +72,12 @@ export default function WelcomePage() {
         >
           {APP_TAGLINE}
         </p>
+        <p
+          className="mt-3 max-w-xs text-xs text-white/50 animate-fade-in-up"
+          style={{ animationDelay: "0.45s" }}
+        >
+          Speak your wins. Never forget them.
+        </p>
 
         <div className="mt-9 flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 rounded-full bg-white animate-splash-dot" style={{ animationDelay: "0s" }} />
