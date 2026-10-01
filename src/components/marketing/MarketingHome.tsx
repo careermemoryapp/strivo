@@ -556,8 +556,7 @@ const HERO_TESTIMONIALS = [
     initial: "R",
     name: "Rakesh G.",
     role: "Director",
-    quote:
-      "I've been using Strivo since the early testing days — genuinely useful, not just another AI chatbot. You record a moment as it happens, and it's ready as a resume line or interview story when you need it.",
+    quote: "I've been using Strivo — you record a moment as it happens, and it's ready as a resume line or interview story when you need it.",
   },
   {
     initial: "S",
@@ -721,7 +720,7 @@ export function MarketingHome({
                 {[...HERO_TESTIMONIALS, ...HERO_TESTIMONIALS].map((t, i) => (
                   <div
                     key={`${t.name}-${i}`}
-                    className="flex h-[168px] w-60 shrink-0 flex-col justify-center rounded-2xl border border-[#2a2a35] p-4"
+                    className="flex h-[168px] w-60 shrink-0 flex-col justify-start rounded-2xl border border-[#2a2a35] p-4"
                     style={{ background: "linear-gradient(160deg,#15121c,#0e0c12)", boxShadow: "0 10px 26px rgba(0,0,0,0.3)" }}
                   >
                     <div className="mb-2.5 flex items-center gap-2.5">
