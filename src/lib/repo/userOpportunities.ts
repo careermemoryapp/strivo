@@ -77,6 +77,22 @@ export function clearUserOpportunities(userId: string): void {
   db.prepare(`DELETE FROM user_opportunities WHERE user_id = ?`).run(userId);
 }
 
+// Same idea as clearUserOpportunities above, but for every user at once --
+// for when a matching/ranking CHANGE just shipped (a prompt edit, a scoring
+// tweak) and everyone's existing cached list was built by the old logic.
+// Does NOT touch job_postings (the shared pool itself) -- unlike "Purge job
+// pool" on the admin dashboard, which wipes the pool and forces a full
+// Adzuna re-fetch, this only clears what each user was SHOWN, so the very
+// next time each person opens the Opportunities tab, getOpportunitiesForUser
+// (lib/opportunities.ts) recomputes against the pool that's already there,
+// with today's matching code. Returns the row count removed so the caller
+// can report something concrete rather than a bare "done".
+export function clearAllUserOpportunities(): number {
+  const db = getDb();
+  const result = db.prepare(`DELETE FROM user_opportunities`).run();
+  return Number(result.changes);
+}
+
 // Full replace, not a merge -- a fresh ranking supersedes the old one
 // entirely (job order, fit labels and reasons can all shift once new
 // memories or new pool jobs are in the mix), so there's nothing worth
