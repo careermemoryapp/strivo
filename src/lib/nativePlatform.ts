@@ -47,14 +47,20 @@ export function getNativePlatform(): "ios" | "android" | "web" {
 // Callers that are about to trigger one of these expected hand-offs mark it
 // here first; the resume handler checks (and clears) this before deciding to
 // reload, so it skips the reload exactly for the hand-off it was just told
-// to expect. Expires on its own after 60s so a flag that never gets consumed
-// (the picker or browser dialog never actually returned control the way we
+// to expect. Expires on its own so a flag that never gets consumed (the
+// picker or browser dialog never actually returned control the way we
 // expected) can't permanently disable the real staleness check this exists
-// for.
+// for. Google sign-in in particular can take several minutes in the wild
+// (account picker, 2FA, consent screen on a slow connection) -- a short
+// window here was causing the resume handler to reload the WebView out from
+// under a real in-flight sign-in, burning the one-time auth token before it
+// was consumed and leaving the user back at the login screen. 5 minutes
+// comfortably covers that without leaving the staleness check disabled for
+// long if a hand-off genuinely never returns.
 let expectedResumeUntil = 0;
 
 export function markExpectedResume() {
-  expectedResumeUntil = Date.now() + 60_000;
+  expectedResumeUntil = Date.now() + 300_000;
 }
 
 export function consumeExpectedResume(): boolean {
