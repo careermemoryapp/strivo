@@ -696,6 +696,16 @@ export type OpportunitiesDebugInfo = {
   // bottleneck is the LLM being too conservative; if they look like noise,
   // the keyword pre-filter itself is the problem, not the AI judgment.
   topCandidateSample: { title: string; company: string | null; industry: string | null }[];
+  // The EXACT text handed to rankOpportunities' system prompt as "PERSON'S
+  // PROFILE" (see buildProfileText) -- added 2026-10-02 while chasing a
+  // report that reasons were citing automotive work experience nowhere in
+  // roles/statedPreferences above. Showing the real string sent to the LLM
+  // settles at a glance whether that's a prompt-wording problem (the stated
+  // preference being misread as experience) or the resumeExcerpt itself
+  // actually containing automotive content the roles above don't capture
+  // (e.g. a resume upload that doesn't match this account's real career) --
+  // no more guessing from the roles list alone.
+  profileText: string;
 };
 
 // Admin-only diagnostic (see app/api/admin/opportunities-debug/route.ts) --
@@ -751,5 +761,6 @@ export function getOpportunitiesDebugInfo(userId: string): OpportunitiesDebugInf
     activePoolSize: pool.length,
     passesHardFilters: passing.length,
     currentlyShown: cache.length,
+    profileText: buildProfileText(roles, resumeText, detectedCity, prefs, userSeniority),
   };
 }
