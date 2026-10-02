@@ -316,8 +316,21 @@ function buildProfileText(
   // excerpt. City is handled separately via locationLine below (it already
   // takes a stated city over a resume-detected one -- see the caller).
   const statedBits = stated ? [stated.function, stated.industry].filter((v): v is string => !!v) : [];
+  // Worded deliberately as a WANT, never a HAVE -- this field is free text
+  // typed into a preferences form (see JobPreferences), not evidence of
+  // anything they've actually done. Earlier wording ("They directly told
+  // Strivo they're looking for: Automotive") read enough like a fact about
+  // them that rankOpportunities' system prompt in lib/ai.ts started citing
+  // it back as if it were real automotive work history -- e.g. "your
+  // experience in the automotive sector" -- when no such experience exists
+  // anywhere in rolesSection/resumeExcerpt. Keep this phrasing explicit
+  // about the distinction even if it reads a little redundant.
   const statedLine =
-    statedBits.length > 0 ? `They directly told Strivo they're looking for: ${statedBits.join(", ")}.` : null;
+    statedBits.length > 0
+      ? `They typed into a job-preferences form that they are INTERESTED IN exploring: ${statedBits.join(
+          ", "
+        )}. This is a stated target/wish, NOT evidence of experience -- do not describe it as something they have done, have worked in, or are experienced in. Only the roles and resume sections above are actual evidence.`
+      : null;
   const resumeExcerpt = resumeText ? resumeText.slice(0, 3000) : null;
   // Stated explicitly, ahead of the resume excerpt, rather than trusting
   // the model to notice a city name buried in it -- see rankOpportunities'
