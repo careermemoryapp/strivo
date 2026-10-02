@@ -195,15 +195,18 @@ const LOCATION_MATCH_BONUS = 8;
 // Seniority gets ONE genuine hard filter (see SENIORITY_HARD_EXCLUDE_GAP)
 // -- a direct founder ask that the tab actually stop showing obviously
 // wrong-level postings rather than relying entirely on the LLM ranking
-// step's judgment. Industry does NOT get a hard filter, only a bonus/
-// penalty: a "plausible pivot" into an adjacent industry is exactly the
-// kind of judgment call rankOpportunities (lib/ai.ts) already makes well
-// with the full posting text in front of it, and a rigid industry filter
-// would risk wrongly emptying a thin pool. Both signals fall back to
-// neutral (no bonus, no penalty, never excluded) whenever either side of
-// the comparison is unclassified/unknown -- an unclassified posting or a
-// person Strivo hasn't sized up yet should never be punished for missing
-// data it never had a chance to provide.
+// step's judgment. Industry USED TO be soft-penalty-only (a "plausible
+// pivot" into an adjacent industry is exactly the kind of judgment call
+// rankOpportunities, lib/ai.ts, already makes well with the full posting
+// text in front of it, and a rigid filter risks wrongly emptying a thin
+// pool) -- direct founder override (2026-10-02), after real "not a fit"
+// taps kept climbing on confidently off-industry postings (a Legal
+// Secretary role shown to someone with zero legal background, concretely):
+// industry is now ALSO a hard exclude, same shape as seniority's. Both
+// signals still fall back to neutral (no bonus, no penalty, never excluded)
+// whenever either side of the comparison is unclassified/unknown -- an
+// unclassified posting or a person Strivo hasn't sized up yet should never
+// be punished for missing data it never had a chance to provide.
 const SENIORITY_ORDER: Record<string, number> = Object.fromEntries(
   OPPORTUNITY_SENIORITY_LIST.map((s, i) => [s, i])
 );
@@ -211,7 +214,6 @@ const SENIORITY_HARD_EXCLUDE_GAP = 2; // e.g. Entry-level vs Leadership -- only 
 const SENIORITY_MATCH_BONUS = 9;
 const SENIORITY_ADJACENT_BONUS = 3; // one band off either way -- still a normal, worth-showing stretch
 const INDUSTRY_MATCH_BONUS = 10;
-const INDUSTRY_MISMATCH_PENALTY = 3;
 
 // Maps a legacy freeform stated industry (see JobPreferences.industry --
 // typed into the now-removed filter form, still read here for anyone who
@@ -228,6 +230,27 @@ function canonicalIndustry(text: string | null | undefined): string | null {
   return OPPORTUNITY_INDUSTRIES_LIST.find((i) => i.toLowerCase() === lower) ?? null;
 }
 
+// The two hard excludes (seniority, industry) as ONE shared predicate --
+// pulled out so the admin debug helper below (getOpportunitiesDebugInfo)
+// can report EXACTLY how many postings clear this bar for a given person,
+// using the identical logic matchCandidates itself runs, rather than a
+// second hand-written copy that could silently drift out of sync with the
+// real filtering over time.
+function passesHardFilters(job: JobPosting, userIndustries: Set<string>, userSeniorityRank: number | undefined): boolean {
+  // Seniority -- skipped entirely (job stays eligible) unless BOTH the
+  // job's own seniority_tag and this user's overall_seniority are
+  // confidently known and land in valid, recognized bands.
+  if (userSeniorityRank !== undefined && job.seniority_tag) {
+    const jobRank = SENIORITY_ORDER[job.seniority_tag];
+    if (jobRank !== undefined && Math.abs(jobRank - userSeniorityRank) >= SENIORITY_HARD_EXCLUDE_GAP) return false;
+  }
+  // Industry -- same shape: skipped entirely unless BOTH this user's
+  // industries AND the job's own industry_tag are confidently known, so a
+  // thin/unclassified signal is never punished for data it never had.
+  if (userIndustries.size > 0 && job.industry_tag && !userIndustries.has(job.industry_tag)) return false;
+  return true;
+}
+
 function matchCandidates(
   pool: JobPosting[],
   profileKeywords: string[],
@@ -241,16 +264,7 @@ function matchCandidates(
   const userSeniorityRank = userSeniority ? SENIORITY_ORDER[userSeniority] : undefined;
   const scored = pool
     .filter((job) => !excludeIds.has(job.id))
-    .filter((job) => {
-      // The one real hard exclude -- see this section's top comment.
-      // Skipped entirely (job stays eligible) unless BOTH the job's own
-      // seniority_tag and this user's overall_seniority are confidently
-      // known and land in valid, recognized bands.
-      if (userSeniorityRank === undefined || !job.seniority_tag) return true;
-      const jobRank = SENIORITY_ORDER[job.seniority_tag];
-      if (jobRank === undefined) return true;
-      return Math.abs(jobRank - userSeniorityRank) < SENIORITY_HARD_EXCLUDE_GAP;
-    })
+    .filter((job) => passesHardFilters(job, userIndustries, userSeniorityRank))
     .map((job) => {
       const haystack = keywordsFrom(`${job.title} ${job.snippet ?? ""}`);
       let score = 0;
@@ -258,8 +272,11 @@ function matchCandidates(
       if (boostCity && job.location && job.location.toLowerCase().includes(boostCity.toLowerCase())) {
         score += LOCATION_MATCH_BONUS;
       }
-      if (job.industry_tag && userIndustries.size > 0) {
-        score += userIndustries.has(job.industry_tag) ? INDUSTRY_MATCH_BONUS : -INDUSTRY_MISMATCH_PENALTY;
+      // A mismatch can't reach here any more -- the filter above already
+      // excluded it when both sides were confidently known -- so this is
+      // just the positive bonus for a confirmed match now, not a +/- either way.
+      if (job.industry_tag && userIndustries.has(job.industry_tag)) {
+        score += INDUSTRY_MATCH_BONUS;
       }
       if (job.seniority_tag && userSeniorityRank !== undefined) {
         const jobRank = SENIORITY_ORDER[job.seniority_tag];
@@ -507,12 +524,25 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   // show up alongside whatever's being kept, exactly as asked ("keep the
   // job... along with refreshing new jobs"); MAX_JOB_AGE_DAYS is what keeps
   // this from growing without bound, not TARGET_COUNT.
+  // Direct founder follow-up (2026-10-02, same conversation): "not a fit"
+  // taps were climbing, traced partly to THIS pinning itself -- a weak
+  // match that only ever got shown because a thin candidate field or an
+  // AI-unavailable moment fell back to it (fit: null, no real LLM judgment
+  // behind it -- see the fallback branch below) was being kept alive for
+  // the full MAX_JOB_AGE_DAYS just because it had been shown once. Only a
+  // job with a REAL positive fit label from a previous rankOpportunities
+  // pass (prev.fit !== null) gets pinned now -- an ungraded one is allowed
+  // to quietly drop instead of lingering on the strength of having
+  // technically appeared before.
   function pinPreviouslyShownJobs(
     items: { job: JobPosting; fit: OpportunityCard["fit"]; reason: string | null }[]
   ): { job: JobPosting; fit: OpportunityCard["fit"]; reason: string | null }[] {
     const already = new Set(items.map((i) => i.job.id));
     const pinned = pool
-      .filter((job) => prevById.has(job.id) && !excludeIds.has(job.id) && !already.has(job.id))
+      .filter((job) => {
+        const prev = prevById.get(job.id);
+        return !!prev && prev.fit !== null && !excludeIds.has(job.id) && !already.has(job.id);
+      })
       .map((job) => {
         const prev = prevById.get(job.id)!;
         return { job, fit: prev.fit, reason: prev.reason };
@@ -619,5 +649,59 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
     memoriesNeeded: 0,
     statedPreferences: prefs,
     opportunities: items.map((item) => toCard(item.job, item.fit, item.reason, feedbackMap[item.job.id] ?? null)),
+  };
+}
+
+export type OpportunitiesDebugInfo = {
+  memoryCount: number;
+  roles: { title: string; industry: string | null }[];
+  overallSeniority: string | null;
+  statedPreferences: JobPreferences | null;
+  // Every active, <=MAX_JOB_AGE_DAYS-old posting in the WHOLE shared pool --
+  // not scoped to this person at all, same as the admin dashboard's own
+  // "jobs active" figure.
+  activePoolSize: number;
+  // Of activePoolSize, how many clear this person's own seniority + industry
+  // hard excludes (see passesHardFilters) -- the real ceiling of what could
+  // EVER reach keyword scoring, the top-80 cut, or the AI ranking step for
+  // them, before any of those further narrow it down. If this number is
+  // already small, a short final list is the pool genuinely being thin for
+  // this person, not a bug; if it's large, the AI step itself is being too
+  // conservative.
+  passesHardFilters: number;
+  // What's actually cached/visible on their Opportunities tab right now.
+  currentlyShown: number;
+};
+
+// Admin-only diagnostic (see app/api/admin/opportunities-debug/route.ts) --
+// answers "is six really everything, or is the pool hiding more genuine
+// matches" with real numbers instead of guessing. Deliberately reuses
+// passesHardFilters, the EXACT predicate the live matching path runs,
+// rather than a second hand-rolled count that could quietly drift out of
+// sync with it over time.
+export function getOpportunitiesDebugInfo(userId: string): OpportunitiesDebugInfo {
+  const memoryCount = countMemories(userId);
+  const suggestedRoles = getLatestSuggestedRolesForUser(userId);
+  const roles = suggestedRoles?.roles ?? [];
+  const prefs = getJobPreferences(userId);
+  const userIndustries = new Set(roles.map((r) => r.industry).filter((v): v is string => !!v));
+  const statedIndustry = canonicalIndustry(prefs?.industry);
+  if (statedIndustry) userIndustries.add(statedIndustry);
+  const userSeniority = suggestedRoles?.seniority ?? null;
+  const userSeniorityRank = userSeniority ? SENIORITY_ORDER[userSeniority] : undefined;
+
+  const pool = listActiveJobPostings().filter(isRecentEnough);
+  const passing = pool.filter((job) => passesHardFilters(job, userIndustries, userSeniorityRank));
+
+  const cache = getCachedOpportunities(userId);
+
+  return {
+    memoryCount,
+    roles: roles.map((r) => ({ title: r.title, industry: r.industry })),
+    overallSeniority: userSeniority,
+    statedPreferences: prefs,
+    activePoolSize: pool.length,
+    passesHardFilters: passing.length,
+    currentlyShown: cache.length,
   };
 }
