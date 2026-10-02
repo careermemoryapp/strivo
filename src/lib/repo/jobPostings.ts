@@ -115,7 +115,21 @@ export function upsertJobPosting(job: AdzunaJob, functionTag: string, cityTag: s
 // skipped cron fire on top of the ~15-day cadence.
 const STALE_AFTER_DAYS = 40;
 
-export function listActiveJobPostings(limit = 500): JobPosting[] {
+// limit's default used to be 500 -- found as a real bug (2026-10-02, direct
+// founder question: "why does my list only draw from 58 jobs when the pool
+// has thousands"). Both real callers (lib/opportunities.ts, matching a
+// specific person) call this with NO argument, so every one of them was
+// silently capped to the 500 rows with the MOST RECENT last_seen_at --
+// i.e. whichever ~2 refresh-pool chunks happened to run most recently --
+// before any per-person filtering even started. A person whose target
+// function/industry wasn't among those just-refreshed chunks could have
+// their whole candidate pool quietly degraded to near nothing, no matter
+// how many genuinely fresh, on-topic postings existed elsewhere in the
+// (now 12,000+ row) table. 20,000 is a safety ceiling against an
+// unexpectedly huge table, not a working limit -- comfortably above any
+// pool size this product is actually at or near, so in practice nothing
+// gets silently dropped the way 500 was doing.
+export function listActiveJobPostings(limit = 20000): JobPosting[] {
   const db = getDb();
   const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
   return db
