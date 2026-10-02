@@ -528,7 +528,25 @@ export type SuggestedRoleResult = { title: string; industry: string | null; reas
 // the per-role industry field, just at a coarser, person-level grain.
 export type GenerateSuggestedRolesResult = { roles: SuggestedRoleResult[]; seniority: string | null };
 
-export async function generateSuggestedRoles(memories: Memory[]): Promise<GenerateSuggestedRolesResult | null> {
+// resumeText (added 2026-10-02, founder-reported): this call used to see
+// ONLY recorded memories, never the resume someone uploads separately (see
+// resume_text on the User type). For most people the two tell the same
+// story, so that gap never showed. It broke visibly for a founder whose
+// memories happened to be about peripheral/early-career work (content,
+// digital marketing, product) while his resume carried his real, far more
+// senior specialization (10+ years, a named leadership title, a specific
+// industry) -- industry and especially seniority came back reading like a
+// generic mid-level operator because that's genuinely all the memories
+// alone showed, even though his full known career said otherwise. Passing
+// the resume into this SAME call (not a second one -- same reasoning as
+// seniority sharing memories' call above) lets the model weigh both
+// sources together rather than silently picking whichever one happens to
+// be the only input. Optional and nullable: plenty of accounts have no
+// resume on file, and this must keep working exactly as before for them.
+export async function generateSuggestedRoles(
+  memories: Memory[],
+  resumeText?: string | null
+): Promise<GenerateSuggestedRolesResult | null> {
   const openai = getClient();
   if (!openai || memories.length === 0) return null;
   try {
@@ -562,6 +580,15 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Genera
         );
       })
       .join("\n");
+    // Appended after the memories listing, never substituted for it -- the
+    // memories stay the primary, richest source (specific stories, their
+    // own words); the resume is a SECOND, independent source of evidence
+    // that can show a fuller or more senior picture than whichever stories
+    // happened to get recorded. See this function's own top comment for the
+    // founder case that motivated this.
+    const resumeSection = resumeText
+      ? `\n\nTheir resume (a second, independent source of evidence -- may cover roles, employers, or seniority not reflected in the memories above; weigh it together with the memories, don't let one silently override the other):\n${resumeText.slice(0, 3000)}`
+      : "";
     const completion = await openai.chat.completions.create({
       model: CHAT_MODEL,
       temperature: 0.4,
@@ -570,18 +597,19 @@ export async function generateSuggestedRoles(memories: Memory[]): Promise<Genera
         {
           role: "system",
           content:
-            "You are a career coach reviewing someone's personal career memories (from a career-memory app) to name roles they're genuinely ready for RIGHT NOW. " +
-            "You'll be given a list of memories, each with a title, optional competencies, a short third-person summary, AND an excerpt of the person's OWN WORDS (their original transcript). " +
+            "You are a career coach reviewing someone's personal career memories (from a career-memory app), and optionally their resume, to name roles they're genuinely ready for RIGHT NOW. " +
+            "You'll be given a list of memories, each with a title, optional competencies, a short third-person summary, AND an excerpt of the person's OWN WORDS (their original transcript) -- and, when they've uploaded one, their resume text. " +
             "The summary is a compact recap of what they DID and can leave out which employer, client, or sector the story was about even when the person's own words clearly named it -- so for industry specifically, always check the 'In their own words' excerpt, not just the summary. " +
+            "When a resume is included, treat it as EQUALLY real evidence alongside the memories, not a tiebreaker or a fallback -- base industry, seniority, and role suggestions on the FULL picture both sources paint together. The memories and the resume commonly describe the same career from different angles (memories: specific stories in their own words; resume: the formal record of titles, employers, and scope) -- a role, industry, or seniority signal the resume clearly supports is real even if no single memory happens to name it directly, and the reverse is also true. Never let one source silently overrule or hide what the other shows; never invent anything beyond what either source actually states. " +
             'Respond ONLY with JSON: {"roles": [{"title": string, "industry": string or null, "reasoning": string}], "seniority": string or null}. ' +
-            "Up to 5 roles, best fit first. Every role must be directly supported by concrete evidence across these memories (skills actually demonstrated, scope of responsibility, kind of work actually done) -- never invent a role that isn't backed by what's actually here, and return fewer than 5 (even zero, as an empty array) rather than padding with a weak fit. " +
-            `industry: the SINGLE best-matching entry from this exact list, copied EXACTLY, or null: ${INDUSTRY_OPTIONS.join(", ")}. Only set it when the memories themselves clearly point at one of these -- a company, sector, or domain actually mentioned or strongly implied. If the memories show transferable skills without pointing at a specific field, or point at a real sector that genuinely isn't a good match for anything on this list, set industry to null -- do NOT guess or force a near-fit just because it's a common pairing for that role title. ` +
-            "reasoning: 1-2 sentences, written directly to the person ('you...'), citing the SPECIFIC memory or evidence that supports this role -- e.g. what they actually did, led, or solved. This is shown to them verbatim as the explanation for why this role is on their list, so it must be concrete and checkable against their own memories, never generic career-coach filler. " +
-            "Look across ALL the memories first and identify the ONE industry/sector that shows up most (a company, domain, or sector actually named or strongly implied across several memories, e.g. someone with years of automotive-sector work). If a clear dominant industry exists (and it's a genuine match for one of the list entries above), 2 to 3 of the roles (out of up to 5) MUST be roles within THAT SAME industry -- a believable, evidenced next step from what they're already doing there, not a lateral pivot into something unrelated -- and industry for each of those roles MUST be set to that actual list entry, never null and never 'Any industry'. This is what shows the person the suggestions genuinely understand the industry and function they specialize in, instead of reading as generic. Only spend the remaining slots on adjacent or different fields, and only when the evidence genuinely supports it. If the memories genuinely show no dominant industry (truly cross-industry or industry-agnostic work), it's fine for industry to be null on some or all roles -- but check carefully first, since most people's memories do point at one. " +
-            `seniority: ONE overall band for this person as a whole (not per-role), the SINGLE best-matching entry from this exact list, copied EXACTLY, or null: ${SENIORITY_OPTIONS.join(", ")}. Judge this from the scope, scale, and language of responsibility actually shown across the memories as a whole (team/budget/project size they led or owned, whether they're described managing others vs. individually executing, titles or seniority language actually used) -- not from years of tenure alone. Set it to null only if the sample genuinely gives no basis to judge (very sparse or ambiguous evidence) rather than defaulting to a middle guess. ` +
+            "Up to 5 roles, best fit first. Every role must be directly supported by concrete evidence across the memories and resume together (skills actually demonstrated, scope of responsibility, kind of work actually done) -- never invent a role that isn't backed by what's actually here, and return fewer than 5 (even zero, as an empty array) rather than padding with a weak fit. " +
+            `industry: the SINGLE best-matching entry from this exact list, copied EXACTLY, or null: ${INDUSTRY_OPTIONS.join(", ")}. Only set it when the memories and/or resume clearly point at one of these -- a company, sector, or domain actually mentioned or strongly implied in either source. If neither shows transferable skills pointing at a specific field, or they point at a real sector that genuinely isn't a good match for anything on this list, set industry to null -- do NOT guess or force a near-fit just because it's a common pairing for that role title. ` +
+            "reasoning: 1-2 sentences, written directly to the person ('you...'), citing the SPECIFIC memory or resume evidence that supports this role -- e.g. what they actually did, led, or solved. This is shown to them verbatim as the explanation for why this role is on their list, so it must be concrete and checkable against their own memories/resume, never generic career-coach filler. " +
+            "Look across ALL the memories AND the resume (when given) first and identify the ONE industry/sector that shows up most (a company, domain, or sector actually named or strongly implied across several memories or in the resume, e.g. someone with years of automotive-sector work). If a clear dominant industry exists (and it's a genuine match for one of the list entries above), 2 to 3 of the roles (out of up to 5) MUST be roles within THAT SAME industry -- a believable, evidenced next step from what they're already doing there, not a lateral pivot into something unrelated -- and industry for each of those roles MUST be set to that actual list entry, never null and never 'Any industry'. This is what shows the person the suggestions genuinely understand the industry and function they specialize in, instead of reading as generic. Only spend the remaining slots on adjacent or different fields, and only when the evidence genuinely supports it. If neither the memories nor the resume shows a dominant industry (truly cross-industry or industry-agnostic work), it's fine for industry to be null on some or all roles -- but check carefully first, since most people's full evidence does point at one, even when any single memory alone wouldn't. " +
+            `seniority: ONE overall band for this person as a whole (not per-role), the SINGLE best-matching entry from this exact list, copied EXACTLY, or null: ${SENIORITY_OPTIONS.join(", ")}. Judge this from the scope, scale, and language of responsibility actually shown across the memories AND the resume together (team/budget/project size they led or owned, whether they're described managing others vs. individually executing, titles or seniority language actually used, years of experience and role titles the resume states) -- not from years of tenure alone, and not from the memories in isolation when a resume is also given and shows more senior scope than the recorded stories alone would suggest. Set it to null only if the sample genuinely gives no basis to judge (very sparse or ambiguous evidence in both sources) rather than defaulting to a middle guess. ` +
             "Never invent facts not present in what you were given.",
         },
-        { role: "user", content: listing },
+        { role: "user", content: `${listing}${resumeSection}` },
       ],
     });
     const raw = completion.choices[0]?.message?.content;

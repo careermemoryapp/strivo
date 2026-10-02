@@ -4,6 +4,7 @@ import { listUserIdsWithMemoriesSince, listOldestMemories, listNewestMemories } 
 import { shouldGenerateGrowthNarrative, createGrowthNarrative } from "@/lib/repo/growthNarratives";
 import { shouldGenerateSuggestedRoles, createSuggestedRoles } from "@/lib/repo/suggestedRoles";
 import { generateGrowthNarrative, generateSuggestedRoles } from "@/lib/ai";
+import { getUserById } from "@/lib/repo/users";
 import { notifyUser } from "@/lib/notify";
 
 // How many memories go into each side of the "earlier vs recent"
@@ -105,7 +106,11 @@ export async function POST(req: Request) {
     if (shouldGenerateSuggestedRoles(userId)) {
       const roleMemories = listNewestMemories(userId, ROLE_SAMPLE_SIZE);
       if (roleMemories.length > 0) {
-        const generated = await generateSuggestedRoles(roleMemories);
+        // See generateSuggestedRoles' own comment in lib/ai.ts -- same
+        // resume-plus-memories reasoning applies to the monthly batch as to
+        // the inline regeneration in lib/opportunities.ts and the manual
+        // single-account endpoint.
+        const generated = await generateSuggestedRoles(roleMemories, getUserById(userId)?.resume_text ?? null);
         if (generated && generated.roles.length > 0) {
           createSuggestedRoles({
             userId,

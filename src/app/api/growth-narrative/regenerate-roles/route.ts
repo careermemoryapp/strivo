@@ -49,7 +49,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "This account has no memories yet -- nothing to generate roles from" }, { status: 400 });
   }
 
-  const generated = await generateSuggestedRoles(roleMemories);
+  // See generateSuggestedRoles' own comment in lib/ai.ts -- same reasoning
+  // for why this manual single-account regeneration needs the resume too,
+  // not just this account's memories.
+  const generated = await generateSuggestedRoles(roleMemories, user.resume_text);
   if (!generated || generated.roles.length === 0) {
     return NextResponse.json({
       ok: true,

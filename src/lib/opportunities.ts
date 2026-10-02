@@ -403,6 +403,13 @@ function isCacheFresh(
 
 export async function getOpportunitiesForUser(userId: string): Promise<OpportunitiesResult> {
   const memoryCount = countMemories(userId);
+  // Fetched up front (used both for the suggested_roles regeneration call
+  // below and again further down for matching itself -- see
+  // generateSuggestedRoles' own comment in lib/ai.ts for why it's now
+  // passed resume text too) rather than only where it was previously read,
+  // further down this function, after that regeneration had already run
+  // without it.
+  const resumeTextForProfile = getUserById(userId)?.resume_text ?? null;
 
   // Direct founder call (2026-09-28): "Roles you're ready for" used to
   // ONLY regenerate on the monthly growth-narrative/roles batch (see
@@ -428,7 +435,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   if (shouldGenerateSuggestedRoles(userId)) {
     const roleMemories = listNewestMemories(userId, ROLE_SAMPLE_SIZE);
     if (roleMemories.length > 0) {
-      const generated = await generateSuggestedRoles(roleMemories);
+      const generated = await generateSuggestedRoles(roleMemories, resumeTextForProfile);
       if (generated && generated.roles.length > 0) {
         createSuggestedRoles({
           userId,
@@ -578,8 +585,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   // Personalized path -- reachable via memory-derived roles, stated
   // preferences, or both at once; everything below just uses whichever
   // sources are actually present.
-  const user = getUserById(userId);
-  const resumeText = user?.resume_text ?? null;
+  const resumeText = resumeTextForProfile;
   // An explicitly stated city always wins over one merely detected in the
   // resume -- the person said it themselves, no inference needed.
   const detectedCity = prefs?.city || detectCityFromText(resumeText);
