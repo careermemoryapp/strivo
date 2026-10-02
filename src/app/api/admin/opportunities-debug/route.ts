@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isAdminAuthed } from "@/lib/adminAuth";
 import { getUserByEmail } from "@/lib/repo/users";
 import { getOpportunitiesDebugInfo } from "@/lib/opportunities";
+import { getActivePoolAgeDistribution } from "@/lib/repo/jobPostings";
 
 // Admin-only diagnostic, added 2026-10-02 after a direct founder question
 // that no existing admin panel could answer with real numbers: "is my short
@@ -26,5 +27,13 @@ export async function GET(req: Request) {
   if (!user) {
     return NextResponse.json({ error: `No user found for ${email}` }, { status: 404 });
   }
-  return NextResponse.json(getOpportunitiesDebugInfo(user.id));
+  return NextResponse.json({
+    ...getOpportunitiesDebugInfo(user.id),
+    // Pool-wide, not scoped to this user -- see getActivePoolAgeDistribution's
+    // own comment for why this is included: MAX_JOB_AGE_DAYS=15 only lets a
+    // user's list draw from whichever bucket here is withinDays:15, which is
+    // usually a small slice of the pool's full "jobs active" count shown on
+    // the admin dashboard.
+    poolAgeDistribution: getActivePoolAgeDistribution(),
+  });
 }

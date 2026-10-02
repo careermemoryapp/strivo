@@ -267,3 +267,29 @@ export function countActiveJobPostings(): number {
   };
   return row.c;
 }
+
+// Admin-only diagnostic (see app/api/admin/opportunities-debug/route.ts) --
+// direct founder question (2026-10-02): the admin dashboard's "jobs active"
+// figure (countActiveJobPostings, 40-day STALE_AFTER_DAYS window) and what
+// a user's own list actually draws from (MAX_JOB_AGE_DAYS=15 in
+// lib/opportunities.ts, checked against posted_date -- Adzuna's own
+// "created" timestamp, fixed at first insert, never bumped by a later
+// refresh re-seeing the same listing) are two VERY different numbers, and
+// there was no way to see that gap without this. Buckets the same active
+// (last_seen_at within STALE_AFTER_DAYS) pool by how many postings are
+// within each of several age-since-posted thresholds, so the real tradeoff
+// behind MAX_JOB_AGE_DAYS -- recall (how many jobs are even eligible) vs.
+// freshness guarantee -- can be seen in real numbers instead of guessed at
+// before picking a new value.
+export function getActivePoolAgeDistribution(): { withinDays: number; count: number }[] {
+  const db = getDb();
+  const cutoffActive = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const thresholds = [7, 15, 21, 30, 40];
+  return thresholds.map((days) => {
+    const cutoffAge = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const row = db
+      .prepare(`SELECT COUNT(*) as c FROM job_postings WHERE last_seen_at >= ? AND posted_date >= ?`)
+      .get(cutoffActive, cutoffAge) as { c: number };
+    return { withinDays: days, count: row.c };
+  });
+}
