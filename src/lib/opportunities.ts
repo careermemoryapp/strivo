@@ -671,6 +671,18 @@ export type OpportunitiesDebugInfo = {
   passesHardFilters: number;
   // What's actually cached/visible on their Opportunities tab right now.
   currentlyShown: number;
+  // The actual titles/companies/fit/reason behind currentlyShown -- so "why
+  // only 6" can be answered by looking at what they actually are, not just
+  // the count.
+  currentList: { title: string; company: string | null; fit: OpportunityCard["fit"]; reason: string | null }[];
+  // Of passesHardFilters, the top ~15 (by the SAME keyword/location/industry/
+  // seniority score matchCandidates itself ranks by) that would actually
+  // reach the AI ranking step this round -- the top-80 cut happens BEFORE
+  // the LLM ever sees anything, purely on crude keyword overlap plus the
+  // structured bonuses. If these look like genuinely strong matches, the
+  // bottleneck is the LLM being too conservative; if they look like noise,
+  // the keyword pre-filter itself is the problem, not the AI judgment.
+  topCandidateSample: { title: string; company: string | null; industry: string | null }[];
 };
 
 // Admin-only diagnostic (see app/api/admin/opportunities-debug/route.ts) --
@@ -695,9 +707,32 @@ export function getOpportunitiesDebugInfo(userId: string): OpportunitiesDebugInf
 
   const cache = getCachedOpportunities(userId);
 
+  // Same candidate-selection call the live path makes (see
+  // getOpportunitiesForUser) -- reused here, not re-derived, so this sample
+  // can never silently drift from what matching actually does.
+  const user = getUserById(userId);
+  const resumeText = user?.resume_text ?? null;
+  const detectedCity = prefs?.city || detectCityFromText(resumeText);
+  const profileKeywords = [
+    ...keywordsFrom(roles.map((r) => `${r.title} ${r.industry ?? ""}`).join(" ")),
+    ...keywordsFrom((resumeText ?? "").slice(0, 1500)),
+    ...keywordsFrom(`${prefs?.function ?? ""} ${prefs?.industry ?? ""}`),
+  ];
+  const feedbackMap = getFeedbackMap(userId);
+  const excludeIds = new Set(
+    Object.entries(feedbackMap)
+      .filter(([, v]) => v === "not_for_me")
+      .map(([jobId]) => jobId)
+  );
+  const topCandidates = matchCandidates(pool, profileKeywords, excludeIds, 80, detectedCity, userIndustries, userSeniority);
+
   return {
     memoryCount,
     roles: roles.map((r) => ({ title: r.title, industry: r.industry })),
+    currentList: cache.map((row) => ({ title: row.job.title, company: row.job.company, fit: row.fit, reason: row.reason })),
+    topCandidateSample: topCandidates
+      .slice(0, 15)
+      .map((job) => ({ title: job.title, company: job.company, industry: job.industry_tag })),
     overallSeniority: userSeniority,
     statedPreferences: prefs,
     activePoolSize: pool.length,
