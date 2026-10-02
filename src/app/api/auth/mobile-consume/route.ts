@@ -15,7 +15,12 @@ const SITE_URL = process.env.NEXTAUTH_URL || "https://strivo.ai";
 // this request's response lands in the WebView's own cookie jar, which is
 // the one the app actually reads sessions from — then send the user home
 // already signed in. Anything wrong with the token sends them back to
-// /login to try again rather than erroring out.
+// /login?error=signin_failed. Used to be a bare /login with nothing on
+// screen to explain it — the person just saw the sign-in button again
+// with no idea anything had gone wrong, which looked exactly like "my tap
+// did nothing" and is the most likely reason so few people who opened the
+// Google flow ever finished it. The query param lets the login page show
+// an explicit "that didn't go through, try again" message instead.
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get("token");
   const result = token ? consumeMobileAuthToken(token) : undefined;
@@ -30,7 +35,9 @@ export async function GET(req: NextRequest) {
       tags: { flow: "mobile-google-signin" },
       extra: { hadToken: !!token },
     });
-    return NextResponse.redirect(new URL("/login", SITE_URL));
+    return NextResponse.redirect(
+      new URL("/login?error=signin_failed", SITE_URL)
+    );
   }
   const res = NextResponse.redirect(new URL("/home", SITE_URL));
   res.cookies.set({

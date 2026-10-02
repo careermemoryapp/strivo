@@ -41,6 +41,7 @@ const STEP_LABELS: Record<(typeof ONBOARDING_EVENTS)[number], string> = {
   onboarding_google_browser_opened: "System browser opened",
   onboarding_google_browser_open_failed: "System browser failed to open",
   onboarding_resumed_incomplete: "Returned to app without finishing",
+  onboarding_google_token_failed: "Sign-in failed, shown an error",
 };
 
 function countEventSince(eventName: string, sinceIso: string): number {

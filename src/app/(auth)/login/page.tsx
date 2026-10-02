@@ -58,10 +58,21 @@ function AppleIcon() {
 // fully intact, this only controls whether the button renders.
 const APPLE_SIGNIN_ENABLED = false;
 
+const SIGNIN_FAILED_MESSAGE = "That sign-in didn't go through. Please try again.";
+
 function LoginForm() {
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
+  // /api/auth/mobile-consume redirects here with ?error=signin_failed when
+  // the one-time token it got handed was missing, expired, or already
+  // used -- previously a bare /login with nothing on screen, which looked
+  // exactly like "my tap did nothing" and gave someone no reason to try
+  // again. Reading it straight into the initial state (rather than an
+  // effect calling setError) shows the banner on the very first render
+  // instead of flashing in a frame later.
+  const [error, setError] = useState<string | null>(() =>
+    searchParams.get("error") === "signin_failed" ? SIGNIN_FAILED_MESSAGE : null
+  );
   // /api/auth/mobile-bridge sets this when it sends the system browser back
   // here so the *app's* handleGoogle (below) doesn't run — this instance of
   // the page is being viewed inside a real Chrome tab, not the app WebView,
@@ -78,6 +89,14 @@ function LoginForm() {
   useEffect(() => {
     if (isNativeApp()) trackEvent("onboarding_login_viewed");
   }, []);
+
+  // Same ?error=signin_failed case as the error state above -- just the
+  // analytics side of it, split out since trackEvent isn't state.
+  useEffect(() => {
+    if (searchParams.get("error") === "signin_failed" && isNativeApp()) {
+      trackEvent("onboarding_google_token_failed");
+    }
+  }, [searchParams]);
 
   // handleGoogle/handleApple below set `loading` true right before handing
   // off to the system browser, and only reset it in a `finally` that runs

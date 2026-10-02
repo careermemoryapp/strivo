@@ -407,6 +407,12 @@ export const ONBOARDING_EVENTS = [
   // ever see the return-to-foreground, so a real completed sign-in never
   // fires this.
   "onboarding_resumed_incomplete",
+  // LoginPage mounted with ?error=signin_failed -- /api/auth/mobile-consume
+  // sends the WebView here whenever the one-time token it got handed was
+  // missing, expired, or already used, instead of completing sign-in. Lets
+  // us see this specific failure separately from someone just closing the
+  // Google tab on their own (onboarding_resumed_incomplete, above).
+  "onboarding_google_token_failed",
 ] as const;
 
 export const NEW_CHAT_TEMPLATES = [
