@@ -570,6 +570,29 @@ const HERO_TESTIMONIALS = [
     role: "Director",
     quote: "The idea seems novel and promising.",
   },
+  // Three more pulled from real Play Store reviews (2026-10-02), trimmed
+  // to fit the card the same way Rakesh's was -- see this array's comment
+  // above for why these are real, attributed quotes, not placeholders.
+  {
+    initial: "H",
+    name: "Harsha G.",
+    role: "Software Developer",
+    quote:
+      "It surfaced career stories I didn't even realize I had — a point I thought was ordinary turned out to be a strong leadership story for interviews.",
+  },
+  {
+    initial: "R",
+    name: "Rohit K.",
+    role: "Manager",
+    quote:
+      "I often forget what I've done at work. I just speak freely about it, and Strivo organizes everything into structured career memories for me.",
+  },
+  {
+    initial: "S",
+    name: "Sagar",
+    role: "Product Manager",
+    quote: "Really liked the clean, user-friendly interface — very intuitive and self-explanatory.",
+  },
 ];
 
 export function MarketingHome({
