@@ -34,7 +34,6 @@ import {
 import {
   getCachedOpportunities,
   replaceUserOpportunities,
-  listFeedbackedJobIds,
   getFeedbackMap,
 } from "@/lib/repo/userOpportunities";
 import { rankOpportunities, generateSuggestedRoles, type OpportunityCandidate } from "@/lib/ai";
@@ -460,7 +459,66 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   // pool that's technically non-empty but entirely stale reads the same
   // as a genuinely empty one rather than silently ranking old listings.
   const pool = listActiveJobPostings().filter(isRecentEnough);
-  const excludeIds = listFeedbackedJobIds(userId);
+  // Only a "not for me" tap should keep a job out of future matching passes
+  // -- a direct founder report (2026-10-02): a job the person marked FIT was
+  // silently vanishing from their list a few days later, even though it was
+  // still well within MAX_JOB_AGE_DAYS and genuinely still relevant. Root
+  // cause was this set previously coming from listFeedbackedJobIds, which
+  // returned BOTH directions of feedback -- so "relevant" was being treated
+  // exactly like "not_for_me" and excluded from every future candidate
+  // pool, meaning a fresh cache regeneration (see replaceUserOpportunities'
+  // own "full replace, not a merge" comment -- it has nothing to carry a
+  // past-fit job forward with) could never show it again. Deriving straight
+  // from feedbackMap (already fetched above) instead of a second query
+  // means a "fit" tap no longer removes a job from consideration; see the
+  // explicit re-pinning below for the other half of this fix -- not
+  // excluding it is not the same as guaranteeing it stays visible.
+  const excludeIds = new Set(
+    Object.entries(feedbackMap)
+      .filter(([, v]) => v === "not_for_me")
+      .map(([jobId]) => jobId)
+  );
+  // Previous cache's fit/reason per job, so a job pinned back in below (see
+  // pinPreviouslyShownJobs) can keep showing whatever fit label/explanation
+  // it had last time, instead of going blank just because this regeneration
+  // didn't happen to re-rank it.
+  const prevById = new Map(cache.map((row) => [row.job_posting_id, row]));
+
+  // ANY job this person was already shown should stay, as long as it's
+  // still within MAX_JOB_AGE_DAYS and still in the live pool -- not just a
+  // job explicitly marked "fit" (see excludeIds' comment above for that
+  // half of this). Direct founder follow-up (2026-10-02): a regeneration
+  // shouldn't be allowed to drop a still-recent, still-live job just
+  // because this pass's ranking didn't happen to re-pick it -- matchCandidates/
+  // rankOpportunities might still pick one up naturally (it's no longer
+  // excluded unless it's a "not for me"), but nothing GUARANTEES that -- a
+  // thin field of candidates, an off day from the LLM ranking, or simply 25
+  // other jobs scoring higher could all still drop it silently. So every
+  // job from the PREVIOUS list (prevById -- i.e. this person has actually
+  // seen it before) gets explicitly re-added here, on top of whatever fresh
+  // candidates this regeneration ranked, as long as it's: still in `pool`
+  // (still in the live, non-pruned job_postings table AND still within
+  // MAX_JOB_AGE_DAYS -- a job genuinely gone from the market, or that's
+  // simply aged out past 15 days, is still allowed to drop off, same as
+  // before), not something they said "not for me" to (excludeIds), and not
+  // already present in this round's fresh items. Fit/reason carried forward
+  // from last time it was shown rather than going blank. This is
+  // deliberately additive, not a cap -- new jobs the refresh turns up still
+  // show up alongside whatever's being kept, exactly as asked ("keep the
+  // job... along with refreshing new jobs"); MAX_JOB_AGE_DAYS is what keeps
+  // this from growing without bound, not TARGET_COUNT.
+  function pinPreviouslyShownJobs(
+    items: { job: JobPosting; fit: OpportunityCard["fit"]; reason: string | null }[]
+  ): { job: JobPosting; fit: OpportunityCard["fit"]; reason: string | null }[] {
+    const already = new Set(items.map((i) => i.job.id));
+    const pinned = pool
+      .filter((job) => prevById.has(job.id) && !excludeIds.has(job.id) && !already.has(job.id))
+      .map((job) => {
+        const prev = prevById.get(job.id)!;
+        return { job, fit: prev.fit, reason: prev.reason };
+      });
+    return [...items, ...pinned];
+  }
 
   if (pool.length === 0) {
     // A genuinely different situation from the branch above -- this person
@@ -521,10 +579,12 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
     // bar -- fall back to the generic list rather than showing an empty
     // tab. Still recorded as personalized=false so the next call retries
     // the real ranking instead of trusting this fallback as settled.
-    const fallback = candidates.slice(0, TARGET_COUNT);
+    const fallbackItems = pinPreviouslyShownJobs(
+      candidates.slice(0, TARGET_COUNT).map((job) => ({ job, fit: null, reason: null }))
+    );
     replaceUserOpportunities(
       userId,
-      fallback.map((job, i) => ({ jobPostingId: job.id, rank: i + 1, fit: null, reason: null })),
+      fallbackItems.map((item, i) => ({ jobPostingId: item.job.id, rank: i + 1, fit: item.fit, reason: item.reason })),
       { personalized: false, memoryCountAtGeneration: memoryCount }
     );
     return {
@@ -532,18 +592,20 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
       memoryCount,
       memoriesNeeded,
       statedPreferences: prefs,
-      opportunities: fallback.map((job) => toCard(job, null, null, feedbackMap[job.id] ?? null)),
+      opportunities: fallbackItems.map((item) => toCard(item.job, item.fit, item.reason, feedbackMap[item.job.id] ?? null)),
     };
   }
 
   const byId = new Map(candidates.map((job) => [job.id, job]));
-  const items = ranked
-    .map((r) => {
-      const job = byId.get(r.id);
-      return job ? { job, fit: r.fit as OpportunityCard["fit"], reason: r.reason } : null;
-    })
-    .filter((x): x is { job: JobPosting; fit: OpportunityCard["fit"]; reason: string } => x !== null)
-    .slice(0, TARGET_COUNT);
+  const items = pinPreviouslyShownJobs(
+    ranked
+      .map((r) => {
+        const job = byId.get(r.id);
+        return job ? { job, fit: r.fit as OpportunityCard["fit"], reason: r.reason } : null;
+      })
+      .filter((x): x is { job: JobPosting; fit: OpportunityCard["fit"]; reason: string } => x !== null)
+      .slice(0, TARGET_COUNT)
+  );
 
   replaceUserOpportunities(
     userId,
