@@ -5,6 +5,7 @@ import { personalize, renderCampaignBodyHtml, htmlToPlainText, wrapBrandedEmail 
 import { renderWelcomeEmailHtml, renderWelcomeEmailText } from "@/lib/emailWelcome";
 import { renderGiftEmailHtml, renderGiftEmailText, type GiftPlan } from "@/lib/emailGift";
 import { renderProductUpdateEmailHtml, renderProductUpdateEmailText } from "@/lib/emailProductUpdate";
+import { renderAppLinkEmailHtml, renderAppLinkEmailText } from "@/lib/emailAppLink";
 
 // Sends outbound email via AWS SES. Uses the standard AWS SDK env vars
 // (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) so it picks up
@@ -155,6 +156,42 @@ export async function sendWelcomeEmail(params: { toEmail: string; firstName: str
     return true;
   } catch (e) {
     console.error(`Failed to send welcome email to ${params.toEmail} via SES:`, e);
+    Sentry.captureException(e);
+    return false;
+  }
+}
+
+// Sent the moment a desktop (or iOS) visitor on strivo.ai types their email
+// into the QR modal's "email me the link instead" option -- see
+// PlayStoreLink.tsx and emailAppLink.ts for the full reasoning. No account
+// is touched or created by this; `toEmail` is whatever the visitor typed
+// into that one-off form, not a Strivo user's account email. Never throws;
+// returns false on any failure so the caller can show a generic error
+// without crashing the request.
+export async function sendAppLinkEmail(params: { toEmail: string; downloadUrl: string }): Promise<boolean> {
+  if (!sesConfigured()) {
+    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping app-link email.");
+    return false;
+  }
+
+  try {
+    await getClient().send(
+      new SendEmailCommand({
+        Source: FROM_EMAIL,
+        Destination: { ToAddresses: [params.toEmail] },
+        Message: {
+          Subject: { Data: "Your Strivo download link", Charset: "UTF-8" },
+          Body: {
+            Html: { Data: renderAppLinkEmailHtml(params.downloadUrl), Charset: "UTF-8" },
+            Text: { Data: renderAppLinkEmailText(params.downloadUrl), Charset: "UTF-8" },
+          },
+        },
+      })
+    );
+    console.log(`App-link email sent to ${params.toEmail} via SES.`);
+    return true;
+  } catch (e) {
+    console.error(`Failed to send app-link email to ${params.toEmail} via SES:`, e);
     Sentry.captureException(e);
     return false;
   }

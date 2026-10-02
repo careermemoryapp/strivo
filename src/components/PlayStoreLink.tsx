@@ -116,6 +116,15 @@ export function PlayStoreLink({
   // nothing can be clicked before the page reaches a real browser anyway.
   const [isAndroid] = useState(() => typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent));
   const [showQr, setShowQr] = useState(false);
+  // Added 2026-10-02, direct founder call: GA4's device-category report
+  // shows most strivo.ai visits are desktop, where scanning the QR code
+  // above means stopping to pick up and unlock a phone right that second.
+  // Emailing the link instead lets someone grab it later from their
+  // phone's own mail app -- see /api/send-app-link and emailAppLink.ts.
+  // Local to this one modal instance; resets if it's closed and reopened,
+  // which is fine -- there's nothing worth persisting past a closed modal.
+  const [email, setEmail] = useState("");
+  const [emailStatus, setEmailStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
 
   // Rewritten 2026-09-29, second founder pass, from a screenshot + voice
   // note: the first version revealed the QR code inline, stacked directly
@@ -160,6 +169,29 @@ export function PlayStoreLink({
     if (!isAndroid) {
       e.preventDefault();
       setShowQr(true);
+    }
+  }
+
+  async function handleEmailSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setEmailStatus("sending");
+    try {
+      const res = await fetch("/api/send-app-link", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      if (!res.ok) {
+        setEmailStatus("error");
+        return;
+      }
+      setEmailStatus("sent");
+      window.gtag?.("event", "email_link_requested", {
+        link_location: location,
+        page_path: window.location.pathname,
+      });
+    } catch {
+      setEmailStatus("error");
     }
   }
 
@@ -229,6 +261,68 @@ export function PlayStoreLink({
               <div className="mt-1 rounded-xl bg-white p-3">
                 <QRCode value={destination} size={168} />
               </div>
+
+              <div className="mt-1 flex w-full items-center gap-2.5 text-[#4a4a55]">
+                <div className="h-px flex-1 bg-[#2a2a35]" />
+                <span className="text-[11px] font-semibold uppercase tracking-wide">or</span>
+                <div className="h-px flex-1 bg-[#2a2a35]" />
+              </div>
+
+              {emailStatus === "sent" ? (
+                <p className="text-center text-sm font-semibold text-[#6ee7b7]">
+                  Sent! Check your inbox on your phone.
+                </p>
+              ) : (
+                <form onSubmit={handleEmailSubmit} className="flex w-full flex-col gap-2">
+                  <label htmlFor="play-store-link-email" className="sr-only">
+                    Email address
+                  </label>
+                  <input
+                    id="play-store-link-email"
+                    type="email"
+                    required
+                    value={email}
+                    onChange={(ev) => setEmail(ev.target.value)}
+                    placeholder="you@email.com"
+                    className="w-full rounded-full border border-[#2a2a35] bg-[#17151f] px-4 py-2.5 text-sm text-white placeholder:text-[#5a5a66] focus:border-[#7c3aed] focus:outline-none"
+                  />
+                  <button
+                    type="submit"
+                    disabled={emailStatus === "sending"}
+                    className="w-full rounded-full bg-[#1e1e26] px-4 py-2.5 text-sm font-bold text-white transition-colors hover:bg-[#262630] disabled:opacity-60"
+                  >
+                    {emailStatus === "sending" ? "Sending…" : "Email me the link"}
+                  </button>
+                  {emailStatus === "error" && (
+                    <p className="text-center text-xs text-[#f87171]">Couldn&apos;t send that — try again.</p>
+                  )}
+                </form>
+              )}
+
+              <div className="mt-1 flex w-full items-center gap-2.5 text-[#4a4a55]">
+                <div className="h-px flex-1 bg-[#2a2a35]" />
+                <span className="text-[11px] font-semibold uppercase tracking-wide">or</span>
+                <div className="h-px flex-1 bg-[#2a2a35]" />
+              </div>
+
+              {/* Added back 2026-10-02, direct founder call: before the QR
+                  fallback (2026-09-29) this link was the only thing a
+                  desktop click did. Some visitors already have Android
+                  signed into the same Google account on this computer (or
+                  just want the Play Store page itself, e.g. to read
+                  reviews first) -- for them "Install on more devices"
+                  genuinely works, or is still the path they expect. The QR
+                  code and email option above cover everyone else; this
+                  restores the direct path instead of removing it. */}
+              <a
+                href={destination}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setShowQr(false)}
+                className="w-full rounded-full border border-[#2a2a35] px-4 py-2.5 text-center text-sm font-bold text-[#c7c7d1] transition-colors hover:border-[#4a4a55] hover:text-white"
+              >
+                View on Google Play
+              </a>
             </div>
           </div>,
           document.body
