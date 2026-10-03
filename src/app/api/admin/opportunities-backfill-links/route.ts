@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthed } from "@/lib/adminAuth";
-import { resolveDirectApplyUrl, resolverProxyConfigured, mapWithConcurrency } from "@/lib/applyLinkResolver";
+import { resolveApplyUrlChecked, resolverProxyConfigured, mapWithConcurrency } from "@/lib/applyLinkResolver";
 import { isAggregatorDomain } from "@/lib/config";
 import {
   listJobsNeedingLinkBackfill,
   countJobsNeedingLinkBackfill,
   applyBackfillResult,
+  deleteJobPosting,
 } from "@/lib/repo/jobPostings";
 
 // One-time (repeat-until-done) backfill for the admin dashboard's
@@ -39,6 +40,18 @@ import {
 // Apply button" flow the founder already confirmed works and explicitly
 // accepted.
 //
+// Uses resolveApplyUrlChecked, not the cheaper resolveDirectApplyUrl --
+// see that function's own comment in applyLinkResolver.ts. Direct founder
+// report (2026-10-03, after watching this very backfill run): clicking a
+// job he was shown landed on Adzuna's own page plainly saying the listing
+// was no longer available -- not the "needs one more click" case this
+// route already knew about, a genuinely DEAD listing that was sitting in
+// the pool looking just like a live one. "There is no point showing jobs
+// that aren't available -- it makes users lose trust." A dead listing
+// (reason "dead") is deleted outright (deleteJobPosting), not just marked
+// checked with the old link left in place -- there's nothing worth keeping
+// about a posting whose own page says it's gone.
+//
 // Bounded per call, same reasoning (and same numbers) as refresh-pool/
 // run's MAX_RESOLUTIONS_PER_RUN/RESOLVE_CONCURRENCY -- a burst of
 // thousands of simultaneous outbound requests in one HTTP call would both
@@ -65,6 +78,7 @@ export async function POST() {
   let resolvedDirectCount = 0;
   let stillAggregatorCount = 0;
   let unresolvedCount = 0;
+  let deadCount = 0; // posting's own page said it's gone -- deleted outright, see deleteJobPosting below
   let alreadyDirectCount = 0; // row's existing link wasn't actually an aggregator link -- just marked checked, nothing to resolve
   const topDomains = new Map<string, number>();
 
@@ -74,10 +88,13 @@ export async function POST() {
       applyBackfillResult(posting.id, null);
       return;
     }
-    const outcome = await resolveDirectApplyUrl(posting.source_url);
+    const outcome = await resolveApplyUrlChecked(posting.source_url);
     if (outcome.url) {
       resolvedDirectCount++;
       applyBackfillResult(posting.id, outcome.url);
+    } else if (outcome.reason === "dead") {
+      deadCount++;
+      deleteJobPosting(posting.id); // not applyBackfillResult -- nothing left worth marking checked, the row is gone
     } else {
       applyBackfillResult(posting.id, null);
       if (outcome.reason === "aggregator") {
@@ -99,6 +116,7 @@ export async function POST() {
     resolvedDirectCount,
     stillAggregatorCount,
     unresolvedCount,
+    deadCount,
     alreadyDirectCount,
     topAggregatorDomains,
     remaining: countJobsNeedingLinkBackfill(),

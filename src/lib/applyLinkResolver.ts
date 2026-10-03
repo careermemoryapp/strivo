@@ -158,6 +158,59 @@ export async function resolveFinalUrl(url: string): Promise<string | null> {
   }
 }
 
+// How much of a response body to read when checking whether a listing says
+// it's dead (see resolveApplyUrlChecked below) -- enough to contain the
+// "this job is no longer available" message, which sits near the top of
+// Adzuna's own details/landing pages, without buffering a full page (some
+// run past 500KB) for every one of 15,000+ postings. A direct founder
+// report (2026-10-03): clicking into a job landed on an Adzuna page that
+// plainly said the listing was gone -- not a redirect failure, a real
+// "this is gone" page that resolveFinalUrl's old cancel-the-body-
+// immediately behavior had no way to notice, so a dead listing just sat in
+// the pool looking identical to a live one until a person actually clicked
+// it. Deliberately conservative on bandwidth: reading 64KB/check against
+// 15,000 postings is under 1GB total, comfortably inside the 5GB this
+// proxy was bought with (see RESOLVER_PROXY_URL's own comment).
+const AVAILABILITY_CHECK_MAX_BYTES = 65536;
+
+// Case-INsensitive substrings that mean "the page itself says this listing
+// is gone" -- exactly the wording from the founder's own screenshot
+// ("Unfortunately, this job is no longer available"). Matched against
+// whatever text actually loaded, so this only ever fires on a real page
+// that says so, never on a resolution failure (that's the separate
+// "unresolved" reason below, same as always). Add more phrasings here if
+// another dead-listing wording turns up on a different source domain.
+const DEAD_LISTING_MARKERS = ["no longer available"];
+
+// Reads up to maxBytes off a response body and decodes it as text, then
+// cancels the rest of the stream -- a bounded alternative to
+// response.text() (which buffers the WHOLE body) for exactly the same
+// reason resolveFinalUrl cancels outright: this is called per-posting,
+// across thousands of postings in one run, and nothing here needs more
+// than the first screenful of HTML.
+async function readBoundedText(body: ReadableStream<Uint8Array> | null, maxBytes: number): Promise<string> {
+  if (!body) return "";
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let text = "";
+  let received = 0;
+  try {
+    while (received < maxBytes) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      received += value.byteLength;
+      text += decoder.decode(value, { stream: true });
+    }
+  } catch {
+    // A truncated/aborted read still leaves `text` with whatever decoded
+    // so far -- good enough for a substring check, so this is swallowed
+    // rather than treated as a resolution failure.
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+  return text;
+}
+
 // The one function refresh-pool/run actually calls: resolve, then judge.
 // Returns a discriminated result rather than a bare string|null -- a job
 // still gets dropped either way (that product decision hasn't changed),
@@ -180,7 +233,15 @@ export type ApplyUrlResolution =
   // Resolved fine, but the final landed host is on the denylist -- domain
   // is the actual hostname that matched, so a run-level tally can show
   // e.g. "adzuna.in (150)" instead of a single opaque number.
-  | { url: null; reason: "aggregator"; domain: string };
+  | { url: null; reason: "aggregator"; domain: string }
+  // The page itself loaded and plainly said the listing is gone (see
+  // DEAD_LISTING_MARKERS/resolveApplyUrlChecked) -- distinct from
+  // "unresolved" (couldn't reach a verdict at all) and from "aggregator"
+  // (landed somewhere we don't trust, but that page didn't say the job was
+  // dead). Callers that see this should remove the posting outright, not
+  // just fall back to showing Adzuna's own link -- that link is exactly
+  // what led here.
+  | { url: null; reason: "dead" };
 
 export async function resolveDirectApplyUrl(redirectUrl: string): Promise<ApplyUrlResolution> {
   const finalUrl = await resolveFinalUrl(redirectUrl);
@@ -189,6 +250,35 @@ export async function resolveDirectApplyUrl(redirectUrl: string): Promise<ApplyU
     return { url: null, reason: "aggregator", domain: hostnameOf(finalUrl) ?? finalUrl };
   }
   return { url: finalUrl };
+}
+
+// Same as resolveDirectApplyUrl, PLUS a check of whether the landed page
+// itself says the listing is gone (see AVAILABILITY_CHECK_MAX_BYTES/
+// DEAD_LISTING_MARKERS above) -- the two differ only in whether the body
+// gets read at all: resolveDirectApplyUrl cancels it immediately (cheapest
+// possible check, "did this resolve to a trusted domain"), this one reads
+// a bounded slice of it too so a page that loaded FINE but plainly says
+// "no longer available" doesn't get treated as a normal aggregator/portal
+// link. Used by the admin backfill (re-checking the existing pool) and by
+// refresh-pool/run's resolution of brand-new postings -- both places that
+// actually decide whether a listing enters/stays in the pool, as opposed
+// to debug-only probes that don't need the extra read.
+export async function resolveApplyUrlChecked(redirectUrl: string): Promise<ApplyUrlResolution> {
+  try {
+    const res = await impitClient.fetch(redirectUrl, { method: "GET", redirect: "follow" });
+    const text = await readBoundedText(res.body, AVAILABILITY_CHECK_MAX_BYTES);
+    if (!res.url) return { url: null, reason: "unresolved" };
+    const lower = text.toLowerCase();
+    if (DEAD_LISTING_MARKERS.some((marker) => lower.includes(marker))) {
+      return { url: null, reason: "dead" };
+    }
+    if (isAggregatorDomain(res.url)) {
+      return { url: null, reason: "aggregator", domain: hostnameOf(res.url) ?? res.url };
+    }
+    return { url: res.url };
+  } catch {
+    return { url: null, reason: "unresolved" };
+  }
 }
 
 // Runs `fn` over `items` with at most `limit` in flight at once -- plain

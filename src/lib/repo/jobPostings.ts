@@ -197,6 +197,41 @@ export function applyBackfillResult(id: string, resolvedUrl: string | null): voi
   }
 }
 
+// Clears backfill_checked_at on every row that has one, so the NEXT click
+// of "Backfill existing links" starts a fresh pass over the whole active
+// pool instead of skipping everything already marked checked. Exists
+// specifically for upgrading WHAT the backfill checks for: the very first
+// backfill pass (2026-10-03) only re-resolved links (resolveDirectApplyUrl)
+// -- it did NOT yet check whether a landed page says the listing is dead
+// (that check, resolveApplyUrlChecked, shipped right after). Postings
+// marked checked by that first pass were never actually looked at for
+// "no longer available," and listJobsNeedingLinkBackfill's WHERE
+// backfill_checked_at IS NULL means they'd silently never be reconsidered
+// -- a founder clicking "run until done" again would see "all done!"
+// immediately, with the vast majority of the pool never having been
+// checked under the new logic at all. One-time use (admin "Re-check whole
+// pool" button) whenever what the backfill looks for changes again, not
+// something to run routinely.
+export function resetLinkBackfillProgress(): number {
+  const db = getDb();
+  const result = db.prepare(`UPDATE job_postings SET backfill_checked_at = NULL WHERE backfill_checked_at IS NOT NULL`).run();
+  return Number(result.changes);
+}
+
+// Removes ONE posting outright -- used when resolveApplyUrlChecked (see
+// applyLinkResolver.ts) finds the listing's own page plainly says it's
+// gone (reason "dead"), as opposed to merely unresolved/aggregator, where
+// the posting is kept and shown with Adzuna's own link as before. Unlike
+// applyBackfillResult, there's no "leave source_url as-is" option here --
+// a confirmed-dead listing has nothing worth keeping around to show.
+// job_postings.id is referenced by user_opportunities.job_posting_id with
+// ON DELETE CASCADE (see lib/db.ts), so this also quietly drops the
+// posting from anyone's cached list without a separate cleanup step.
+export function deleteJobPosting(id: string): void {
+  const db = getDb();
+  db.prepare(`DELETE FROM job_postings WHERE id = ?`).run(id);
+}
+
 // Drops rows that haven't shown up in ANY refresh for a while -- the
 // source listing is presumably gone/filled. Called at the end of
 // refresh-pool/run, after that run's own upserts have already bumped

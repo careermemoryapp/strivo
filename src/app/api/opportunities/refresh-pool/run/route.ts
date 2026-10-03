@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthed, checkOpportunitiesRefreshSecret } from "@/lib/adminAuth";
 import { adzunaConfigured, searchAdzunaJobs, type AdzunaJob } from "@/lib/adzuna";
-import { resolveDirectApplyUrl, mapWithConcurrency } from "@/lib/applyLinkResolver";
+import { resolveApplyUrlChecked, mapWithConcurrency } from "@/lib/applyLinkResolver";
 import { OPPORTUNITY_CITIES } from "@/lib/geo";
 import {
   upsertJobPosting,
@@ -240,6 +240,14 @@ export async function POST(req: Request) {
   let unresolvedCount = 0;
   let aggregatorCount = 0;
   const aggregatorDomainCounts = new Map<string, number>();
+  // A brand-new posting whose OWN page already says it's gone (reason
+  // "dead" -- see resolveApplyUrlChecked's comment in applyLinkResolver.ts
+  // and deadCount's comment in the admin backfill route for the full
+  // story) is never saved at all -- there's no older "it used to work"
+  // version of a job that's never been in the pool, so unlike the backfill
+  // route there's nothing to delete, just nothing to upsert in the first
+  // place.
+  let deadSkippedCount = 0;
 
   const cells: QueryCell[] = [];
   for (const fn of chunkFunctions) for (const city of CITIES) cells.push({ fn, city });
@@ -306,10 +314,22 @@ export async function POST(req: Request) {
     // changes -- when it does succeed, that verified direct URL is what
     // gets shown instead of the raw redirect.
     await mapWithConcurrency(toResolve, RESOLVE_CONCURRENCY, async (job) => {
-      const outcome = await resolveDirectApplyUrl(job.link);
+      // resolveApplyUrlChecked, not the cheaper resolveDirectApplyUrl --
+      // reads a bounded slice of the landed page so a listing whose OWN
+      // page already says "no longer available" at the moment it's first
+      // discovered (Adzuna's search results can lag reality) gets caught
+      // here too, not just by the separate admin backfill that re-checks
+      // what's already in the pool. See that function's own comment in
+      // applyLinkResolver.ts.
+      const outcome = await resolveApplyUrlChecked(job.link);
       if (outcome.url) {
         upsertJobPosting({ ...job, link: outcome.url }, cell.fn, cell.city);
         resolvedDirectCount++;
+        jobsUpserted++;
+        jobsNew++;
+      } else if (outcome.reason === "dead") {
+        // Not upserted at all -- see deadSkippedCount's own comment above.
+        deadSkippedCount++;
       } else {
         upsertJobPosting(job, cell.fn, cell.city);
         rawRedirectCount++;
@@ -319,9 +339,9 @@ export async function POST(req: Request) {
         } else {
           unresolvedCount++;
         }
+        jobsUpserted++;
+        jobsNew++;
       }
-      jobsUpserted++;
-      jobsNew++;
     });
 
     // Past MAX_RESOLUTIONS_PER_RUN -- shown too, just without spending an
@@ -425,6 +445,10 @@ export async function POST(req: Request) {
     rawRedirectCount,
     unresolvedCount,
     aggregatorCount,
+    // How many brand-new postings were skipped entirely (never saved) this
+    // run because their own page already said they're gone -- see
+    // deadSkippedCount's own comment above.
+    deadSkippedCount,
     topAggregatorDomains: Array.from(aggregatorDomainCounts.entries())
       .sort((a, b) => b[1] - a[1])
       .slice(0, 8)

@@ -507,6 +507,13 @@ export default function AdminDashboardPage() {
   const [oppBackfillError, setOppBackfillError] = useState<string | null>(null);
   const [oppBackfillAuto, setOppBackfillAuto] = useState(false);
   const oppBackfillStopRef = useRef(false);
+  // "Re-check whole pool" -- see resetLinkBackfillProgress's comment in
+  // lib/repo/jobPostings.ts. Only needs to exist, and only needs clicking,
+  // right after the backfill's own logic changes (so postings already
+  // marked checked under the old logic get looked at again under the new
+  // one) -- not a routine control.
+  const [oppBackfillResetting, setOppBackfillResetting] = useState(false);
+  const [confirmResetBackfill, setConfirmResetBackfill] = useState(false);
   const [oppFeedbackStats, setOppFeedbackStats] = useState<{
     relevant: number;
     notForMe: number;
@@ -600,7 +607,7 @@ export default function AdminDashboardPage() {
             }]`
           : "";
       setOppResult(
-        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Verified direct link: ${json.resolvedDirectCount} · Shown via Adzuna's own redirect link: ${json.rawRedirectCount}${rawBreakdown} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
+        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Verified direct link: ${json.resolvedDirectCount} · Shown via Adzuna's own redirect link: ${json.rawRedirectCount}${rawBreakdown} · Already gone, never saved: ${json.deadSkippedCount ?? 0} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
       );
       // Merges onto the existing state (keeping resolverProxyConfigured,
       // which this response doesn't include) rather than replacing it
@@ -636,7 +643,7 @@ export default function AdminDashboardPage() {
     const json = await res.json();
     const domainsNote = json.topAggregatorDomains?.length ? ` -- ${json.topAggregatorDomains.join(", ")}` : "";
     setOppBackfillResult(
-      `Checked ${json.batchSize} posting${json.batchSize === 1 ? "" : "s"} · Now resolve directly: ${json.resolvedDirectCount} · Still need Adzuna's own redirect: ${json.stillAggregatorCount}${domainsNote} · Couldn't resolve (network/timeout): ${json.unresolvedCount} · Already had a direct link: ${json.alreadyDirectCount} · Left to check: ${json.remaining}${
+      `Checked ${json.batchSize} posting${json.batchSize === 1 ? "" : "s"} · Now resolve directly: ${json.resolvedDirectCount} · Still need Adzuna's own redirect: ${json.stillAggregatorCount}${domainsNote} · Couldn't resolve (network/timeout): ${json.unresolvedCount} · Removed, no longer available: ${json.deadCount ?? 0} · Already had a direct link: ${json.alreadyDirectCount} · Left to check: ${json.remaining}${
         json.remaining > 0 ? "" : " -- all done!"
       }`
     );
@@ -698,6 +705,26 @@ export default function AdminDashboardPage() {
   const stopOpportunitiesBackfillAll = useCallback(() => {
     oppBackfillStopRef.current = true;
   }, []);
+
+  const runOpportunitiesBackfillReset = useCallback(async () => {
+    setOppBackfillResetting(true);
+    setOppBackfillError(null);
+    try {
+      const res = await fetch("/api/admin/opportunities-reset-backfill", { method: "POST" });
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) throw new Error();
+      const json = (await res.json()) as { reset: number };
+      setOppBackfillResult(
+        `Reset ${json.reset.toLocaleString()} posting${json.reset === 1 ? "" : "s"} back to "not yet checked." Click "Backfill existing links" (either button) to re-check the whole pool under the current logic.`
+      );
+      loadOpportunitiesStatus();
+    } catch {
+      setOppBackfillError("Couldn't reset backfill progress. Try again.");
+    } finally {
+      setOppBackfillResetting(false);
+      setConfirmResetBackfill(false);
+    }
+  }, [handleUnauthorized, loadOpportunitiesStatus]);
 
   const runOpportunitiesTestResolve = useCallback(async () => {
     setOppTesting(true);
@@ -1948,12 +1975,22 @@ export default function AdminDashboardPage() {
                   Backfill existing links (run until done)
                 </Button>
               )}
+              <Button
+                variant="ghost"
+                className="!py-2 !px-3 text-[13px]"
+                loading={oppBackfillResetting}
+                onClick={() => setConfirmResetBackfill(true)}
+              >
+                Re-check whole pool
+              </Button>
             </div>
             {oppUsage?.resolverProxyConfigured && (
               <p className="mt-1.5 text-[11.5px] text-ink-faint">
                 At this pool size, a full backfill is roughly {Math.max(1, Math.ceil((oppUsage.jobsNeedingBackfill ?? 0) / 150))} batches.
                 &quot;Run until done&quot; clicks through all of them on its own, a batch at a time -- keep this tab open while it runs; it picks up
-                right where it left off if you close it or click Stop.
+                right where it left off if you close it or click Stop. &quot;Re-check whole pool&quot; resets every posting back to &quot;not yet
+                checked&quot; -- only needed right after a change to what the backfill actually checks for (e.g. adding the dead-listing check),
+                so postings already checked under the OLD logic get looked at again under the new one.
               </p>
             )}
             {oppError && <p className="mt-2 text-[13px] text-red-600">{oppError}</p>}
@@ -3134,6 +3171,16 @@ export default function AdminDashboardPage() {
         loading={oppPurging}
         onConfirm={runOpportunitiesPurge}
         onCancel={() => setConfirmPurgePool(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmResetBackfill}
+        title="Re-check the whole pool?"
+        description="Marks every already-checked posting as not-yet-checked again, so the next backfill pass re-examines the entire active pool under today's logic instead of skipping everything already marked checked. Only needed right after the backfill's own checks change -- nothing is deleted by this step itself, it just queues everything up to be re-checked."
+        confirmLabel="Reset"
+        loading={oppBackfillResetting}
+        onConfirm={runOpportunitiesBackfillReset}
+        onCancel={() => setConfirmResetBackfill(false)}
       />
     </div>
   );
