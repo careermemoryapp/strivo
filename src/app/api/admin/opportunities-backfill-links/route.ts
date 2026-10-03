@@ -1,13 +1,54 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthed } from "@/lib/adminAuth";
-import { resolveApplyUrlChecked, resolverProxyConfigured, mapWithConcurrency } from "@/lib/applyLinkResolver";
+import { resolveDirectApplyUrl, resolverProxyConfigured, mapWithConcurrency } from "@/lib/applyLinkResolver";
 import { isAggregatorDomain } from "@/lib/config";
 import {
   listJobsNeedingLinkBackfill,
   countJobsNeedingLinkBackfill,
   applyBackfillResult,
-  deleteJobPosting,
 } from "@/lib/repo/jobPostings";
+
+// *** 2026-10-03, same day: the "dead listing" auto-delete below (reason
+// "dead" -> deleteJobPosting) is DISABLED, reverted back to the plain
+// resolveDirectApplyUrl this route used before. Direct founder report
+// right after running a full pool pass with it live: his own Opportunities
+// list dropped to ~2 jobs out of 14,000+ active. One batch's own numbers
+// (26 of 60 marked "dead" -- a 43% rate) were already an immediate red
+// flag in hindsight: no real job board has that fraction of its current
+// listings already expired at any given moment. The far more likely
+// explanation is a FALSE POSITIVE in DEAD_LISTING_MARKERS -- "no longer
+// available" matched as a plain substring against the first 64KB of
+// whatever page loaded, with zero verification first against real known-
+// live vs known-dead examples. Adzuna's own listing/landing pages very
+// plausibly carry that exact phrase somewhere as generic template
+// boilerplate (a "heads up, listings can expire" disclaimer, or copy
+// attached to a "similar jobs" widget) on EVERY page, live or not -- which
+// would explain a run deleting most of an active pool, not just the
+// occasional genuinely-gone posting. Until that's confirmed one way or
+// the other against real examples (and, if confirmed, fixed with a far
+// more specific signal than a bare substring match), resolveApplyUrlChecked
+// stays defined in applyLinkResolver.ts but UNUSED by both call sites that
+// used to delete/skip on it (this route and refresh-pool/run) -- see each
+// one's own revert note. Nothing here recovers the postings already
+// deleted by the one pass that did run with this live; that pool rebuilds
+// over time through ordinary Refresh runs (a deleted external_id is
+// indistinguishable from a never-seen one, so it's simply treated as new
+// again), bounded by Adzuna's normal daily/weekly call caps.
+//
+// Only ever resolves rows whose CURRENT source_url is still on the
+// aggregator denylist (isAggregatorDomain) -- a row that already resolved
+// to a direct employer link (rare pre-proxy, but possible) is left alone
+// and just marked checked, same as this file's own history of "attempted
+// marker kept separate from the result" (classified_at, logo_looked_up_at).
+// A row that still comes back aggregator/unresolved after this attempt
+// (most commonly a sponsored/Appcast-routed listing that lands on
+// Adzuna's own page by DESIGN, not by IP block -- see the founder-
+// confirmed finding in admin/page.tsx's resolver-test history) is marked
+// checked too, so a later click doesn't keep re-spending a resolution
+// request on a listing that will never resolve past Adzuna's own landing
+// page -- that's not a bug, it's the same "land on Adzuna, tap their own
+// Apply button" flow the founder already confirmed works and explicitly
+// accepted.
 
 // One-time (repeat-until-done) backfill for the admin dashboard's
 // Opportunities section -- see backfill_checked_at's comment in lib/db.ts
@@ -40,18 +81,6 @@ import {
 // Apply button" flow the founder already confirmed works and explicitly
 // accepted.
 //
-// Uses resolveApplyUrlChecked, not the cheaper resolveDirectApplyUrl --
-// see that function's own comment in applyLinkResolver.ts. Direct founder
-// report (2026-10-03, after watching this very backfill run): clicking a
-// job he was shown landed on Adzuna's own page plainly saying the listing
-// was no longer available -- not the "needs one more click" case this
-// route already knew about, a genuinely DEAD listing that was sitting in
-// the pool looking just like a live one. "There is no point showing jobs
-// that aren't available -- it makes users lose trust." A dead listing
-// (reason "dead") is deleted outright (deleteJobPosting), not just marked
-// checked with the old link left in place -- there's nothing worth keeping
-// about a posting whose own page says it's gone.
-//
 // Bounded per call, same reasoning (and same numbers) as refresh-pool/
 // run's MAX_RESOLUTIONS_PER_RUN/RESOLVE_CONCURRENCY -- a burst of
 // thousands of simultaneous outbound requests in one HTTP call would both
@@ -78,7 +107,6 @@ export async function POST() {
   let resolvedDirectCount = 0;
   let stillAggregatorCount = 0;
   let unresolvedCount = 0;
-  let deadCount = 0; // posting's own page said it's gone -- deleted outright, see deleteJobPosting below
   let alreadyDirectCount = 0; // row's existing link wasn't actually an aggregator link -- just marked checked, nothing to resolve
   const topDomains = new Map<string, number>();
 
@@ -88,13 +116,10 @@ export async function POST() {
       applyBackfillResult(posting.id, null);
       return;
     }
-    const outcome = await resolveApplyUrlChecked(posting.source_url);
+    const outcome = await resolveDirectApplyUrl(posting.source_url);
     if (outcome.url) {
       resolvedDirectCount++;
       applyBackfillResult(posting.id, outcome.url);
-    } else if (outcome.reason === "dead") {
-      deadCount++;
-      deleteJobPosting(posting.id); // not applyBackfillResult -- nothing left worth marking checked, the row is gone
     } else {
       applyBackfillResult(posting.id, null);
       if (outcome.reason === "aggregator") {
@@ -116,7 +141,6 @@ export async function POST() {
     resolvedDirectCount,
     stillAggregatorCount,
     unresolvedCount,
-    deadCount,
     alreadyDirectCount,
     topAggregatorDomains,
     remaining: countJobsNeedingLinkBackfill(),

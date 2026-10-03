@@ -295,6 +295,66 @@ export function isAggregatorDomain(url: string): boolean {
   return AGGREGATOR_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
 }
 
+// Company names Adzuna (or the underlying recruiter feed behind a given
+// listing) sends in place of a real employer name -- almost always a sign
+// of an anonymized third-party recruiter posting, not a genuine company a
+// person could research or feel good about applying to. Direct founder
+// complaint (2026-10-03): "very unknown company, low quality profile...
+// I was not attracted to the jobs" -- distinct from the role/industry/
+// seniority fit lib/opportunities.ts already scores; this is about
+// whether the posting even names a real employer at all.
+//
+// Matched against the WHOLE trimmed, lowercased company string, never as a
+// substring -- so a real company whose name happens to contain one of
+// these words, e.g. "Confidential Technologies Pvt Ltd" or "National
+// Multinational Logistics", is never wrongly caught. These are placeholder
+// VALUES standing in for "no real name given," not words that can appear
+// within a real one.
+export const LOW_QUALITY_COMPANY_NAMES = [
+  "confidential",
+  "confidential company",
+  "undisclosed",
+  "undisclosed company",
+  "not disclosed",
+  "name not disclosed",
+  "name withheld",
+  "a reputed company",
+  "a reputed organisation",
+  "a reputed organization",
+  "reputed company",
+  "a leading company",
+  "leading company",
+  "a leading mnc",
+  "leading mnc",
+  "a reputed mnc",
+  "reputed mnc",
+  "top mnc",
+  "a multinational company",
+  "multinational company",
+  "fortune 500 company",
+  "n/a",
+  "na",
+  "none",
+  "unknown",
+  "unknown company",
+  "client",
+  "our client",
+  "a client",
+];
+
+// A null/empty company (Adzuna sent no company.display_name at all -- see
+// adzuna.ts, stored as null by upsertJobPosting) is the OTHER half of "no
+// real employer named" -- callers check `!job.company` for that half
+// themselves and this function for the placeholder-string half, since a
+// caller that already has `company: string | null` typed can't call this
+// with the empty case alone without a type guard anyway.
+export function isLowQualityCompanyName(name: string | null | undefined): boolean {
+  if (!name) return true;
+  const lower = name.trim().toLowerCase();
+  if (!lower) return true;
+  return LOW_QUALITY_COMPANY_NAMES.includes(lower);
+}
+
 // Fixed allow-list of Career Wrapped analytics events (see the spec's
 // analytics section) -- the single source of truth for both the client
 // trackEvent() helper (lib/trackEvent.ts) and the API route that persists
@@ -407,12 +467,6 @@ export const ONBOARDING_EVENTS = [
   // ever see the return-to-foreground, so a real completed sign-in never
   // fires this.
   "onboarding_resumed_incomplete",
-  // LoginPage mounted with ?error=signin_failed -- /api/auth/mobile-consume
-  // sends the WebView here whenever the one-time token it got handed was
-  // missing, expired, or already used, instead of completing sign-in. Lets
-  // us see this specific failure separately from someone just closing the
-  // Google tab on their own (onboarding_resumed_incomplete, above).
-  "onboarding_google_token_failed",
 ] as const;
 
 export const NEW_CHAT_TEMPLATES = [

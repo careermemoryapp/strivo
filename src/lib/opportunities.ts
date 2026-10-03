@@ -25,7 +25,7 @@ import {
   createSuggestedRoles,
   MIN_TOTAL_MEMORIES,
 } from "@/lib/repo/suggestedRoles";
-import { OPPORTUNITY_INDUSTRIES_LIST, OPPORTUNITY_SENIORITY_LIST } from "@/lib/config";
+import { OPPORTUNITY_INDUSTRIES_LIST, OPPORTUNITY_SENIORITY_LIST, isLowQualityCompanyName } from "@/lib/config";
 import { getJobPreferences, hasStatedPreferences, type JobPreferences } from "@/lib/repo/jobPreferences";
 import {
   listActiveJobPostings,
@@ -172,6 +172,20 @@ function keywordsFrom(text: string): string[] {
 // function/industry signal for the jobs that DO share real keyword overlap.
 const LOCATION_MATCH_BONUS = 8;
 
+// A job whose company got a REAL logo match from logo.dev (see
+// lib/logoLookup.ts, logo_domain) is a reasonable, cheap proxy for "this is
+// a brand a person has actually heard of, or could at least look up" --
+// since it already passed isShowableQuality's placeholder-name check above,
+// this is a soft tiebreaker among otherwise-real company names, not a
+// replacement for that hard check. Deliberately small relative to
+// INDUSTRY_MATCH_BONUS/SENIORITY_MATCH_BONUS below so a recognizable brand
+// never outranks a genuinely better function/industry/seniority fit -- and
+// deliberately a BONUS for having a logo, never a penalty for lacking one,
+// since logo_domain is also null for a company whose lookup simply hasn't
+// run yet (see listJobsNeedingLogoLookup) or a genuinely real, small
+// company logo.dev just doesn't have on file.
+const KNOWN_LOGO_BONUS = 4;
+
 // Structured 4-factor matching (function, industry, location, seniority) --
 // a direct founder call, after the earlier pure-keyword-overlap version of
 // this function (preFilterCandidates) couldn't reliably tell "Finance
@@ -272,6 +286,9 @@ function matchCandidates(
       if (boostCity && job.location && job.location.toLowerCase().includes(boostCity.toLowerCase())) {
         score += LOCATION_MATCH_BONUS;
       }
+      if (job.logo_domain) {
+        score += KNOWN_LOGO_BONUS;
+      }
       // A mismatch can't reach here any more -- the filter above already
       // excluded it when both sides were confidently known -- so this is
       // just the positive bonus for a confirmed match now, not a +/- either way.
@@ -363,6 +380,43 @@ function isRecentEnough(job: JobPosting): boolean {
   const postedMs = new Date(job.posted_date).getTime();
   if (Number.isNaN(postedMs)) return false;
   return Date.now() - postedMs <= MAX_JOB_AGE_DAYS * 24 * 60 * 60 * 1000;
+}
+
+// A near-empty description is a strong, cheap signal of a thin/scraped
+// listing -- not a genuine employer's own posting -- regardless of how
+// well its title happens to match. Chosen conservatively (a real one-line
+// posting easily clears this); not tuned against real data yet since this
+// app's production pool isn't reachable from here -- see isShowableQuality's
+// own comment for how to re-tune it from the admin debug numbers.
+const MIN_SNIPPET_LENGTH = 50;
+
+// Whether a posting is even worth surfacing to a real person at all --
+// separate from isRecentEnough (freshness) and passesHardFilters (fit).
+// Direct founder complaint (2026-10-03): "very unknown company, low
+// quality profile... I was not attracted to the jobs" -- a DIFFERENT
+// problem from role/industry/seniority mismatch, which matchCandidates/
+// rankOpportunities already handle; this is about whether the posting
+// itself names a real, researchable employer and says anything substantive
+// at all. Two cheap, uncontroversial checks: an anonymized/placeholder
+// company name (see isLowQualityCompanyName in lib/config.ts --
+// "Confidential", "Undisclosed", "A Reputed Company", ...) and a near-empty
+// description. Deliberately NOT a broad recruiter/staffing-agency name
+// filter (e.g. excluding every company name containing "Consultants" or
+// "Manpower") -- those ARE real postings for real roles, just routed
+// through a third-party recruiter, and a founder call would be needed
+// before risking starving the pool over that, the same way the "no longer
+// available" substring match turned into an undiagnosed false-positive
+// disaster (see this file's own git history / the backfill routes' revert
+// notes) by excluding/deleting on an unverified heuristic. This only ever
+// changes what's RANKED/SHOWN to a user -- never what's deleted from
+// job_postings itself, so there's no data-loss risk the way that bug had.
+// Check this against the admin debug endpoint's activePoolSize/
+// passesHardFilters numbers after deploying (see getOpportunitiesDebugInfo
+// below) before tightening it further.
+function isShowableQuality(job: JobPosting): boolean {
+  if (isLowQualityCompanyName(job.company)) return false;
+  if (!job.snippet || job.snippet.trim().length < MIN_SNIPPET_LENGTH) return false;
+  return true;
 }
 
 function isCacheFresh(
@@ -495,7 +549,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   // comment. Applied here, before the "pool is empty" check below, so a
   // pool that's technically non-empty but entirely stale reads the same
   // as a genuinely empty one rather than silently ranking old listings.
-  const pool = listActiveJobPostings().filter(isRecentEnough);
+  const pool = listActiveJobPostings().filter(isRecentEnough).filter(isShowableQuality);
   // Only a "not for me" tap should keep a job out of future matching passes
   // -- a direct founder report (2026-10-02): a job the person marked FIT was
   // silently vanishing from their list a few days later, even though it was
@@ -731,7 +785,7 @@ export function getOpportunitiesDebugInfo(userId: string): OpportunitiesDebugInf
   const userSeniority = suggestedRoles?.seniority ?? null;
   const userSeniorityRank = userSeniority ? SENIORITY_ORDER[userSeniority] : undefined;
 
-  const pool = listActiveJobPostings().filter(isRecentEnough);
+  const pool = listActiveJobPostings().filter(isRecentEnough).filter(isShowableQuality);
   const passing = pool.filter((job) => passesHardFilters(job, userIndustries, userSeniorityRank));
 
   const cache = getCachedOpportunities(userId);
