@@ -30,10 +30,10 @@ export async function GET(req: Request) {
   return NextResponse.json({
     ...getOpportunitiesDebugInfo(user.id),
     // Pool-wide, not scoped to this user -- see getActivePoolAgeDistribution's
-    // own comment for why this is included: MAX_JOB_AGE_DAYS=15 only lets a
-    // user's list draw from whichever bucket here is withinDays:15, which is
-    // usually a small slice of the pool's full "jobs active" count shown on
-    // the admin dashboard.
+    // own comment for why this is included: MAX_JOB_AGE_DAYS (lib/opportunities.ts
+    // -- 30 as of 2026-10-03) only lets a user's list draw from whichever
+    // bucket here matches it, which is usually a smaller slice of the
+    // pool's full "jobs active" count shown on the admin dashboard.
     poolAgeDistribution: getActivePoolAgeDistribution(),
   });
 }

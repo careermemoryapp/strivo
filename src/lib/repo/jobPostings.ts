@@ -398,8 +398,9 @@ export function countActiveJobPostings(): number {
 // Admin-only diagnostic (see app/api/admin/opportunities-debug/route.ts) --
 // direct founder question (2026-10-02): the admin dashboard's "jobs active"
 // figure (countActiveJobPostings, 40-day STALE_AFTER_DAYS window) and what
-// a user's own list actually draws from (MAX_JOB_AGE_DAYS=15 in
-// lib/opportunities.ts, checked against posted_date -- Adzuna's own
+// a user's own list actually draws from (MAX_JOB_AGE_DAYS in
+// lib/opportunities.ts -- 15 originally, widened to 30 on 2026-10-03, see
+// that constant's own comment -- checked against posted_date, Adzuna's own
 // "created" timestamp, fixed at first insert, never bumped by a later
 // refresh re-seeing the same listing) are two VERY different numbers, and
 // there was no way to see that gap without this. Buckets the same active

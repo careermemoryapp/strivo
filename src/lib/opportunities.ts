@@ -93,24 +93,22 @@ const CACHE_MAX_AGE_DAYS = 3;
 // separate from STALE_AFTER_DAYS in lib/repo/jobPostings.ts, which decides
 // how long a row stays in the raw pool at all (kept much looser than this,
 // at 40 days, so the pool itself doesn't go empty between a function's
-// chunk-refreshes -- see that constant's own comment). Direct founder
-// call: since each function only actually gets re-queried against Adzuna
-// roughly every 14-16 days (the chunked refresh-pool cadence -- see
-// app/api/opportunities/refresh-pool/run's top comment), a user's list
-// should never show anything older than that same ~15-day window, so what
-// they see always reflects a genuinely current pass over the job market
-// rather than a stale one sitting around for weeks. Checked against
-// job_postings.posted_date (Adzuna's own "created" timestamp, set once at
-// first insert and never overwritten -- see upsertJobPosting -- so this
-// age genuinely reflects the listing's real age, not just when we last
-// re-saw it). Note this is a little tight against the refresh cadence: for
-// a function whose chunk hasn't been re-queried in close to the full
-// 14-16 days, some of its older postings will drop out of a user's list a
-// day or two before that function's next refresh brings fresher ones in --
-// accepted deliberately, since the pool spans all 80 functions (only 1/5
-// of them are ever that close to their next refresh at once) and 3-day
-// cache means a user's own list re-pulls from the pool often anyway.
-const MAX_JOB_AGE_DAYS = 15;
+// chunk-refreshes -- see that constant's own comment). Originally set to
+// 15 (direct founder call, so a user's list would never lag much behind
+// the ~14-16-day chunked refresh-pool cadence -- see app/api/opportunities/
+// refresh-pool/run's top comment) -- widened to 30 on 2026-10-03, a second
+// direct founder call made alongside the industry hard-exclude -> soft
+// signal change above, once the classification backlog fix made clear how
+// thin a niche profile's eligible pool actually was at 15 days (1,345 of
+// 11,006 active postings). A posting this old is still very likely open
+// (most listings stay live for 30-60 days), and for a thin niche the extra
+// supply matters more than shaving a few days off freshness -- this is a
+// site-wide setting, so it widens everyone's pool, not just a niche
+// profile's. Checked against job_postings.posted_date (Adzuna's own
+// "created" timestamp, set once at first insert and never overwritten --
+// see upsertJobPosting -- so this age genuinely reflects the listing's
+// real age, not just when we last re-saw it).
+const MAX_JOB_AGE_DAYS = 30;
 // Re-rank once at least this many NEW memories have landed since the cache
 // was generated, even if it isn't stale by age yet -- new evidence should
 // visibly change the list, not sit unused until the next scheduled refresh.
@@ -206,21 +204,36 @@ const KNOWN_LOGO_BONUS = 4;
 // suggested-role titles below without any extra logic. Adding a second,
 // redundant bonus for the same signal would just double-count it.
 //
-// Seniority gets ONE genuine hard filter (see SENIORITY_HARD_EXCLUDE_GAP)
+// Seniority keeps its ONE genuine hard filter (see SENIORITY_HARD_EXCLUDE_GAP)
 // -- a direct founder ask that the tab actually stop showing obviously
 // wrong-level postings rather than relying entirely on the LLM ranking
-// step's judgment. Industry USED TO be soft-penalty-only (a "plausible
-// pivot" into an adjacent industry is exactly the kind of judgment call
-// rankOpportunities, lib/ai.ts, already makes well with the full posting
-// text in front of it, and a rigid filter risks wrongly emptying a thin
-// pool) -- direct founder override (2026-10-02), after real "not a fit"
-// taps kept climbing on confidently off-industry postings (a Legal
-// Secretary role shown to someone with zero legal background, concretely):
-// industry is now ALSO a hard exclude, same shape as seniority's. Both
-// signals still fall back to neutral (no bonus, no penalty, never excluded)
-// whenever either side of the comparison is unclassified/unknown -- an
-// unclassified posting or a person Strivo hasn't sized up yet should never
-// be punished for missing data it never had a chance to provide.
+// step's judgment. Industry's history is more winding: it STARTED as
+// soft-penalty-only (a "plausible pivot" into an adjacent industry is
+// exactly the kind of judgment call rankOpportunities, lib/ai.ts, already
+// makes well with the full posting text in front of it, and a rigid filter
+// risks wrongly emptying a thin pool), got promoted to a hard exclude on
+// 2026-10-02 after real "not a fit" taps kept climbing on confidently
+// off-industry postings (a Legal Secretary role shown to someone with zero
+// legal background) -- then, 2026-10-03, a direct founder call reverted it
+// back to soft, same day the classification backlog fix (see
+// countUnclassifiedActiveJobPostings in lib/repo/jobPostings.ts) finally
+// made the hard exclude's real effect visible: once most of the pool
+// actually had a real industry_tag, the hard exclude cut HIS OWN pool of
+// eligible postings from 1,284 to 245 for a niche profile (Automotive & EV
+// strategy) -- founder's own words: "even though my industry is automotive,
+// you should also consider parallel industries... where my skills can be
+// utilized... give priority [to the same industry], but also consider
+// other industries, not just automotive." A hard exclude can't express
+// "prefer X, but still show a well-argued Y" -- only a priority/soft-signal
+// can, which is exactly what INDUSTRY_MISMATCH_PENALTY below (paired with
+// INDUSTRY_MATCH_BONUS) does, with rankOpportunities' own existing
+// instruction ("a plausible pivot is fine, an unrelated field is not -- if
+// the profile shows no real connection at all... leave it out entirely")
+// as the real judgment call on which off-industry postings are genuine
+// transferable-skill stretches versus noise -- the same mechanism this
+// file's own history says was already the right tool for this, now
+// actually given candidates to judge instead of having them hard-excluded
+// before it ever saw them.
 const SENIORITY_ORDER: Record<string, number> = Object.fromEntries(
   OPPORTUNITY_SENIORITY_LIST.map((s, i) => [s, i])
 );
@@ -228,6 +241,14 @@ const SENIORITY_HARD_EXCLUDE_GAP = 2; // e.g. Entry-level vs Leadership -- only 
 const SENIORITY_MATCH_BONUS = 9;
 const SENIORITY_ADJACENT_BONUS = 3; // one band off either way -- still a normal, worth-showing stretch
 const INDUSTRY_MATCH_BONUS = 10;
+// Applied only when BOTH sides are confidently known and they DON'T match
+// -- same neutral-when-unknown shape as everything else here. Modest
+// relative to INDUSTRY_MATCH_BONUS (10) and the keyword/seniority bonuses,
+// so a same-industry posting still wins the pre-LLM top-80 cut whenever
+// enough of them exist, but a strong, clearly-relevant off-industry posting
+// (lots of keyword/seniority/location signal) can still surface instead of
+// being silently excluded outright.
+const INDUSTRY_MISMATCH_PENALTY = 5;
 
 // Maps a legacy freeform stated industry (see JobPreferences.industry --
 // typed into the now-removed filter form, still read here for anyone who
@@ -244,13 +265,15 @@ function canonicalIndustry(text: string | null | undefined): string | null {
   return OPPORTUNITY_INDUSTRIES_LIST.find((i) => i.toLowerCase() === lower) ?? null;
 }
 
-// The two hard excludes (seniority, industry) as ONE shared predicate --
-// pulled out so the admin debug helper below (getOpportunitiesDebugInfo)
-// can report EXACTLY how many postings clear this bar for a given person,
-// using the identical logic matchCandidates itself runs, rather than a
-// second hand-written copy that could silently drift out of sync with the
-// real filtering over time.
-function passesHardFilters(job: JobPosting, userIndustries: Set<string>, userSeniorityRank: number | undefined): boolean {
+// Seniority's hard exclude as its own predicate -- pulled out so the admin
+// debug helper below (getOpportunitiesDebugInfo) can report EXACTLY how
+// many postings clear this bar for a given person, using the identical
+// logic matchCandidates itself runs, rather than a second hand-written copy
+// that could silently drift out of sync with the real filtering over time.
+// Industry is deliberately NOT part of this predicate any more -- see
+// INDUSTRY_MISMATCH_PENALTY's own comment above for why it moved to a soft
+// scoring signal instead of a hard exclude.
+function passesHardFilters(job: JobPosting, userSeniorityRank: number | undefined): boolean {
   // Seniority -- skipped entirely (job stays eligible) unless BOTH the
   // job's own seniority_tag and this user's overall_seniority are
   // confidently known and land in valid, recognized bands.
@@ -258,10 +281,6 @@ function passesHardFilters(job: JobPosting, userIndustries: Set<string>, userSen
     const jobRank = SENIORITY_ORDER[job.seniority_tag];
     if (jobRank !== undefined && Math.abs(jobRank - userSeniorityRank) >= SENIORITY_HARD_EXCLUDE_GAP) return false;
   }
-  // Industry -- same shape: skipped entirely unless BOTH this user's
-  // industries AND the job's own industry_tag are confidently known, so a
-  // thin/unclassified signal is never punished for data it never had.
-  if (userIndustries.size > 0 && job.industry_tag && !userIndustries.has(job.industry_tag)) return false;
   return true;
 }
 
@@ -278,7 +297,7 @@ function matchCandidates(
   const userSeniorityRank = userSeniority ? SENIORITY_ORDER[userSeniority] : undefined;
   const scored = pool
     .filter((job) => !excludeIds.has(job.id))
-    .filter((job) => passesHardFilters(job, userIndustries, userSeniorityRank))
+    .filter((job) => passesHardFilters(job, userSeniorityRank))
     .map((job) => {
       const haystack = keywordsFrom(`${job.title} ${job.snippet ?? ""}`);
       let score = 0;
@@ -289,11 +308,17 @@ function matchCandidates(
       if (job.logo_domain) {
         score += KNOWN_LOGO_BONUS;
       }
-      // A mismatch can't reach here any more -- the filter above already
-      // excluded it when both sides were confidently known -- so this is
-      // just the positive bonus for a confirmed match now, not a +/- either way.
-      if (job.industry_tag && userIndustries.has(job.industry_tag)) {
-        score += INDUSTRY_MATCH_BONUS;
+      // Industry is a soft signal now, not a hard exclude -- see
+      // INDUSTRY_MISMATCH_PENALTY's own comment above. A confirmed match
+      // gets the bonus; a confident mismatch (both sides known) gets a
+      // smaller penalty instead of being filtered out outright, so a
+      // strong off-industry candidate can still reach the top-80 cut (and
+      // from there, rankOpportunities' own judgment on whether it's a
+      // genuine transferable-skill pivot or just noise) when there isn't
+      // enough same-industry supply to fill the list. Neutral (neither
+      // bonus nor penalty) whenever either side is unclassified/unknown.
+      if (job.industry_tag && userIndustries.size > 0) {
+        score += userIndustries.has(job.industry_tag) ? INDUSTRY_MATCH_BONUS : -INDUSTRY_MISMATCH_PENALTY;
       }
       if (job.seniority_tag && userSeniorityRank !== undefined) {
         const jobRank = SENIORITY_ORDER[job.seniority_tag];
@@ -590,7 +615,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   // candidates this regeneration ranked, as long as it's: still in `pool`
   // (still in the live, non-pruned job_postings table AND still within
   // MAX_JOB_AGE_DAYS -- a job genuinely gone from the market, or that's
-  // simply aged out past 15 days, is still allowed to drop off, same as
+  // simply aged out past that window, is still allowed to drop off, same as
   // before), not something they said "not for me" to (excludeIds), and not
   // already present in this round's fresh items. Fit/reason carried forward
   // from last time it was shown rather than going blank. This is
@@ -734,13 +759,16 @@ export type OpportunitiesDebugInfo = {
   // not scoped to this person at all, same as the admin dashboard's own
   // "jobs active" figure.
   activePoolSize: number;
-  // Of activePoolSize, how many clear this person's own seniority + industry
-  // hard excludes (see passesHardFilters) -- the real ceiling of what could
-  // EVER reach keyword scoring, the top-80 cut, or the AI ranking step for
-  // them, before any of those further narrow it down. If this number is
-  // already small, a short final list is the pool genuinely being thin for
-  // this person, not a bug; if it's large, the AI step itself is being too
-  // conservative.
+  // Of activePoolSize, how many clear this person's own SENIORITY hard
+  // exclude (see passesHardFilters) -- the real ceiling of what could EVER
+  // reach keyword scoring, the top-80 cut, or the AI ranking step for them,
+  // before any of those further narrow it down. Industry is no longer a
+  // hard exclude (2026-10-03, direct founder call -- see
+  // INDUSTRY_MISMATCH_PENALTY's own comment), so this number no longer
+  // reflects industry fit at all -- that signal now only shows up in
+  // topCandidateSample's ordering. If this number is already small, a
+  // short final list is the pool genuinely being thin for this person, not
+  // a bug; if it's large, the AI step itself is being too conservative.
   passesHardFilters: number;
   // What's actually cached/visible on their Opportunities tab right now.
   currentlyShown: number;
@@ -786,7 +814,12 @@ export function getOpportunitiesDebugInfo(userId: string): OpportunitiesDebugInf
   const userSeniorityRank = userSeniority ? SENIORITY_ORDER[userSeniority] : undefined;
 
   const pool = listActiveJobPostings().filter(isRecentEnough).filter(isShowableQuality);
-  const passing = pool.filter((job) => passesHardFilters(job, userIndustries, userSeniorityRank));
+  // Industry no longer excludes here either (see passesHardFilters' own
+  // comment) -- this debug number now reports what clears the SENIORITY
+  // bar alone, so it'll read higher than it used to for the same person;
+  // the industry signal's effect now shows up in topCandidateSample's
+  // ordering (via INDUSTRY_MATCH_BONUS/INDUSTRY_MISMATCH_PENALTY) instead.
+  const passing = pool.filter((job) => passesHardFilters(job, userSeniorityRank));
 
   const cache = getCachedOpportunities(userId);
 
