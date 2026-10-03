@@ -468,18 +468,23 @@ function OpportunityCardItem({
           target="_blank"
           rel="noopener noreferrer"
           title={
+            // Direct founder call (2026-10-03): the button itself always
+            // reads "Apply Now" now, even for a source_url this server
+            // never verified (viaAdzuna) -- a conscious reversal of the
+            // 2026-10-02 fix above (isAdzunaHostedListing's own comment
+            // has that history), accepting the tradeoff it was written to
+            // avoid: tapping this on an unverified link can still land on
+            // Adzuna's own page, occasionally one that says the listing is
+            // no longer available, rather than the employer directly. The
+            // honest context moves here, into the hover tooltip, instead
+            // of disappearing outright.
             viaAdzuna
               ? `Opens on ${viaAdzunaHost === "adzuna.in" || viaAdzunaHost === "adzuna.com" ? "Adzuna" : viaAdzunaHost ?? "the job board"} -- tap their own Apply button there to continue to the employer`
               : undefined
           }
           className="flex items-center gap-1.5 rounded-input bg-gradient-brand px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm active:scale-95 transition"
         >
-          {viaAdzuna
-            ? viaAdzunaHost === "adzuna.in" || viaAdzunaHost === "adzuna.com"
-              ? "View on Adzuna"
-              : "View job posting"
-            : "Apply"}{" "}
-          <ExternalLink size={13} />
+          Apply Now <ExternalLink size={13} />
         </a>
       </div>
     </Card>

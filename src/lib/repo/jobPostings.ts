@@ -283,6 +283,29 @@ export function listUnclassifiedActiveJobPostings(limit: number): JobPosting[] {
     .all(cutoff, limit) as JobPosting[];
 }
 
+// Same backlog as listUnclassifiedActiveJobPostings, just a COUNT instead
+// of a page of rows -- added 2026-10-03 while chasing a direct founder
+// report ("out of 14,000 jobs, how am I only fit for 5?"): the admin
+// opportunities-debug endpoint showed topCandidateSample entries with
+// industry:null across the board, meaning matchCandidates' INDUSTRY_MATCH_
+// BONUS (lib/opportunities.ts) can't do its job of surfacing genuinely
+// on-industry postings into the pre-LLM top-80 sample when the pool this
+// person draws from is still mostly unclassified -- without that signal,
+// the top-80 cut falls back to raw keyword overlap, which performs badly
+// for a niche profile (e.g. "Automotive & EV," "Gigafactory," "Battery")
+// against generic Indian job titles. Surfaced on the admin dashboard
+// (opportunities-status) so a founder report like this one can be
+// diagnosed against a real number instead of guessing whether
+// classification is keeping up with the pool or not running at all.
+export function countUnclassifiedActiveJobPostings(): number {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const row = db
+    .prepare(`SELECT COUNT(*) as count FROM job_postings WHERE last_seen_at >= ? AND classified_at IS NULL`)
+    .get(cutoff) as { count: number };
+  return row.count;
+}
+
 // Wipes the ENTIRE pool -- a one-time cleanup lever, not something a
 // normal refresh ever calls. Exists because the pool that existed before
 // the apply-link resolver (see lib/applyLinkResolver.ts) and the
