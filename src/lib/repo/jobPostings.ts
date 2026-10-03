@@ -32,6 +32,11 @@ export type JobPosting = {
   // "attempted, no logo found for this company" (logo_looked_up_at set).
   logo_domain: string | null;
   logo_looked_up_at: string | null;
+  // See this column's own comment in lib/db.ts -- null means the one-time
+  // apply-link backfill (admin "Backfill existing links" button) hasn't
+  // looked at this row yet; non-null means it has, whether or not that
+  // attempt actually changed source_url.
+  backfill_checked_at: string | null;
 };
 
 // Whether a job we've already vetted (see resolveDirectApplyUrl in
@@ -140,6 +145,56 @@ export function listActiveJobPostings(limit = 20000): JobPosting[] {
 export function getJobPostingById(id: string): JobPosting | undefined {
   const db = getDb();
   return db.prepare(`SELECT * FROM job_postings WHERE id = ?`).get(id) as JobPosting | undefined;
+}
+
+// Next batch for the admin "Backfill existing links" button (see
+// backfill_checked_at's comment in lib/db.ts and the route at
+// /api/admin/opportunities-backfill-links) -- oldest-attempted-first is
+// irrelevant here since nothing's been attempted yet for these rows; DESC
+// by last_seen_at just means the backfill naturally works through the
+// currently-active pool first rather than rows about to age out anyway.
+// Same STALE_AFTER_DAYS cutoff as listActiveJobPostings so this never
+// spends a resolution request on a posting that's about to get pruned.
+export function listJobsNeedingLinkBackfill(limit: number): JobPosting[] {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  return db
+    .prepare(
+      `SELECT * FROM job_postings WHERE backfill_checked_at IS NULL AND last_seen_at >= ? ORDER BY last_seen_at DESC LIMIT ?`
+    )
+    .all(cutoff, limit) as JobPosting[];
+}
+
+// How many active postings the backfill button still has left to look at
+// -- shown on the admin dashboard as a progress indicator across repeated
+// clicks (one call's batch is capped, see MAX_BACKFILL_PER_RUN in the
+// route). Same cutoff as listJobsNeedingLinkBackfill so the two numbers
+// agree.
+export function countJobsNeedingLinkBackfill(): number {
+  const db = getDb();
+  const cutoff = new Date(Date.now() - STALE_AFTER_DAYS * 24 * 60 * 60 * 1000).toISOString();
+  const row = db
+    .prepare(`SELECT COUNT(*) as n FROM job_postings WHERE backfill_checked_at IS NULL AND last_seen_at >= ?`)
+    .get(cutoff) as { n: number };
+  return row.n;
+}
+
+// Records the outcome of one backfill attempt. resolvedUrl is the newly
+// verified direct employer link when resolution succeeded, or null when
+// it didn't (still landed on an aggregator domain, or the fetch itself
+// failed/timed out) -- in the null case source_url is left exactly as it
+// was (Adzuna's own redirect link keeps working via the person's own
+// browser, same as every other unresolved posting). Either way
+// backfill_checked_at is set so this row is never re-attempted by a later
+// click of the same button.
+export function applyBackfillResult(id: string, resolvedUrl: string | null): void {
+  const db = getDb();
+  const ts = nowIso();
+  if (resolvedUrl) {
+    db.prepare(`UPDATE job_postings SET source_url = ?, backfill_checked_at = ? WHERE id = ?`).run(resolvedUrl, ts, id);
+  } else {
+    db.prepare(`UPDATE job_postings SET backfill_checked_at = ? WHERE id = ?`).run(ts, id);
+  }
 }
 
 // Drops rows that haven't shown up in ANY refresh for a while -- the

@@ -486,7 +486,21 @@ export default function AdminDashboardPage() {
     poolSize: number;
     adzunaUsage: { callsThisMonth: number; callsToday: number; monthlyLimit: number; dailyLimit: number };
     resolverProxyConfigured?: boolean;
+    jobsNeedingBackfill?: number;
   } | null>(null);
+  // "Backfill existing links" -- separate loading/result/error state from
+  // Purge/Refresh above (same reasoning as oppTesting's own comment: all
+  // three can be visible on screen at once and shouldn't stomp on each
+  // other). See /api/admin/opportunities-backfill-links' own comment for
+  // why this exists: the proxy only helps BRAND NEW postings going
+  // forward, so this is what actually re-resolves everything already
+  // sitting in the pool from before it existed. Repeat-until-done, same UX
+  // as "Refresh job pool now (next chunk)" -- one click processes one
+  // bounded batch and the admin clicks again until oppBackfillResult's
+  // `remaining` hits 0.
+  const [oppBackfilling, setOppBackfilling] = useState(false);
+  const [oppBackfillResult, setOppBackfillResult] = useState<string | null>(null);
+  const [oppBackfillError, setOppBackfillError] = useState<string | null>(null);
   const [oppFeedbackStats, setOppFeedbackStats] = useState<{
     relevant: number;
     notForMe: number;
@@ -596,6 +610,31 @@ export default function AdminDashboardPage() {
       setOppRefreshing(false);
     }
   }, [handleUnauthorized, loadOpportunitiesStatus]);
+
+  const runOpportunitiesBackfill = useCallback(async () => {
+    setOppBackfilling(true);
+    setOppBackfillError(null);
+    try {
+      const res = await fetch("/api/admin/opportunities-backfill-links", { method: "POST" });
+      if (res.status === 401) return handleUnauthorized();
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || "");
+      }
+      const json = await res.json();
+      const domainsNote = json.topAggregatorDomains?.length ? ` -- ${json.topAggregatorDomains.join(", ")}` : "";
+      setOppBackfillResult(
+        `Checked ${json.batchSize} posting${json.batchSize === 1 ? "" : "s"} · Now resolve directly: ${json.resolvedDirectCount} · Still need Adzuna's own redirect: ${json.stillAggregatorCount}${domainsNote} · Couldn't resolve (network/timeout): ${json.unresolvedCount} · Already had a direct link: ${json.alreadyDirectCount} · Left to check: ${json.remaining}${
+          json.remaining > 0 ? " -- click again for the next batch" : " -- all done!"
+        }`
+      );
+      setOppUsage((prev) => (prev ? { ...prev, jobsNeedingBackfill: json.remaining } : prev));
+    } catch (err) {
+      setOppBackfillError(err instanceof Error && err.message ? err.message : "Couldn't run the backfill. Try again.");
+    } finally {
+      setOppBackfilling(false);
+    }
+  }, [handleUnauthorized]);
 
   const runOpportunitiesTestResolve = useCallback(async () => {
     setOppTesting(true);
@@ -1798,6 +1837,12 @@ export default function AdminDashboardPage() {
                   {oppUsage.resolverProxyConfigured ? "configured" : "not configured"}
                 </span>
                 {!oppUsage.resolverProxyConfigured && " -- add RESOLVER_PROXY_URL to the server's .env and redeploy, then use \"Test resolver\" below to confirm it's getting past Adzuna's block."}
+                {oppUsage.resolverProxyConfigured &&
+                  oppUsage.jobsNeedingBackfill != null &&
+                  oppUsage.jobsNeedingBackfill > 0 &&
+                  ` -- ${oppUsage.jobsNeedingBackfill.toLocaleString()} already-stored posting${
+                    oppUsage.jobsNeedingBackfill === 1 ? "" : "s"
+                  } still have the pre-proxy link. Use "Backfill existing links" below to re-resolve them now instead of waiting for natural refresh.`}
               </p>
             )}
             <p className="text-[13px] text-ink-soft">
@@ -1817,9 +1862,20 @@ export default function AdminDashboardPage() {
               <Button variant="ghost" className="!py-2 !px-3 text-[13px]" loading={oppTesting} onClick={runOpportunitiesTestResolve}>
                 Test resolver (1 call)
               </Button>
+              <Button
+                variant="ghost"
+                className="!py-2 !px-3 text-[13px]"
+                loading={oppBackfilling}
+                disabled={!oppUsage?.resolverProxyConfigured}
+                onClick={runOpportunitiesBackfill}
+              >
+                Backfill existing links (next batch)
+              </Button>
             </div>
             {oppError && <p className="mt-2 text-[13px] text-red-600">{oppError}</p>}
             {oppResult && <p className="mt-2 text-[12.5px] text-ink-soft">{oppResult}</p>}
+            {oppBackfillError && <p className="mt-2 text-[13px] text-red-600">{oppBackfillError}</p>}
+            {oppBackfillResult && <p className="mt-2 text-[12.5px] text-ink-soft">{oppBackfillResult}</p>}
             {oppTestError && <p className="mt-2 text-[13px] text-red-600">{oppTestError}</p>}
             {oppTestResult && (
               <div className="mt-2 space-y-1.5">

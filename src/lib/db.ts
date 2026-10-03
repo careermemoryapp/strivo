@@ -950,6 +950,30 @@ function migrate(db: DatabaseSync) {
     db.exec(`ALTER TABLE job_postings ADD COLUMN logo_looked_up_at TEXT;`);
   }
 
+  // One-time admin-triggered backfill (see /api/admin/opportunities-
+  // backfill-links and the "Backfill existing links" button in
+  // admin/page.tsx) that re-resolves already-stored postings' source_url
+  // now that RESOLVER_PROXY_URL exists (2026-10-03, founder-purchased
+  // residential proxy -- see its comment in lib/applyLinkResolver.ts).
+  // Before that proxy, this server was IP-blocked by Adzuna for close to
+  // 100% of this table's history, so most existing rows' source_url is
+  // still Adzuna's own raw redirect even though the SAME listing might
+  // resolve straight to the employer now. upsertJobPosting deliberately
+  // never overwrites source_url on a later refresh (see its own comment),
+  // so without this backfill those rows would just sit there until they
+  // age out and happen to be re-queried as "new" -- weeks away, and not
+  // guaranteed even then. backfill_checked_at marks a row as "already
+  // attempted this pass" (whether or not resolution actually changed
+  // anything) so repeatedly clicking the admin button makes forward
+  // progress through the backlog instead of re-spending a resolution
+  // request on the same still-sponsored/Appcast-style listing that will
+  // never get past Adzuna's own landing page, proxy or not. Same
+  // "attempted marker kept separate from the result" convention as
+  // classified_at/logo_looked_up_at above. Null means never attempted.
+  if (!jobPostingColumns.includes("backfill_checked_at")) {
+    db.exec(`ALTER TABLE job_postings ADD COLUMN backfill_checked_at TEXT;`);
+  }
+
   // Same closed-vocabulary treatment for the PERSON side of the match --
   // one overall seniority band per person, from the same OPPORTUNITY_
   // SENIORITY_LIST job postings are classified against, inferred in the

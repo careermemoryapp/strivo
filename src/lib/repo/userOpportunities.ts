@@ -23,7 +23,7 @@ export function getCachedOpportunities(userId: string): UserOpportunityWithJob[]
               jp.id as jp_id, jp.external_id, jp.title, jp.company, jp.location, jp.snippet,
               jp.salary, jp.source_url, jp.function_tag, jp.city_tag, jp.posted_date,
               jp.fetched_at, jp.last_seen_at, jp.industry_tag, jp.seniority_tag, jp.classified_at,
-              jp.logo_domain, jp.logo_looked_up_at
+              jp.logo_domain, jp.logo_looked_up_at, jp.backfill_checked_at
          FROM user_opportunities uo
          JOIN job_postings jp ON jp.id = uo.job_posting_id
         WHERE uo.user_id = ?
@@ -60,6 +60,7 @@ export function getCachedOpportunities(userId: string): UserOpportunityWithJob[]
       classified_at: r.classified_at as string | null,
       logo_domain: r.logo_domain as string | null,
       logo_looked_up_at: r.logo_looked_up_at as string | null,
+      backfill_checked_at: r.backfill_checked_at as string | null,
     },
   }));
 }

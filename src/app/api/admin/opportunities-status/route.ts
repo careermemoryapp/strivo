@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { isAdminAuthed } from "@/lib/adminAuth";
-import { countActiveJobPostings } from "@/lib/repo/jobPostings";
+import { countActiveJobPostings, countJobsNeedingLinkBackfill } from "@/lib/repo/jobPostings";
 import { getAdzunaUsage } from "@/lib/repo/adzunaUsage";
 import { resolverProxyConfigured } from "@/lib/applyLinkResolver";
 
@@ -24,5 +24,9 @@ export async function GET() {
     poolSize: countActiveJobPostings(),
     adzunaUsage: getAdzunaUsage(),
     resolverProxyConfigured: resolverProxyConfigured(),
+    // See backfill_checked_at's comment in lib/db.ts -- how many already-
+    // stored postings the "Backfill existing links" button still hasn't
+    // looked at, shown on the admin dashboard as a progress indicator.
+    jobsNeedingBackfill: countJobsNeedingLinkBackfill(),
   });
 }
