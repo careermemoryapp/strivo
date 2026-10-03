@@ -487,6 +487,12 @@ export default function AdminDashboardPage() {
     adzunaUsage: { callsThisMonth: number; callsToday: number; monthlyLimit: number; dailyLimit: number };
     resolverProxyConfigured?: boolean;
     jobsNeedingBackfill?: number;
+    // Added 2026-10-03 -- see countUnclassifiedActiveJobPostings' own
+    // comment in lib/repo/jobPostings.ts for the founder report this
+    // answers ("out of 14,000, why only 5 matches").
+    unclassifiedBacklog?: number;
+    aiConfigured?: boolean;
+    logoDevConfigured?: boolean;
   } | null>(null);
   // "Backfill existing links" -- separate loading/result/error state from
   // Purge/Refresh above (same reasoning as oppTesting's own comment: all
@@ -514,6 +520,18 @@ export default function AdminDashboardPage() {
   // one) -- not a routine control.
   const [oppBackfillResetting, setOppBackfillResetting] = useState(false);
   const [confirmResetBackfill, setConfirmResetBackfill] = useState(false);
+  // "Classify job backlog" -- same "next batch" / "run until done" shape as
+  // the backfill controls above, for /api/admin/opportunities-classify-
+  // backlog (see that route's own comment for why this exists: the
+  // industry/seniority tagging refresh-pool/run does per-chunk, bounded to
+  // 150/invocation, can't keep up with a many-thousand-row backlog on that
+  // route's own Adzuna-budget-paced cadence). oppClassifyStopRef is a ref,
+  // not state, same reasoning as oppBackfillStopRef above.
+  const [oppClassifying, setOppClassifying] = useState(false);
+  const [oppClassifyResult, setOppClassifyResult] = useState<string | null>(null);
+  const [oppClassifyError, setOppClassifyError] = useState<string | null>(null);
+  const [oppClassifyAuto, setOppClassifyAuto] = useState(false);
+  const oppClassifyStopRef = useRef(false);
   const [oppFeedbackStats, setOppFeedbackStats] = useState<{
     relevant: number;
     notForMe: number;
@@ -607,7 +625,7 @@ export default function AdminDashboardPage() {
             }]`
           : "";
       setOppResult(
-        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Verified direct link: ${json.resolvedDirectCount} · Shown via Adzuna's own redirect link: ${json.rawRedirectCount}${rawBreakdown} · Already gone, never saved: ${json.deadSkippedCount ?? 0} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
+        `Chunk ${json.chunkIndex + 1} of ${json.totalChunks} (${json.functionsThisChunk?.join(", ")}) · Queries run: ${json.queriesRun} (${json.queriesFailed} failed) · Jobs upserted: ${json.jobsUpserted} (${json.jobsNew} new) · Verified direct link: ${json.resolvedDirectCount} · Shown via Adzuna's own redirect link: ${json.rawRedirectCount}${rawBreakdown} · Pool size: ${json.poolSize} · Next click will run chunk ${json.nextChunkIndex + 1} of ${json.totalChunks}`
       );
       // Merges onto the existing state (keeping resolverProxyConfigured,
       // which this response doesn't include) rather than replacing it
@@ -624,10 +642,28 @@ export default function AdminDashboardPage() {
     }
   }, [handleUnauthorized, loadOpportunitiesStatus]);
 
+  // Running totals ACROSS a whole "Run until done" pass (and across manual
+  // "next batch" clicks too) -- added after a founder report made clear
+  // the per-BATCH line above (just the most recent 150) was the only
+  // number on screen: once a long auto-run finished, there was no way to
+  // see how many were actually removed as dead over the WHOLE pass without
+  // having screenshotted every batch along the way. Reset only when a
+  // fresh "Run until done" pass starts (runOpportunitiesBackfillAll below)
+  // -- a single manual "next batch" click still adds onto whatever total
+  // is already showing, since it's the same kind of work.
+  const [oppBackfillTotals, setOppBackfillTotals] = useState<{
+    batches: number;
+    checked: number;
+    resolvedDirect: number;
+    stillAggregator: number;
+    unresolved: number;
+    alreadyDirect: number;
+  } | null>(null);
+
   // Runs exactly ONE batch (see MAX_BACKFILL_PER_RUN's comment in the
-  // route) and updates the result/usage state -- shared by the single
-  // "Backfill existing links" click below and the "Run until done" loop
-  // further down. Returns the parsed response so the loop can decide
+  // route) and updates the result/usage/totals state -- shared by the
+  // single "Backfill existing links" click below and the "Run until done"
+  // loop further down. Returns the parsed response so the loop can decide
   // whether to keep going, or null when the caller should stop outright
   // (session expired -- handleUnauthorized already fired).
   const runOneBackfillBatch = useCallback(async (): Promise<{ remaining: number; batchSize: number } | null> => {
@@ -643,10 +679,18 @@ export default function AdminDashboardPage() {
     const json = await res.json();
     const domainsNote = json.topAggregatorDomains?.length ? ` -- ${json.topAggregatorDomains.join(", ")}` : "";
     setOppBackfillResult(
-      `Checked ${json.batchSize} posting${json.batchSize === 1 ? "" : "s"} · Now resolve directly: ${json.resolvedDirectCount} · Still need Adzuna's own redirect: ${json.stillAggregatorCount}${domainsNote} · Couldn't resolve (network/timeout): ${json.unresolvedCount} · Removed, no longer available: ${json.deadCount ?? 0} · Already had a direct link: ${json.alreadyDirectCount} · Left to check: ${json.remaining}${
+      `Checked ${json.batchSize} posting${json.batchSize === 1 ? "" : "s"} · Now resolve directly: ${json.resolvedDirectCount} · Still need Adzuna's own redirect: ${json.stillAggregatorCount}${domainsNote} · Couldn't resolve (network/timeout): ${json.unresolvedCount} · Already had a direct link: ${json.alreadyDirectCount} · Left to check: ${json.remaining}${
         json.remaining > 0 ? "" : " -- all done!"
       }`
     );
+    setOppBackfillTotals((prev) => ({
+      batches: (prev?.batches ?? 0) + 1,
+      checked: (prev?.checked ?? 0) + json.batchSize,
+      resolvedDirect: (prev?.resolvedDirect ?? 0) + json.resolvedDirectCount,
+      stillAggregator: (prev?.stillAggregator ?? 0) + json.stillAggregatorCount,
+      unresolved: (prev?.unresolved ?? 0) + json.unresolvedCount,
+      alreadyDirect: (prev?.alreadyDirect ?? 0) + json.alreadyDirectCount,
+    }));
     setOppUsage((prev) => (prev ? { ...prev, jobsNeedingBackfill: json.remaining } : prev));
     return json;
   }, [handleUnauthorized]);
@@ -683,6 +727,7 @@ export default function AdminDashboardPage() {
     oppBackfillStopRef.current = false;
     setOppBackfillAuto(true);
     setOppBackfillError(null);
+    setOppBackfillTotals(null); // fresh pass -- see its own comment above
     try {
       while (!oppBackfillStopRef.current) {
         setOppBackfilling(true);
@@ -690,6 +735,14 @@ export default function AdminDashboardPage() {
         if (!json) break; // session expired
         if (json.remaining <= 0 || json.batchSize === 0) break;
       }
+      // Deletions during the pass (see deadCount in the route) change the
+      // real pool size, but nothing above touches oppUsage.poolSize itself
+      // -- only jobsNeedingBackfill. Re-pull it once the pass actually
+      // finishes (not after every batch -- that's the same count this
+      // route already returns) so the "Pool size" figure at the top of
+      // this page reflects reality instead of sitting stale at whatever it
+      // showed before the run started.
+      loadOpportunitiesStatus();
     } catch (err) {
       setOppBackfillError(
         err instanceof Error && err.message
@@ -700,7 +753,7 @@ export default function AdminDashboardPage() {
       setOppBackfilling(false);
       setOppBackfillAuto(false);
     }
-  }, [runOneBackfillBatch]);
+  }, [runOneBackfillBatch, loadOpportunitiesStatus]);
 
   const stopOpportunitiesBackfillAll = useCallback(() => {
     oppBackfillStopRef.current = true;
@@ -725,6 +778,78 @@ export default function AdminDashboardPage() {
       setConfirmResetBackfill(false);
     }
   }, [handleUnauthorized, loadOpportunitiesStatus]);
+
+  // Runs exactly ONE batch (see MAX_CLASSIFY_PER_RUN's comment in the
+  // route) -- shared by the single "next batch" click and the "run until
+  // done" loop below, same shape as runOneBackfillBatch above. Returns the
+  // parsed response so the loop can decide whether to keep going, or null
+  // when the caller should stop outright (session expired).
+  const runOneClassifyBatch = useCallback(async (): Promise<{ remaining: number; batchSize: number } | null> => {
+    const res = await fetch("/api/admin/opportunities-classify-backlog", { method: "POST" });
+    if (res.status === 401) {
+      handleUnauthorized();
+      return null;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || "");
+    }
+    const json = await res.json();
+    setOppClassifyResult(
+      `Classified ${json.classifiedCount.toLocaleString()} posting${json.classifiedCount === 1 ? "" : "s"} · Left to classify: ${json.remaining.toLocaleString()}${
+        json.remaining > 0 ? "" : " -- all done!"
+      }`
+    );
+    setOppUsage((prev) => (prev ? { ...prev, unclassifiedBacklog: json.remaining } : prev));
+    return json;
+  }, [handleUnauthorized]);
+
+  const runOpportunitiesClassify = useCallback(async () => {
+    setOppClassifying(true);
+    setOppClassifyError(null);
+    try {
+      await runOneClassifyBatch();
+    } catch (err) {
+      setOppClassifyError(err instanceof Error && err.message ? err.message : "Couldn't run classification. Try again.");
+    } finally {
+      setOppClassifying(false);
+    }
+  }, [runOneClassifyBatch]);
+
+  // "Run until done" -- same reasoning as runOpportunitiesBackfillAll
+  // above: many short client-side requests instead of one long
+  // server-side request for the whole backlog, so a reverse-proxy timeout
+  // can't silently kill the whole pass. Each batch's classifications are
+  // already committed server-side (setJobClassification runs before the
+  // route responds), so the loop just stops on an error and the next
+  // click (or another "run until done") picks up exactly where it left
+  // off.
+  const runOpportunitiesClassifyAll = useCallback(async () => {
+    oppClassifyStopRef.current = false;
+    setOppClassifyAuto(true);
+    setOppClassifyError(null);
+    try {
+      while (!oppClassifyStopRef.current) {
+        setOppClassifying(true);
+        const json = await runOneClassifyBatch();
+        if (!json) break; // session expired
+        if (json.remaining <= 0 || json.batchSize === 0) break;
+      }
+    } catch (err) {
+      setOppClassifyError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Auto-run stopped on an error -- click "Run until done" again to resume from here.'
+      );
+    } finally {
+      setOppClassifying(false);
+      setOppClassifyAuto(false);
+    }
+  }, [runOneClassifyBatch]);
+
+  const stopOpportunitiesClassifyAll = useCallback(() => {
+    oppClassifyStopRef.current = true;
+  }, []);
 
   const runOpportunitiesTestResolve = useCallback(async () => {
     setOppTesting(true);
@@ -1996,7 +2121,52 @@ export default function AdminDashboardPage() {
             {oppError && <p className="mt-2 text-[13px] text-red-600">{oppError}</p>}
             {oppResult && <p className="mt-2 text-[12.5px] text-ink-soft">{oppResult}</p>}
             {oppBackfillError && <p className="mt-2 text-[13px] text-red-600">{oppBackfillError}</p>}
-            {oppBackfillResult && <p className="mt-2 text-[12.5px] text-ink-soft">{oppBackfillResult}</p>}
+            {oppBackfillTotals && (
+              <p className="mt-2 text-[13px] font-semibold text-ink">
+                Total this run ({oppBackfillTotals.batches} batch{oppBackfillTotals.batches === 1 ? "" : "es"}, {oppBackfillTotals.checked.toLocaleString()} postings checked): now resolve directly: {oppBackfillTotals.resolvedDirect.toLocaleString()} · still need Adzuna&apos;s own redirect: {oppBackfillTotals.stillAggregator.toLocaleString()} · couldn&apos;t resolve: {oppBackfillTotals.unresolved.toLocaleString()} · already had a direct link: {oppBackfillTotals.alreadyDirect.toLocaleString()}
+              </p>
+            )}
+            {oppBackfillResult && <p className="mt-1 text-[12.5px] text-ink-soft">Latest batch: {oppBackfillResult}</p>}
+            <div className="mt-4 border-t border-[#f5f2fa] pt-3">
+              <p className="text-[13px] text-ink-soft">
+                Industry/seniority classification (lib/ai.ts) is what lets matching actually tell a genuinely
+                on-industry posting apart from a generic keyword hit -- see matchCandidates&apos; INDUSTRY_MATCH_BONUS
+                in lib/opportunities.ts. Refresh-pool/run classifies a bounded batch per chunk already, but that&apos;s
+                paced to Adzuna&apos;s own call budget, not to how fast a real backlog needs to clear -- classification
+                itself is pure OpenAI cost with no relationship to Adzuna&apos;s limits, so these buttons burn down the
+                backlog directly instead of waiting on that cadence.
+                {oppUsage?.unclassifiedBacklog != null &&
+                  ` ${oppUsage.unclassifiedBacklog.toLocaleString()} posting${oppUsage.unclassifiedBacklog === 1 ? "" : "s"} still unclassified right now.`}
+                {oppUsage?.aiConfigured === false && " OPENAI_API_KEY isn't configured -- classification can't run at all until that's set."}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  variant="ghost"
+                  className="!py-2 !px-3 text-[13px]"
+                  loading={oppClassifying && !oppClassifyAuto}
+                  disabled={oppUsage?.aiConfigured === false || oppClassifyAuto}
+                  onClick={runOpportunitiesClassify}
+                >
+                  Classify job backlog (next batch)
+                </Button>
+                {oppClassifyAuto ? (
+                  <Button variant="ghost" className="!py-2 !px-3 text-[13px]" onClick={stopOpportunitiesClassifyAll}>
+                    Stop auto-classify
+                  </Button>
+                ) : (
+                  <Button
+                    className="!py-2 !px-3 text-[13px]"
+                    loading={oppClassifying && oppClassifyAuto}
+                    disabled={oppUsage?.aiConfigured === false}
+                    onClick={runOpportunitiesClassifyAll}
+                  >
+                    Classify job backlog (run until done)
+                  </Button>
+                )}
+              </div>
+              {oppClassifyError && <p className="mt-2 text-[13px] text-red-600">{oppClassifyError}</p>}
+              {oppClassifyResult && <p className="mt-1 text-[12.5px] text-ink-soft">{oppClassifyResult}</p>}
+            </div>
             {oppTestError && <p className="mt-2 text-[13px] text-red-600">{oppTestError}</p>}
             {oppTestResult && (
               <div className="mt-2 space-y-1.5">
