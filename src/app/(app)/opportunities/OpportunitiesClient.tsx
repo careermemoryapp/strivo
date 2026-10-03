@@ -100,29 +100,42 @@ function logoDomainFor(sourceUrl: string): string | null {
 }
 
 // Adzuna's OWN redirect_url (the only field this app ever gets an apply
-// link from server-side -- see lib/adzuna.ts) sometimes points to a
-// genuine pass-through redirect (path /land/ad/...) that forwards the
-// browser straight to the real destination with no further action, and
-// sometimes to Adzuna's OWN hosted job-details page (path /details/...)
-// instead -- Adzuna's own choice per posting, confirmed live: a /details/
-// link opens adzuna.in itself, behind Adzuna's own "Apply for this job"
-// button and an email-capture popup ("No thanks, take me to the job"),
-// before the browser is finally sent on to the real employer site. A
-// founder report of "Apply just stops at Adzuna" was exactly this case,
-// not a broken link -- it does get there, just via one extra Adzuna-hosted
-// stop this app has no way to skip (there's no other field Adzuna's API
-// gives us to bypass it with). Labeling the button differently for this
-// case sets the right expectation instead of looking stuck.
+// link from server-side -- see lib/adzuna.ts) comes in more than one path
+// shape -- sometimes /details/... (Adzuna's own hosted job-details page,
+// behind an "Apply for this job" button and an email-capture popup before
+// finally forwarding to the real employer site), sometimes /land/ad/...
+// or other click-tracking shapes. This function used to only flag the
+// /details/ shape as "still on Adzuna" and treat every other Adzuna-hosted
+// path as if it reliably passed straight through to the employer with no
+// further stop.
+//
+// Founder-reported 2026-10-02: a job whose button read "Apply" (meaning
+// this function said false -- "not Adzuna-hosted, safe to call it a real
+// apply link") still opened adzuna.in and showed "Unfortunately, this job
+// is no longer available." The stored link WAS still on adzuna.in -- it
+// just wasn't a /details/ path, so the /details/-only check waved it
+// through as if it were a verified employer link. That path-shape
+// assumption was never actually reliable (refresh-pool/run's own resolver
+// comment covers why: this server's IP is blocked from following Adzuna's
+// redirect_url at all for the vast majority of postings now, so most
+// "Apply"-eligible jobs were really just Adzuna's own unresolved redirect
+// link in a *different-looking* path -- not a verified destination, with
+// no way to tell from the path alone whether it'll dead-end once the
+// underlying listing expires).
+//
+// Fixed to the honest, conservative rule: ANY source_url still hosted on
+// adzuna.in/adzuna.com -- whatever the path -- means this app never
+// confirmed where it actually leads, so it gets "View on Adzuna" and the
+// expectation-setting copy, never "Apply". "Apply" is now reserved for
+// what the server actually verified: a source_url resolveDirectApplyUrl
+// confirmed lands on a non-aggregator domain (see AGGREGATOR_DOMAINS in
+// lib/config.ts, the exact same list this reuses via isAggregatorDomain).
+// This doesn't stop an individual listing from having expired at the
+// source since it was fetched -- Strivo has no way to re-check Adzuna
+// listings live for the same IP-block reason -- it just stops mislabeling
+// an unverified link as a guaranteed one.
 function isAdzunaHostedListing(sourceUrl: string): boolean {
-  const host = hostnameOf(sourceUrl);
-  if (!host) return false;
-  const isAdzuna = host === "adzuna.in" || host === "adzuna.com" || host.endsWith(".adzuna.in") || host.endsWith(".adzuna.com");
-  if (!isAdzuna) return false;
-  try {
-    return new URL(sourceUrl).pathname.startsWith("/details/");
-  } catch {
-    return false;
-  }
+  return isAggregatorDomain(sourceUrl);
 }
 
 // Logo-by-domain image URL, via logo.dev -- no server round trip for the
@@ -231,6 +244,14 @@ function OpportunityCardItem({
   const domain = opp.logoDomain ?? logoDomainFor(opp.sourceUrl);
   const logoSrc = domain ? logoUrlFor(domain) : null;
   const viaAdzuna = isAdzunaHostedListing(opp.sourceUrl);
+  // isAdzunaHostedListing now covers EVERY aggregator domain (see its own
+  // comment), not just Adzuna -- almost always genuinely Adzuna in
+  // practice, but the button copy shouldn't claim that for the rare
+  // leftover row still pointing at some other portal (LinkedIn, Naukri,
+  // ...) from before resolution always fell back to Adzuna's own link on
+  // failure. Falls back to Adzuna by name when the host can't be read at
+  // all (shouldn't happen if viaAdzuna is true, but keeps the label sane).
+  const viaAdzunaHost = viaAdzuna ? hostnameOf(opp.sourceUrl) : null;
 
   useEffect(() => {
     // One animation frame after mount, not the same tick -- so the browser
@@ -446,10 +467,19 @@ function OpportunityCardItem({
           href={opp.sourceUrl}
           target="_blank"
           rel="noopener noreferrer"
-          title={viaAdzuna ? "Opens on Adzuna -- tap their own Apply button there to continue to the employer" : undefined}
+          title={
+            viaAdzuna
+              ? `Opens on ${viaAdzunaHost === "adzuna.in" || viaAdzunaHost === "adzuna.com" ? "Adzuna" : viaAdzunaHost ?? "the job board"} -- tap their own Apply button there to continue to the employer`
+              : undefined
+          }
           className="flex items-center gap-1.5 rounded-input bg-gradient-brand px-3.5 py-2 text-[13px] font-semibold text-white shadow-sm active:scale-95 transition"
         >
-          {viaAdzuna ? "View on Adzuna" : "Apply"} <ExternalLink size={13} />
+          {viaAdzuna
+            ? viaAdzunaHost === "adzuna.in" || viaAdzunaHost === "adzuna.com"
+              ? "View on Adzuna"
+              : "View job posting"
+            : "Apply"}{" "}
+          <ExternalLink size={13} />
         </a>
       </div>
     </Card>
