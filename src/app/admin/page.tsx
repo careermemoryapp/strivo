@@ -494,13 +494,19 @@ export default function AdminDashboardPage() {
   // other). See /api/admin/opportunities-backfill-links' own comment for
   // why this exists: the proxy only helps BRAND NEW postings going
   // forward, so this is what actually re-resolves everything already
-  // sitting in the pool from before it existed. Repeat-until-done, same UX
-  // as "Refresh job pool now (next chunk)" -- one click processes one
-  // bounded batch and the admin clicks again until oppBackfillResult's
-  // `remaining` hits 0.
+  // sitting in the pool from before it existed. Two ways to drive it: one
+  // click processes one bounded batch (150 postings), or "Run until done"
+  // loops that client-side -- see runOpportunitiesBackfillAll's own
+  // comment below for why that loop lives in the browser rather than as
+  // one long server-side request. oppBackfillAuto is true only while the
+  // loop is running (so the UI can swap the button for a Stop control);
+  // oppBackfillStopRef is a ref, not state, so a Stop click is seen by the
+  // loop on its very next iteration instead of waiting on a re-render.
   const [oppBackfilling, setOppBackfilling] = useState(false);
   const [oppBackfillResult, setOppBackfillResult] = useState<string | null>(null);
   const [oppBackfillError, setOppBackfillError] = useState<string | null>(null);
+  const [oppBackfillAuto, setOppBackfillAuto] = useState(false);
+  const oppBackfillStopRef = useRef(false);
   const [oppFeedbackStats, setOppFeedbackStats] = useState<{
     relevant: number;
     notForMe: number;
@@ -611,30 +617,87 @@ export default function AdminDashboardPage() {
     }
   }, [handleUnauthorized, loadOpportunitiesStatus]);
 
+  // Runs exactly ONE batch (see MAX_BACKFILL_PER_RUN's comment in the
+  // route) and updates the result/usage state -- shared by the single
+  // "Backfill existing links" click below and the "Run until done" loop
+  // further down. Returns the parsed response so the loop can decide
+  // whether to keep going, or null when the caller should stop outright
+  // (session expired -- handleUnauthorized already fired).
+  const runOneBackfillBatch = useCallback(async (): Promise<{ remaining: number; batchSize: number } | null> => {
+    const res = await fetch("/api/admin/opportunities-backfill-links", { method: "POST" });
+    if (res.status === 401) {
+      handleUnauthorized();
+      return null;
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => null);
+      throw new Error(body?.error || "");
+    }
+    const json = await res.json();
+    const domainsNote = json.topAggregatorDomains?.length ? ` -- ${json.topAggregatorDomains.join(", ")}` : "";
+    setOppBackfillResult(
+      `Checked ${json.batchSize} posting${json.batchSize === 1 ? "" : "s"} · Now resolve directly: ${json.resolvedDirectCount} · Still need Adzuna's own redirect: ${json.stillAggregatorCount}${domainsNote} · Couldn't resolve (network/timeout): ${json.unresolvedCount} · Already had a direct link: ${json.alreadyDirectCount} · Left to check: ${json.remaining}${
+        json.remaining > 0 ? "" : " -- all done!"
+      }`
+    );
+    setOppUsage((prev) => (prev ? { ...prev, jobsNeedingBackfill: json.remaining } : prev));
+    return json;
+  }, [handleUnauthorized]);
+
   const runOpportunitiesBackfill = useCallback(async () => {
     setOppBackfilling(true);
     setOppBackfillError(null);
     try {
-      const res = await fetch("/api/admin/opportunities-backfill-links", { method: "POST" });
-      if (res.status === 401) return handleUnauthorized();
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new Error(body?.error || "");
-      }
-      const json = await res.json();
-      const domainsNote = json.topAggregatorDomains?.length ? ` -- ${json.topAggregatorDomains.join(", ")}` : "";
-      setOppBackfillResult(
-        `Checked ${json.batchSize} posting${json.batchSize === 1 ? "" : "s"} · Now resolve directly: ${json.resolvedDirectCount} · Still need Adzuna's own redirect: ${json.stillAggregatorCount}${domainsNote} · Couldn't resolve (network/timeout): ${json.unresolvedCount} · Already had a direct link: ${json.alreadyDirectCount} · Left to check: ${json.remaining}${
-          json.remaining > 0 ? " -- click again for the next batch" : " -- all done!"
-        }`
-      );
-      setOppUsage((prev) => (prev ? { ...prev, jobsNeedingBackfill: json.remaining } : prev));
+      await runOneBackfillBatch();
     } catch (err) {
       setOppBackfillError(err instanceof Error && err.message ? err.message : "Couldn't run the backfill. Try again.");
     } finally {
       setOppBackfilling(false);
     }
-  }, [handleUnauthorized]);
+  }, [runOneBackfillBatch]);
+
+  // "Run until done" -- loops runOneBackfillBatch in the BROWSER instead of
+  // asking the founder to click "Backfill existing links" by hand roughly
+  // (pool size / 150) times, which at this pool's size (14,910 postings)
+  // is ~100 clicks. Deliberately many short client-side requests rather
+  // than one long server-side request for the whole backlog: this server
+  // sits behind a reverse proxy whose own request timeout isn't something
+  // this code can see, and one request chewing through thousands of
+  // resolutions (worst case 6s each, see RESOLVE_TIMEOUT_MS in
+  // applyLinkResolver.ts) risks silently dying partway with no result at
+  // all. Each short request here either lands cleanly, or if the response
+  // itself fails to arrive, nothing already committed server-side is lost
+  // (applyBackfillResult runs before the route responds) -- so the loop
+  // just stops on an error and "Run until done" picks up exactly where it
+  // left off on the next click, same as a manual "click again" would.
+  // oppBackfillStopRef (not state) is what lets a Stop click be seen on
+  // the loop's very next iteration instead of waiting on a re-render.
+  const runOpportunitiesBackfillAll = useCallback(async () => {
+    oppBackfillStopRef.current = false;
+    setOppBackfillAuto(true);
+    setOppBackfillError(null);
+    try {
+      while (!oppBackfillStopRef.current) {
+        setOppBackfilling(true);
+        const json = await runOneBackfillBatch();
+        if (!json) break; // session expired
+        if (json.remaining <= 0 || json.batchSize === 0) break;
+      }
+    } catch (err) {
+      setOppBackfillError(
+        err instanceof Error && err.message
+          ? err.message
+          : 'Auto-run stopped on an error -- click "Run until done" again to resume from here.'
+      );
+    } finally {
+      setOppBackfilling(false);
+      setOppBackfillAuto(false);
+    }
+  }, [runOneBackfillBatch]);
+
+  const stopOpportunitiesBackfillAll = useCallback(() => {
+    oppBackfillStopRef.current = true;
+  }, []);
 
   const runOpportunitiesTestResolve = useCallback(async () => {
     setOppTesting(true);
@@ -1865,13 +1928,34 @@ export default function AdminDashboardPage() {
               <Button
                 variant="ghost"
                 className="!py-2 !px-3 text-[13px]"
-                loading={oppBackfilling}
-                disabled={!oppUsage?.resolverProxyConfigured}
+                loading={oppBackfilling && !oppBackfillAuto}
+                disabled={!oppUsage?.resolverProxyConfigured || oppBackfillAuto}
                 onClick={runOpportunitiesBackfill}
               >
                 Backfill existing links (next batch)
               </Button>
+              {oppBackfillAuto ? (
+                <Button variant="ghost" className="!py-2 !px-3 text-[13px]" onClick={stopOpportunitiesBackfillAll}>
+                  Stop auto-backfill
+                </Button>
+              ) : (
+                <Button
+                  className="!py-2 !px-3 text-[13px]"
+                  loading={oppBackfilling && oppBackfillAuto}
+                  disabled={!oppUsage?.resolverProxyConfigured}
+                  onClick={runOpportunitiesBackfillAll}
+                >
+                  Backfill existing links (run until done)
+                </Button>
+              )}
             </div>
+            {oppUsage?.resolverProxyConfigured && (
+              <p className="mt-1.5 text-[11.5px] text-ink-faint">
+                At this pool size, a full backfill is roughly {Math.max(1, Math.ceil((oppUsage.jobsNeedingBackfill ?? 0) / 150))} batches.
+                &quot;Run until done&quot; clicks through all of them on its own, a batch at a time -- keep this tab open while it runs; it picks up
+                right where it left off if you close it or click Stop.
+              </p>
+            )}
             {oppError && <p className="mt-2 text-[13px] text-red-600">{oppError}</p>}
             {oppResult && <p className="mt-2 text-[12.5px] text-ink-soft">{oppResult}</p>}
             {oppBackfillError && <p className="mt-2 text-[13px] text-red-600">{oppBackfillError}</p>}
