@@ -59,10 +59,22 @@ const nextConfig: NextConfig = {
           // Don't leak full referrer URLs (which can contain tokens/paths)
           // to other origins when a Strivo page links out.
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          // Explicitly allow microphone for the app's own origin (the
-          // Record feature needs it) and deny camera/geolocation, which
-          // Strivo never uses.
-          { key: "Permissions-Policy", value: "microphone=(self), camera=(), geolocation=()" },
+          // Explicitly allow microphone and geolocation for the app's own
+          // origin only (the Record feature needs mic; the Opportunities
+          // tab's "Share your location" control, added 2026-10-04, needs
+          // geolocation -- see OpportunitiesClient.tsx's requestLocation).
+          // Camera stays denied, since Strivo never uses it.
+          //
+          // geolocation was still denied here when the location feature
+          // shipped: this header blocks the browser's Geolocation API at
+          // the policy level, for every origin including this app's own,
+          // before Android's native permission system is ever consulted --
+          // so no manifest permission, no OS-level grant, and no device
+          // location setting could ever have worked around it. That's why
+          // "Location access was denied" kept showing even once the native
+          // Android permission was correctly declared and granted: this
+          // header was always the actual blocker, upstream of all of it.
+          { key: "Permissions-Policy", value: "microphone=(self), camera=(), geolocation=(self)" },
           // Force HTTPS for two years including subdomains — the whole
           // site already only runs over HTTPS via the Let's Encrypt cert.
           { key: "Strict-Transport-Security", value: "max-age=63072000; includeSubDomains" },
