@@ -50,17 +50,31 @@ export function getNativePlatform(): "ios" | "android" | "web" {
 // to expect. Expires on its own so a flag that never gets consumed (the
 // picker or browser dialog never actually returned control the way we
 // expected) can't permanently disable the real staleness check this exists
-// for. Google sign-in in particular can take several minutes in the wild
-// (account picker, 2FA, consent screen on a slow connection) -- a short
-// window here was causing the resume handler to reload the WebView out from
-// under a real in-flight sign-in, burning the one-time auth token before it
-// was consumed and leaving the user back at the login screen. 5 minutes
-// comfortably covers that without leaving the staleness check disabled for
-// long if a hand-off genuinely never returns.
+// for.
+//
+// This used to expire after 60s, which is shorter than a real Google
+// sign-in can easily take from the moment the button is tapped (account
+// picker, password, a 2FA prompt, a slow connection) -- well within normal,
+// not even "slow phone" territory. Whenever that happened, the clock here
+// ran out before the user got back, so the "resume" fired by the deep-link
+// hand-off landed as an UNEXPECTED resume: useReloadOnNativeResume() reloads
+// the WebView right as (or just before) MainActivity is delivering the
+// auth-callback token to it, discarding or racing the in-flight sign-in --
+// silently bouncing the user back to a logged-out screen with no error and
+// no Sentry event (mobile-consume's token-missing warning only fires if the
+// token actually reaches that route; this drops it before it gets there).
+// This is almost certainly the real mechanism behind "Google sign-in
+// sometimes needs several tries on Android," and it can fail on an install
+// that otherwise did everything right -- a plausible chunk of the
+// install-to-signup gap. Widened to comfortably exceed mobileAuth.ts's own
+// 2-minute token TTL (TTL_MS there), so this client-side guard is never the
+// tighter constraint; the server-side token expiry is still the real
+// backstop for a hand-off that's abandoned for good.
+const EXPECTED_RESUME_WINDOW_MS = 4 * 60 * 1000;
 let expectedResumeUntil = 0;
 
 export function markExpectedResume() {
-  expectedResumeUntil = Date.now() + 300_000;
+  expectedResumeUntil = Date.now() + EXPECTED_RESUME_WINDOW_MS;
 }
 
 export function consumeExpectedResume(): boolean {

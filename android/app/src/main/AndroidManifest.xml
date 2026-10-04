@@ -149,12 +149,12 @@
     <!-- Same exact story as RECORD_AUDIO just above, for the Opportunities
          tab's "Share your location for closer matches" control (see
          OpportunitiesClient.tsx's requestLocation, which calls the
-         standard web navigator.geolocation.getCurrentPosition -- no
+         standard web navigator.geolocation.getCurrentPosition — no
          Capacitor geolocation plugin involved). Capacitor's Bridge already
          handles the runtime prompt out of the box
          (BridgeWebChromeClient.onGeolocationPermissionsShowPrompt grants
          ACCESS_COARSE_LOCATION/ACCESS_FINE_LOCATION when the web page asks
-         for geolocation) -- but Android silently auto-denies any runtime
+         for geolocation) — but Android silently auto-denies any runtime
          permission request for a permission the app never declared here,
          with no prompt ever shown, which is exactly the "Location access
          was denied" with no OS dialog a founder reported 2026-10-05.
