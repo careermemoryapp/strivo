@@ -240,15 +240,38 @@ const SENIORITY_ORDER: Record<string, number> = Object.fromEntries(
 const SENIORITY_HARD_EXCLUDE_GAP = 2; // e.g. Entry-level vs Leadership -- only applied when BOTH sides are confidently classified
 const SENIORITY_MATCH_BONUS = 9;
 const SENIORITY_ADJACENT_BONUS = 3; // one band off either way -- still a normal, worth-showing stretch
-const INDUSTRY_MATCH_BONUS = 10;
+const INDUSTRY_MATCH_BONUS = 7;
 // Applied only when BOTH sides are confidently known and they DON'T match
 // -- same neutral-when-unknown shape as everything else here. Modest
-// relative to INDUSTRY_MATCH_BONUS (10) and the keyword/seniority bonuses,
-// so a same-industry posting still wins the pre-LLM top-80 cut whenever
-// enough of them exist, but a strong, clearly-relevant off-industry posting
-// (lots of keyword/seniority/location signal) can still surface instead of
-// being silently excluded outright.
-const INDUSTRY_MISMATCH_PENALTY = 5;
+// relative to INDUSTRY_MATCH_BONUS and the keyword/seniority bonuses, so a
+// same-industry posting still generally wins the pre-LLM candidate cut
+// whenever enough of them exist, but a strong, clearly-relevant
+// off-industry posting (lots of keyword/seniority/location signal) can
+// still surface instead of being silently outranked out of contention.
+// Both this and INDUSTRY_MATCH_BONUS were trimmed down (10/5 -> 7/2) on
+// 2026-10-04, a direct founder call made alongside widening
+// CANDIDATE_POOL_LIMIT and softening rankOpportunities' own cross-industry
+// language in lib/ai.ts: with a niche profile (Automotive & EV strategy),
+// the 15-point same-vs-mismatch swing was still effectively acting like a
+// soft hard-exclude once most of the pool had real industry_tags, leaving
+// only 4-8 jobs shown even though the exclude itself had already been
+// lifted the day before -- see this file's own git history. The founder's
+// own words: "you should also consider other parallel industries... where
+// my skills can be utilized... at least a decent number [of jobs]."
+const INDUSTRY_MISMATCH_PENALTY = 2;
+
+// How many of the best-scoring candidates matchCandidates hands to the LLM
+// ranking step (rankOpportunities, lib/ai.ts) -- widened from 80 to 120 on
+// 2026-10-04 alongside the industry bonus/penalty trim above, same founder
+// call: for a niche profile, the pool was getting cut down to 80
+// candidates before the LLM ever saw it, leaving little room for a genuine
+// cross-industry skill-transfer posting to ride along even after the
+// scoring gap itself was narrowed. Kept well under the full eligible pool
+// (which can run into the hundreds) since cost scales with the LLM prompt
+// itself -- see MAX_OPPORTUNITY_CANDIDATES in lib/ai.ts, its own copy of
+// this same number (that file has no exports to import a shared constant
+// from; keep the two in sync by hand if either changes).
+const CANDIDATE_POOL_LIMIT = 120;
 
 // Maps a legacy freeform stated industry (see JobPreferences.industry --
 // typed into the now-removed filter form, still read here for anyone who
@@ -691,7 +714,7 @@ export async function getOpportunitiesForUser(userId: string): Promise<Opportuni
   const userIndustries = new Set(roles.map((r) => r.industry).filter((v): v is string => !!v));
   const statedIndustry = canonicalIndustry(prefs?.industry);
   if (statedIndustry) userIndustries.add(statedIndustry);
-  const candidates = matchCandidates(pool, profileKeywords, excludeIds, 80, detectedCity, userIndustries, userSeniority);
+  const candidates = matchCandidates(pool, profileKeywords, excludeIds, CANDIDATE_POOL_LIMIT, detectedCity, userIndustries, userSeniority);
   const opportunityCandidates: OpportunityCandidate[] = candidates.map((job) => ({
     id: job.id,
     title: job.title,
@@ -840,7 +863,7 @@ export function getOpportunitiesDebugInfo(userId: string): OpportunitiesDebugInf
       .filter(([, v]) => v === "not_for_me")
       .map(([jobId]) => jobId)
   );
-  const topCandidates = matchCandidates(pool, profileKeywords, excludeIds, 80, detectedCity, userIndustries, userSeniority);
+  const topCandidates = matchCandidates(pool, profileKeywords, excludeIds, CANDIDATE_POOL_LIMIT, detectedCity, userIndustries, userSeniority);
 
   return {
     memoryCount,

@@ -505,6 +505,71 @@ export function OpportunitiesClient() {
   // why that changed from the original "swipe to dismiss" design.
   const [feedbackGiven, setFeedbackGiven] = useState<Record<string, "relevant" | "not_for_me">>({});
 
+  // One-tap "use my current location" control -- added 2026-10-04 after a
+  // direct founder report that resume-text-only city detection can put
+  // someone in the wrong city entirely (their example: a person based in
+  // one city shown jobs in a different one). Deliberately NOT the old
+  // removed filter form (see the comment just below) -- this is a single
+  // button, not fields to fill in, and it only ever sets city (never
+  // function/industry). geoSupported hides the control outright on a
+  // browser/WebView with no geolocation API at all rather than showing a
+  // button that can never work.
+  const [geoSupported, setGeoSupported] = useState(false);
+  const [geoStatus, setGeoStatus] = useState<"idle" | "requesting" | "error">("idle");
+  const [geoError, setGeoError] = useState<string | null>(null);
+  useEffect(() => {
+    // Deferred via setTimeout, not called directly -- same reasoning as
+    // load()'s own effect above (see its comment): keeps the actual
+    // setState call out of the effect's synchronous body (see
+    // react-hooks/set-state-in-effect).
+    const t = setTimeout(() => setGeoSupported(typeof navigator !== "undefined" && "geolocation" in navigator), 0);
+    return () => clearTimeout(t);
+  }, []);
+
+  function requestLocation() {
+    setGeoStatus("requesting");
+    setGeoError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        fetch("/api/opportunities/detect-location", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        })
+          .then(async (res) => {
+            const json = await res.json().catch(() => null);
+            if (res.ok && json?.city) {
+              setGeoStatus("idle");
+              // Re-fetch rather than just trusting the returned city --
+              // the city we just saved also changes which jobs match, so
+              // the list itself (not just the label) needs to refresh.
+              await load();
+            } else if (res.ok) {
+              // ok:true, city:null -- not close enough to any of our 15
+              // covered cities to confidently label (see
+              // nearestOpportunityCity in lib/geo.ts).
+              setGeoStatus("error");
+              setGeoError("That doesn't look like one of the cities we cover yet.");
+            } else {
+              setGeoStatus("error");
+              setGeoError("Couldn't save your location -- try again.");
+            }
+          })
+          .catch(() => {
+            setGeoStatus("error");
+            setGeoError("Couldn't save your location -- try again.");
+          });
+      },
+      (err) => {
+        setGeoStatus("error");
+        setGeoError(
+          err.code === err.PERMISSION_DENIED ? "Location access was denied." : "Couldn't get your location -- try again."
+        );
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 }
+    );
+  }
+
   // There used to be a "tell us what you're looking for" city/function/
   // industry form here (both on the locked state and as a "change search
   // settings" toggle once personalized) -- removed per a direct founder
@@ -659,6 +724,30 @@ export function OpportunitiesClient() {
           <div className="flex items-center gap-1.5 px-0.5 text-[12.5px] font-medium text-ink-soft">
             <Sparkles size={13} className="text-brand-primary" />
             {visible.length} {visible.length === 1 ? "role" : "roles"} matched to your experience — no filters, just fit.
+          </div>
+        )}
+
+        {/* One-tap location control (see requestLocation above) -- not a
+            filter form, just a way to make sure city matching is using
+            where this person actually is right now rather than only a
+            resume-text guess. Shown once personalized so it sits with the
+            rest of the real matching UI, not the locked-state card. */}
+        {!loading && !error && data?.personalized && geoSupported && (
+          <div className="flex flex-wrap items-center gap-2 px-0.5">
+            <button
+              type="button"
+              onClick={requestLocation}
+              disabled={geoStatus === "requesting"}
+              className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12px] font-semibold text-ink-soft transition hover:border-brand-primary/40 hover:bg-brand-primary-soft hover:text-brand-primary active:scale-95 disabled:opacity-60"
+            >
+              <MapPin size={12} className="shrink-0" />
+              {geoStatus === "requesting"
+                ? "Getting your location…"
+                : data.statedPreferences?.city
+                  ? `Matching near ${data.statedPreferences.city} — update`
+                  : "Share your location for closer matches"}
+            </button>
+            {geoStatus === "error" && geoError && <span className="text-[11.5px] text-red-500">{geoError}</span>}
           </div>
         )}
 

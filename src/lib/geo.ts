@@ -79,3 +79,76 @@ export function detectCityFromText(text: string | null | undefined): string | nu
   }
   return null;
 }
+
+// Approximate city-center coordinates for OPPORTUNITY_CITIES -- added
+// 2026-10-04 after a direct founder report that resume-text city detection
+// alone was showing someone jobs in a city they don't actually live/work
+// in (their example: a person based in Bangalore being shown Mohali
+// postings). Used only to resolve a ONE-TIME browser geolocation reading
+// (see the "Use my current location" control on the Opportunities tab,
+// OpportunitiesClient.tsx, and POST /api/opportunities/detect-location) to
+// the nearest of our 15 supported cities -- this is "which of our cities
+// is this person probably in," not real geocoding, so city-center
+// precision is intentionally good enough rather than exact. Raw lat/lng
+// coordinates are never stored anywhere -- only the resolved city name,
+// written to the same user_job_preferences.city column a manually-typed
+// city would use (see setJobPreferences in lib/repo/jobPreferences.ts),
+// so it takes the same precedence over resume-detected city that a stated
+// preference already had (see detectedCity in lib/opportunities.ts).
+const CITY_COORDINATES: Record<(typeof OPPORTUNITY_CITIES)[number], { lat: number; lng: number }> = {
+  Delhi: { lat: 28.6139, lng: 77.209 },
+  Noida: { lat: 28.5355, lng: 77.391 },
+  Gurgaon: { lat: 28.4595, lng: 77.0266 },
+  Faridabad: { lat: 28.4089, lng: 77.3178 },
+  Bengaluru: { lat: 12.9716, lng: 77.5946 },
+  Mumbai: { lat: 19.076, lng: 72.8777 },
+  Ahmedabad: { lat: 23.0225, lng: 72.5714 },
+  Hyderabad: { lat: 17.385, lng: 78.4867 },
+  Chennai: { lat: 13.0827, lng: 80.2707 },
+  Pune: { lat: 18.5204, lng: 73.8567 },
+  Surat: { lat: 21.1702, lng: 72.8311 },
+  Chandigarh: { lat: 30.7333, lng: 76.7794 },
+  Kolkata: { lat: 22.5726, lng: 88.3639 },
+  Jaipur: { lat: 26.9124, lng: 75.7873 },
+  Lucknow: { lat: 26.8467, lng: 80.9462 },
+};
+
+// Beyond this, the nearest of our 15 cities is probably not actually where
+// the person is (e.g. a smaller town between two covered cities, or
+// someone outside India entirely) -- better to say "couldn't place you in
+// one of our covered cities" and fall back to resume-text detection than
+// to confidently mislabel them. ~120km comfortably covers normal
+// GPS/network-location imprecision and short commute distances around any
+// one of these metros without reaching all the way to a neighboring one.
+const MAX_GEOLOCATION_MATCH_KM = 120;
+
+function haversineDistanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }): number {
+  const EARTH_RADIUS_KM = 6371;
+  const toRad = (deg: number) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const sinDLat = Math.sin(dLat / 2);
+  const sinDLng = Math.sin(dLng / 2);
+  const h = sinDLat * sinDLat + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * sinDLng * sinDLng;
+  return 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+// Resolves a raw browser geolocation reading to the nearest OPPORTUNITY_CITIES
+// entry, or null when nothing covered is close enough (see
+// MAX_GEOLOCATION_MATCH_KM). Called server-side from
+// POST /api/opportunities/detect-location -- the client only ever sends a
+// coordinate pair, never picks or guesses the city name itself, so this
+// stays the single source of truth for the distance cutoff.
+export function nearestOpportunityCity(lat: number, lng: number): string | null {
+  const point = { lat, lng };
+  let best: string | null = null;
+  let bestDistanceKm = Infinity;
+  for (const city of OPPORTUNITY_CITIES) {
+    const distanceKm = haversineDistanceKm(point, CITY_COORDINATES[city]);
+    if (distanceKm < bestDistanceKm) {
+      bestDistanceKm = distanceKm;
+      best = city;
+    }
+  }
+  return best && bestDistanceKm <= MAX_GEOLOCATION_MATCH_KM ? best : null;
+}
