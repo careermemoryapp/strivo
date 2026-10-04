@@ -185,13 +185,43 @@ function PillButton({ className = "" }: { className?: string }) {
 // fed the live count) -- not a mockup or an illustration of the idea.
 // Someone can see, before installing anything, exactly what they'd be
 // claiming.
+// Added 2026-10-04 (second direct founder follow-up, same day as
+// FoundingMemberShowcase below): that section carries the full pitch with
+// the real card, but it sits one scroll past the hero -- only someone who
+// scrolls down ever sees it. Founder's own words: "it should be visible
+// instantly... he or she should not scroll." This badge puts the SAME
+// real, live claim (the actual next number, the actual spots remaining --
+// not a mockup) at the very top of the hero, before even the headline, so
+// it's part of the very first paint on any device. Tapping it jumps
+// straight down to the full card/showcase section (#founding-member,
+// below) for anyone who wants more than the one-line claim.
+function FoundingMemberHeroBadge() {
+  const stats = useFoundingMemberStats();
+  const nextNumber = stats ? Math.min(stats.count + 1, stats.cap) : null;
+  const remaining = stats ? Math.max(stats.cap - stats.count, 0) : null;
+
+  return (
+    <motion.div variants={fadeUp} className="mx-auto mb-6 flex justify-center sm:mb-5 sm:justify-start">
+      <a
+        href="#founding-member"
+        className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold tracking-wide sm:text-[13px]"
+        style={{ borderColor: "rgba(244,183,63,0.4)", background: "rgba(244,183,63,0.12)", color: "#f4b73f" }}
+      >
+        <Award size={14} className="shrink-0" />
+        {nextNumber ? `Become Founding Member #${nextNumber}` : "Become a Founding Member"}
+        {remaining !== null ? ` · only ${remaining.toLocaleString("en-US")} spots left` : ""}
+      </a>
+    </motion.div>
+  );
+}
+
 function FoundingMemberShowcase() {
   const stats = useFoundingMemberStats();
   const nextNumber = stats ? Math.min(stats.count + 1, stats.cap) : null;
   const remaining = stats ? Math.max(stats.cap - stats.count, 0) : null;
 
   return (
-    <section className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 sm:px-12" style={{ background: "linear-gradient(135deg,#1c0f2e,#0a0a0f 65%)" }}>
+    <section id="founding-member" className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 sm:px-12" style={{ background: "linear-gradient(135deg,#1c0f2e,#0a0a0f 65%)" }}>
       <div
         className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
         style={{ width: 700, height: 320, background: "radial-gradient(ellipse at center, rgba(244,183,63,0.16), transparent 70%)" }}
@@ -780,6 +810,7 @@ export function MarketingHome({
           }}
         />
         <motion.div initial="hidden" animate="show" variants={stagger} className="relative flex flex-1 flex-col sm:block">
+          <FoundingMemberHeroBadge />
           <motion.p variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.2em] text-brand-primary sm:mb-3">
             YOUR AI CAREER MEMORY
           </motion.p>
