@@ -1,5 +1,6 @@
 import { getDb, newId, nowIso } from "@/lib/db";
 import type { ResumeCareerStats } from "@/lib/ai";
+import { FOUNDING_MEMBER_CAP, FOUNDING_MEMBER_TRIAL_MONTHS } from "@/lib/config";
 
 export type User = {
   id: string;
@@ -225,20 +226,43 @@ export function createUser(input: {
   const db = getDb();
   const id = newId("user");
   const created_at = nowIso();
-  // Every new account starts with a free trial (see TRIAL_MONTHS above).
-  const trialEnd = new Date();
-  trialEnd.setMonth(trialEnd.getMonth() + TRIAL_MONTHS);
+
+  // Founding Member eligibility is an enforced cap, not a display trick --
+  // direct founder clarification 2026-10-04: "the one year free is for
+  // those first one thousand users who are basically founding members"
+  // (the standard 2-month trial, TRIAL_MONTHS above, never changes for
+  // anyone else). COUNT (not MAX) of already-assigned numbers is the
+  // right read for "how many seats are actually taken" -- same reasoning
+  // as getFoundingMemberStats() in repo/foundingMember.ts, and it can only
+  // go up, so a hard-deleted founding member's seat stays spent rather
+  // than quietly reopening for whoever signs up next.
+  const foundingMemberCount = (
+    db.prepare(`SELECT COUNT(*) AS c FROM users WHERE founding_member_number IS NOT NULL`).get() as { c: number }
+  ).c;
+  const isFoundingMember = foundingMemberCount < FOUNDING_MEMBER_CAP;
   // Next sequential Founding Member number (see that column's migration
-  // comment in lib/db.ts). MAX rather than COUNT so this stays correct
+  // comment in lib/db.ts). MAX rather than COUNT so THIS stays correct
   // even if a row is ever hard-deleted (deleteUser below) -- COUNT would
   // let a later signup reuse a number someone already has a generated
   // card/share showing, which must never happen once that number's been
-  // handed out. better-sqlite3/node:sqlite runs this whole function
-  // synchronously on Next.js's single Node process with no `await`
-  // between the read and the INSERT below, so there's no interleaving
-  // window for two signups to race onto the same number.
-  const nextFoundingMemberNumber =
-    (db.prepare(`SELECT COALESCE(MAX(founding_member_number), 0) + 1 AS n FROM users`).get() as { n: number }).n;
+  // handed out. Only computed/assigned at all once isFoundingMember says
+  // there's still a seat -- everyone after the cap gets NULL here and
+  // simply isn't a Founding Member (no card, no page, see
+  // getOrCreateFoundingMemberShare's null guard). better-sqlite3/node:sqlite
+  // runs this whole function synchronously on Next.js's single Node
+  // process with no `await` between the reads and the INSERT below, so
+  // there's no interleaving window for two signups to race onto the same
+  // number or both slip in under a nearly-full cap.
+  const nextFoundingMemberNumber = isFoundingMember
+    ? (db.prepare(`SELECT COALESCE(MAX(founding_member_number), 0) + 1 AS n FROM users`).get() as { n: number }).n
+    : null;
+
+  // Founding members get FOUNDING_MEMBER_TRIAL_MONTHS (currently a year);
+  // everyone else gets the standard TRIAL_MONTHS (currently 2 months) --
+  // see the comment on FOUNDING_MEMBER_TRIAL_MONTHS in lib/config.ts.
+  const trialEnd = new Date();
+  trialEnd.setMonth(trialEnd.getMonth() + (isFoundingMember ? FOUNDING_MEMBER_TRIAL_MONTHS : TRIAL_MONTHS));
+
   db.prepare(
     `INSERT INTO users (id, first_name, last_name, email, password_hash, profile_image, subscription_status, trial_ends_at, created_at, founding_member_number)
      VALUES (?, ?, ?, ?, ?, NULL, 'trial', ?, ?, ?)`

@@ -10,6 +10,7 @@ import {
   ANNUAL_LIST_PRICE_LABEL,
   TRIAL_MONTHS,
 } from "@/lib/repo/users";
+import { FOUNDING_MEMBER_TRIAL_MONTHS } from "@/lib/config";
 import { sendGiftEmail } from "@/lib/email";
 
 // `plan` is optional and only meaningful alongside status "active" -- it's
@@ -72,11 +73,16 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     // Without this, trial_ends_at would still hold whatever far-future
     // renewal date a PRIOR grant computed above, which getSubscriptionInfo
     // would then misread as "your trial ends in 14 months" -- reset it back
-    // to the standard TRIAL_MONTHS window from account creation, the same
-    // value createUser() would have set if they'd never been granted
-    // anything.
+    // to whichever trial window createUser() would have set from account
+    // creation: FOUNDING_MEMBER_TRIAL_MONTHS for one of the first
+    // FOUNDING_MEMBER_CAP signups (founding_member_number not null -- see
+    // that column's cap enforcement in createUser(), repo/users.ts), the
+    // standard TRIAL_MONTHS for everyone else. Without this branch, revoking
+    // a founding member's gift would silently shortchange them down to the
+    // 2-month trial instead of the year they're actually entitled to.
     const resetDate = new Date(user.created_at);
-    resetDate.setMonth(resetDate.getMonth() + TRIAL_MONTHS);
+    const resetTrialMonths = user.founding_member_number !== null ? FOUNDING_MEMBER_TRIAL_MONTHS : TRIAL_MONTHS;
+    resetDate.setMonth(resetDate.getMonth() + resetTrialMonths);
     setTrialEndsAt(id, resetDate.toISOString());
   }
   return NextResponse.json({ ok: true });

@@ -10,7 +10,7 @@ import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
-import { APP_NAME, FOUNDING_MEMBER_CAP, SINGULAR_TRACKING_LINK } from "@/lib/config";
+import { APP_NAME, FOUNDING_MEMBER_CAP, FOUNDING_MEMBER_TRIAL_MONTHS, SINGULAR_TRACKING_LINK } from "@/lib/config";
 import { useFoundingMemberIncentiveText, useFoundingMemberStats } from "@/lib/useFoundingMemberCount";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES } from "@/lib/careerProfile";
 
@@ -189,33 +189,54 @@ function PillButton({ className = "" }: { className?: string }) {
 // FoundingMemberShowcase below): that section carries the full pitch with
 // the real card, but it sits one scroll past the hero -- only someone who
 // scrolls down ever sees it. Founder's own words: "it should be visible
-// instantly... he or she should not scroll." This badge puts the SAME
-// real, live claim (the actual next number, the actual spots remaining --
-// not a mockup) at the very top of the hero, before even the headline, so
-// it's part of the very first paint on any device. Tapping it jumps
-// straight down to the full card/showcase section (#founding-member,
-// below) for anyone who wants more than the one-line claim.
-function FoundingMemberHeroBadge() {
+// instantly... he or she should not scroll." This card puts the SAME real,
+// live claim (the actual next number, the actual spots remaining -- not a
+// mockup) at the very top of the hero, before even the headline, so it's
+// part of the very first paint on any device. Tapping it jumps straight
+// down to the full card/showcase section (#founding-member, below) for
+// anyone who wants more than this.
+//
+// Upgraded same day, third founder follow-up, from a one-line pill to this
+// (still short, but three concrete claims instead of one): the founder's
+// own words were "only 1,000 founding members are getting one year free...
+// they will get a lifetime founding member badge... they can use on
+// LinkedIn and social media... they will always be the founding member of
+// Strivo, even if it reaches billions of users." All three are real,
+// enforced facts now, not just copy -- see createUser() in
+// repo/users.ts: the 12-month trial (FOUNDING_MEMBER_TRIAL_MONTHS, vs. the
+// standard TRIAL_MONTHS everyone else gets) and the founding_member_number
+// itself are only ever handed out to the first FOUNDING_MEMBER_CAP
+// signups, enforced by a real count check, not just a display cap.
+function FoundingMemberHeroBadge({ trialMonths }: { trialMonths: number }) {
   const stats = useFoundingMemberStats();
   const nextNumber = stats ? Math.min(stats.count + 1, stats.cap) : null;
   const remaining = stats ? Math.max(stats.cap - stats.count, 0) : null;
 
   return (
-    <motion.div variants={fadeUp} className="mx-auto mb-6 flex justify-center sm:mb-5 sm:justify-start">
-      <a
-        href="#founding-member"
-        className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[11px] font-bold tracking-wide sm:text-[13px]"
-        style={{ borderColor: "rgba(244,183,63,0.4)", background: "rgba(244,183,63,0.12)", color: "#f4b73f" }}
-      >
-        <Award size={14} className="shrink-0" />
-        {nextNumber ? `Become Founding Member #${nextNumber}` : "Become a Founding Member"}
-        {remaining !== null ? ` · only ${remaining.toLocaleString("en-US")} spots left` : ""}
-      </a>
-    </motion.div>
+    <motion.a
+      href="#founding-member"
+      variants={fadeUp}
+      className="mx-auto mb-7 block w-full max-w-xl rounded-2xl border p-4 text-left transition-colors hover:border-amber-300/60 sm:mb-6"
+      style={{ borderColor: "rgba(244,183,63,0.4)", background: "linear-gradient(135deg, rgba(244,183,63,0.12), rgba(124,58,237,0.1))" }}
+    >
+      <div className="flex items-center gap-2">
+        <Award size={15} className="shrink-0" style={{ color: "#f4b73f" }} />
+        <span className="text-[10px] font-bold tracking-[0.14em]" style={{ color: "#f4b73f" }}>
+          FOUNDING MEMBER OFFER · {remaining !== null ? `${remaining.toLocaleString("en-US")} SPOTS LEFT` : "LIMITED"}
+        </span>
+      </div>
+      <p className="mt-2 text-[15px] font-bold leading-snug text-white sm:text-base">
+        Become Founding Member{nextNumber ? ` #${nextNumber}` : ""} — free for {FOUNDING_MEMBER_TRIAL_MONTHS} months, not {trialMonths}.
+      </p>
+      <p className="mt-1.5 text-xs leading-relaxed text-[#b7b7c2]">
+        Plus a permanent, lifetime Founding Member badge to show on LinkedIn and social media — you&apos;ll always be
+        Strivo&apos;s Founding Member{nextNumber ? ` #${nextNumber}` : ""}, even if we reach a billion users.
+      </p>
+    </motion.a>
   );
 }
 
-function FoundingMemberShowcase() {
+function FoundingMemberShowcase({ trialMonths }: { trialMonths: number }) {
   const stats = useFoundingMemberStats();
   const nextNumber = stats ? Math.min(stats.count + 1, stats.cap) : null;
   const remaining = stats ? Math.max(stats.cap - stats.count, 0) : null;
@@ -247,9 +268,19 @@ function FoundingMemberShowcase() {
             {remaining !== null
               ? `Only ${remaining.toLocaleString("en-US")} of ${stats!.cap.toLocaleString("en-US")} founding spots are left. `
               : ""}
-            Every founding member gets a permanent number and a card like this one — real, shareable, and yours for
-            good. Once we hit {(stats?.cap ?? FOUNDING_MEMBER_CAP).toLocaleString("en-US")}, it&apos;s gone.
+            You&apos;ll get a full {FOUNDING_MEMBER_TRIAL_MONTHS} months free (everyone else gets {trialMonths}), a
+            permanent number, and a lifetime Founding Member badge — real, shareable on LinkedIn and social media,
+            and yours for good. Once we hit {(stats?.cap ?? FOUNDING_MEMBER_CAP).toLocaleString("en-US")}, it&apos;s
+            gone — but you&apos;ll always be Strivo&apos;s Founding Member{nextNumber ? ` #${nextNumber}` : ""}, even
+            if we reach a billion users.
           </p>
+          <ul className="mx-auto mt-5 flex max-w-sm flex-wrap justify-center gap-2 text-[11px] font-semibold text-[#e8e2f5] sm:mx-0 sm:justify-start">
+            <li className="rounded-full border border-[#3a3048] bg-white/5 px-3 py-1.5">
+              {FOUNDING_MEMBER_TRIAL_MONTHS} months free
+            </li>
+            <li className="rounded-full border border-[#3a3048] bg-white/5 px-3 py-1.5">Lifetime LinkedIn badge</li>
+            <li className="rounded-full border border-[#3a3048] bg-white/5 px-3 py-1.5">Forever Founding Member</li>
+          </ul>
           <div className="mt-6 flex justify-center sm:justify-start">
             <PlayStoreLink location="founding_member_banner" href={SINGULAR_TRACKING_LINK} size="lg" />
           </div>
@@ -810,7 +841,7 @@ export function MarketingHome({
           }}
         />
         <motion.div initial="hidden" animate="show" variants={stagger} className="relative flex flex-1 flex-col sm:block">
-          <FoundingMemberHeroBadge />
+          <FoundingMemberHeroBadge trialMonths={trialMonths} />
           <motion.p variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.2em] text-brand-primary sm:mb-3">
             YOUR AI CAREER MEMORY
           </motion.p>
@@ -917,7 +948,7 @@ export function MarketingHome({
         </motion.div>
       </section>
 
-      <FoundingMemberShowcase />
+      <FoundingMemberShowcase trialMonths={trialMonths} />
 
       {/* Value props */}
       <section className="border-t border-[#1e1e26] px-8 py-16 text-center sm:px-12" style={{ background: "#0a0a0f" }}>
@@ -1231,9 +1262,23 @@ export function MarketingHome({
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
           SIMPLE PRICING
         </motion.p>
-        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 mt-2 text-2xl font-bold tracking-tight">
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mt-2 text-2xl font-bold tracking-tight">
           Free for {trialMonths} months, then
         </motion.h2>
+        {/* Avoids a contradiction with the Founding Member offer above
+            (FOUNDING_MEMBER_TRIAL_MONTHS, a full year) -- without this line,
+            someone who just read "free for a year" in the hero would hit
+            "free for {trialMonths} months" here and reasonably wonder which
+            one is true. Both are: this is the standard trial everyone gets,
+            Founding Member is the enforced exception for the first
+            FOUNDING_MEMBER_CAP signups (see createUser() in repo/users.ts). */}
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="mb-8 mt-1.5 text-xs text-[#8a8a99]">
+          Founding Members get {FOUNDING_MEMBER_TRIAL_MONTHS} months free instead —{" "}
+          <a href="#founding-member" className="underline decoration-dotted underline-offset-2 hover:text-white">
+            see if spots are left
+          </a>
+          .
+        </motion.p>
         <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.2 }} variants={stagger} className="flex flex-wrap gap-4">
           <motion.div variants={fadeUp} className="min-w-[180px] flex-1">
             <TiltCard className="rounded-[18px] border border-[#2a2a35] p-6 text-left">

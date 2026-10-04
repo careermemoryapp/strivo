@@ -66,6 +66,18 @@ export const HOME_SUBTITLE = "Capture today. Remember forever. Achieve more.";
 // database code.
 export const FOUNDING_MEMBER_CAP = 1000;
 
+// The actual bonus the cap above is FOR. Added 2026-10-04, direct founder
+// clarification: the standard trial (TRIAL_MONTHS in repo/users.ts, 2
+// months) stays the same for literally everyone, forever -- that never
+// changes. What makes someone a Founding Member isn't a longer trial by
+// itself, it's that the first FOUNDING_MEMBER_CAP signups (and only
+// them -- see createUser() in repo/users.ts, which now checks the real
+// count before handing out a number) get THIS instead of the standard
+// trial. Everyone after the cap gets the normal 2-month trial and no
+// founding_member_number at all -- so "only 1,000 founding members get a
+// year free" is an enforced fact, not a copy claim.
+export const FOUNDING_MEMBER_TRIAL_MONTHS = 12;
+
 // Each quick action starts a new chat with `prompt` as the opening user
 // message. Prompts are phrased as plain first-person statements (not
 // instructions to the AI) — the system prompt in lib/ai.ts is responsible
