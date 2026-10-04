@@ -44,10 +44,21 @@ export function StickyGetAppBar({
   triggerRef?: RefObject<HTMLElement | null>;
 }) {
   const [visible, setVisible] = useState(false);
-  // Tracks whether the visitor has dismissed the bar this page view --
-  // reset on navigation (new component instance), not persisted, so it
-  // isn't permanently hidden after one close.
-  const dismissedRef = useRef(false);
+  // Holds the scroll position the visitor was at when they tapped the X,
+  // or null when not currently dismissed. Previously a plain boolean set
+  // once and never cleared, so a single tap -- curious, accidental, or a
+  // "not right now" that didn't mean "never" -- hid the bar for the rest
+  // of the page view. On a long marketing page that's a real cost: it's
+  // the only persistent "Get the App" reminder across everything below
+  // the hero (how it works, use cases, the differentiator section,
+  // pricing, FAQ). Changed 2026-10-04, as part of the same conversion
+  // push that reordered the homepage's quiz section and added the two new
+  // mid-page CTA bands: a dismissal now only suppresses the bar until the
+  // visitor scrolls another ~500px away from where they closed it (see
+  // REARM_DISTANCE_PX below), then it's eligible to reappear under the
+  // exact same trigger logic as before. Not persisted across navigation,
+  // same as the old behavior.
+  const dismissedAtScrollYRef = useRef<number | null>(null);
 
   // Added 2026-09-29: any PlayStoreLink's QR install modal -- including
   // this bar's own "Get the App" button -- broadcasts a
@@ -66,26 +77,56 @@ export function StickyGetAppBar({
   }, []);
 
   useEffect(() => {
+    // How far (in px) the visitor has to scroll past the point where they
+    // dismissed the bar before it re-arms. Large enough that closing it
+    // doesn't immediately pop back on the next scroll tick (that would
+    // just read as broken/naggy), small enough that it's back well before
+    // the next section's worth of content goes by unreminded.
+    const REARM_DISTANCE_PX = 500;
+
+    // Mirrors the IntersectionObserver's rootMargin below for the
+    // triggerRef case; for the fallback case it's just the same 480px
+    // threshold the old scroll handler used. Used both for normal
+    // fallback-case show/hide and to decide what to show immediately
+    // when a dismissal re-arms.
+    function computeShouldShow(): boolean {
+      if (triggerRef?.current) {
+        return triggerRef.current.getBoundingClientRect().bottom < 72;
+      }
+      return window.scrollY > 480;
+    }
+
+    function reArmIfScrolledAway() {
+      if (dismissedAtScrollYRef.current === null) return;
+      if (Math.abs(window.scrollY - dismissedAtScrollYRef.current) <= REARM_DISTANCE_PX) return;
+      dismissedAtScrollYRef.current = null;
+      setVisible(computeShouldShow());
+    }
+
     if (triggerRef?.current) {
       const el = triggerRef.current;
       const observer = new IntersectionObserver(
         ([entry]) => {
-          if (!dismissedRef.current) setVisible(!entry.isIntersecting);
+          if (dismissedAtScrollYRef.current === null) setVisible(!entry.isIntersecting);
         },
         { rootMargin: "-72px 0px 0px 0px" } // account for the sticky header's height
       );
       observer.observe(el);
-      return () => observer.disconnect();
+      // The observer only fires on an actual intersection change, so it
+      // won't notice a re-arm by itself (the hero stays equally
+      // out-of-view the whole time) -- this listener handles re-arming
+      // while scrolling continues.
+      window.addEventListener("scroll", reArmIfScrolledAway, { passive: true });
+      return () => {
+        observer.disconnect();
+        window.removeEventListener("scroll", reArmIfScrolledAway);
+      };
     }
-    // Fallback for pages with no hero CTA to key off. Lowered from 480
-    // to 150 on 2026-10-01 -- Clarity showed average scroll depth across
-    // the site is only ~14%, so most visitors on these pages (blog list,
-    // blog posts) were leaving before ever crossing 480px and never saw
-    // this bar at all, despite it carrying the only real incentive line
-    // ("free for the first 1,000 users") most of them would ever see.
-    // 150px is roughly "started reading," not "finished a screen."
+    // Fallback for pages with no hero CTA to key off -- show after
+    // scrolling roughly one screen's worth down.
     function onScroll() {
-      if (!dismissedRef.current) setVisible(window.scrollY > 150);
+      reArmIfScrolledAway();
+      if (dismissedAtScrollYRef.current === null) setVisible(computeShouldShow());
     }
     window.addEventListener("scroll", onScroll, { passive: true });
     onScroll();
@@ -123,7 +164,7 @@ export function StickyGetAppBar({
                 type="button"
                 aria-label="Dismiss"
                 onClick={() => {
-                  dismissedRef.current = true;
+                  dismissedAtScrollYRef.current = window.scrollY;
                   setVisible(false);
                 }}
                 className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#6a6a75] transition-colors hover:bg-white/10 hover:text-white"

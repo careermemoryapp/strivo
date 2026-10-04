@@ -53,6 +53,19 @@ export const CLARITY_HEATMAPS_URL = `https://clarity.microsoft.com/projects/view
 
 export const HOME_SUBTITLE = "Capture today. Remember forever. Achieve more.";
 
+// The real, enforced cap behind the "Founding Member" number every user
+// gets at signup (see that column's migration comment in lib/db.ts and
+// lib/repo/foundingMember.ts). This is the SAME number the website's
+// "Free for the first 1,000 users" copy has quoted since 2026-09-26 (see
+// StickyGetAppBar.tsx) -- previously an aspirational, unenforced line (the
+// founder's own call to honor operationally, not something the app
+// verified); now it's the live count shown on the homepage and the actual
+// numbering ceiling a real person is told they have a seat within. Kept
+// here (not foundingMember.ts, which is server-only) so a client
+// component like the homepage counter can import it without pulling in
+// database code.
+export const FOUNDING_MEMBER_CAP = 1000;
+
 // Each quick action starts a new chat with `prompt` as the opening user
 // message. Prompts are phrased as plain first-person statements (not
 // instructions to the AI) — the system prompt in lib/ai.ts is responsible
@@ -490,6 +503,20 @@ export const ONBOARDING_EVENTS = [
   // ever see the return-to-foreground, so a real completed sign-in never
   // fires this.
   "onboarding_resumed_incomplete",
+] as const;
+
+// Founding Member share/card analytics events -- same closed-allow-list
+// convention as CAREER_WRAPPED_EVENTS/CAREER_PROFILE_EVENTS above (see
+// either's comment). Mirrors the Career Card events one-for-one under
+// distinct names for the same reason CAREER_PROFILE_EVENTS does.
+export const FOUNDING_MEMBER_EVENTS = [
+  "founding_member_viewed",
+  "founding_member_card_generated",
+  "founding_member_card_share_clicked",
+  "founding_member_card_shared_linkedin",
+  "founding_member_card_shared_x",
+  "founding_member_card_shared_whatsapp",
+  "founding_member_card_downloaded",
 ] as const;
 
 export const NEW_CHAT_TEMPLATES = [

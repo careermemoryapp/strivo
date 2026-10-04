@@ -3,7 +3,7 @@ import { z } from "zod";
 import { requireUserId } from "@/lib/serverAuth";
 import { logAnalyticsEvent } from "@/lib/repo/analyticsEvents";
 import { rateLimitOrResponse, requestIp } from "@/lib/rateLimit";
-import { CAREER_PROFILE_EVENTS, CAREER_WRAPPED_EVENTS, ONBOARDING_EVENTS } from "@/lib/config";
+import { CAREER_PROFILE_EVENTS, CAREER_WRAPPED_EVENTS, FOUNDING_MEMBER_EVENTS, ONBOARDING_EVENTS } from "@/lib/config";
 
 // Only events from one of the closed per-feature allow-lists are accepted --
 // see each array's own comment in lib/config.ts. Deliberately closed rather
@@ -14,7 +14,12 @@ import { CAREER_PROFILE_EVENTS, CAREER_WRAPPED_EVENTS, ONBOARDING_EVENTS } from 
 // here, use there" discipline as FEATURE_FLAGS/NOTIFICATION_TYPES elsewhere
 // in this app.
 const bodySchema = z.object({
-  eventName: z.union([z.enum(CAREER_WRAPPED_EVENTS), z.enum(CAREER_PROFILE_EVENTS), z.enum(ONBOARDING_EVENTS)]),
+  eventName: z.union([
+    z.enum(CAREER_WRAPPED_EVENTS),
+    z.enum(CAREER_PROFILE_EVENTS),
+    z.enum(ONBOARDING_EVENTS),
+    z.enum(FOUNDING_MEMBER_EVENTS),
+  ]),
   // Small, flat metadata only (e.g. { periodKey: "2026", template: "A" }) --
   // bounded by JSON.stringify length below rather than a strict shape, since
   // different events legitimately carry different fields.

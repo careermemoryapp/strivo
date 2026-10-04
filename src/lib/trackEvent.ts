@@ -1,4 +1,4 @@
-import type { CAREER_PROFILE_EVENTS, CAREER_WRAPPED_EVENTS, ONBOARDING_EVENTS } from "@/lib/config";
+import type { CAREER_PROFILE_EVENTS, CAREER_WRAPPED_EVENTS, FOUNDING_MEMBER_EVENTS, ONBOARDING_EVENTS } from "@/lib/config";
 
 // The full set of trackable event names -- the union of every feature's own
 // allow-list array (see each array's comment in lib/config.ts for why the
@@ -8,7 +8,8 @@ import type { CAREER_PROFILE_EVENTS, CAREER_WRAPPED_EVENTS, ONBOARDING_EVENTS } 
 type TrackableEventName =
   | (typeof CAREER_WRAPPED_EVENTS)[number]
   | (typeof CAREER_PROFILE_EVENTS)[number]
-  | (typeof ONBOARDING_EVENTS)[number];
+  | (typeof ONBOARDING_EVENTS)[number]
+  | (typeof FOUNDING_MEMBER_EVENTS)[number];
 
 // Client-safe fire-and-forget event logger -- posts to
 // app/api/analytics/event/route.ts, which persists into the analytics_events

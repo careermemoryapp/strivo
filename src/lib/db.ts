@@ -631,6 +631,28 @@ function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_career_profile_shares_user ON career_profile_shares(user_id, created_at);
 
+    -- One row per Founding Member share -- same shape/purpose as
+    -- career_wrapped_shares and career_profile_shares above (id is the
+    -- public unguessable slug embedded in /fm/[shareId], card_data is a
+    -- frozen JSON snapshot taken at share-creation time so a posted link
+    -- keeps showing exactly what was true then even if the user's name
+    -- changes later). Deliberately ONE share per user, enforced by the
+    -- unique index below rather than just app logic -- unlike a Career
+    -- Card, which can be regenerated as a person's evidence grows, a
+    -- Founding Member number never changes once assigned (see its
+    -- migration comment above), so there's nothing to ever "create
+    -- another" of. See lib/repo/foundingMember.ts.
+    CREATE TABLE IF NOT EXISTS founding_member_shares (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      member_number INTEGER NOT NULL,
+      card_data TEXT NOT NULL,
+      view_count INTEGER NOT NULL DEFAULT 0,
+      revoked INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL
+    );
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_founding_member_shares_user ON founding_member_shares(user_id);
+
     -- Public, unauthenticated Career Profile Card shares -- created when
     -- someone completes all 5 quizzes on the marketing site's /quiz flow
     -- WITHOUT ever signing in (Home redesign, phase: quizzes move to
@@ -1072,6 +1094,30 @@ function migrate(db: DatabaseSync) {
   // sending regardless of this flag.
   if (!userColumns.includes("email_opt_out")) {
     db.exec(`ALTER TABLE users ADD COLUMN email_opt_out INTEGER NOT NULL DEFAULT 0;`);
+  }
+
+  // Sequential "Founding Member" number, assigned once per user and never
+  // reassigned -- see createUser() in repo/users.ts, which hands out the
+  // next number atomically at signup, and lib/repo/foundingMember.ts for
+  // everything built on top of it. Added 2026-10-04 as part of a direct
+  // founder request for something people would feel genuinely proud of
+  // after installing, not another line of marketing copy: "become a
+  // founding member... a page where a person is shown as the founding
+  // member of the app." NULL only ever happens for rows that predate this
+  // migration, and only until the one-time backfill right below runs.
+  const needsFoundingMemberBackfill = !userColumns.includes("founding_member_number");
+  if (needsFoundingMemberBackfill) {
+    db.exec(`ALTER TABLE users ADD COLUMN founding_member_number INTEGER;`);
+    // Every account that already existed before this shipped is just as
+    // much a founding member as anyone who signs up tomorrow -- more so,
+    // in fact -- so they get numbers in the order they actually joined
+    // (created_at ascending) rather than being left permanently NULL just
+    // because this feature arrived after they did. Guarded by the same
+    // "column didn't exist a moment ago" check as the ALTER just above,
+    // so this can only ever run once, on the first boot after this ships.
+    const existingUsers = db.prepare(`SELECT id FROM users ORDER BY created_at ASC, id ASC`).all() as { id: string }[];
+    const assignFoundingMemberNumber = db.prepare(`UPDATE users SET founding_member_number = ? WHERE id = ?`);
+    existingUsers.forEach((u, i) => assignFoundingMemberNumber.run(i + 1, u.id));
   }
 
   // Design fields for campaign emails -- added after email_campaigns

@@ -10,7 +10,8 @@ import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
-import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
+import { APP_NAME, FOUNDING_MEMBER_CAP, SINGULAR_TRACKING_LINK } from "@/lib/config";
+import { useFoundingMemberIncentiveText, useFoundingMemberStats } from "@/lib/useFoundingMemberCount";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES } from "@/lib/careerProfile";
 
 // Strivo's official social accounts — shown as icon links in the header
@@ -163,6 +164,69 @@ function TiltCard({ children, className = "", style }: { children: React.ReactNo
 // half of that same request.
 function PillButton({ className = "" }: { className?: string }) {
   return <PlayStoreLink location="hero" href={SINGULAR_TRACKING_LINK} size="lg" className={className} />;
+}
+
+// Added 2026-10-04, direct founder follow-up to the Founding Member
+// feature: the hero/closing-CTA/sticky-bar incentive lines all upgraded
+// to the real, live count, but none of them make "become a founding
+// member" the actual REASON to click -- it's one line of small subtext
+// under a button whose headline is about something else entirely. The
+// founder's own framing: "how will the user initially get motivated to
+// download... we need to create a sense of pride... before they
+// download, not just after."
+//
+// This section makes that the headline, right after the hero (prime,
+// above-the-fold-adjacent real estate, before the generic "what Strivo
+// offers" feature list), and makes it concrete rather than abstract: the
+// card shown is the ACTUAL card a visitor would get, with the ACTUAL
+// number waiting for them right now (see
+// /api/public/founding-member-preview-image, which renders the exact same
+// buildFoundingMemberCardElement function every real member's card uses,
+// fed the live count) -- not a mockup or an illustration of the idea.
+// Someone can see, before installing anything, exactly what they'd be
+// claiming.
+function FoundingMemberShowcase() {
+  const stats = useFoundingMemberStats();
+  const nextNumber = stats ? Math.min(stats.count + 1, stats.cap) : null;
+  const remaining = stats ? Math.max(stats.cap - stats.count, 0) : null;
+
+  return (
+    <section className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 sm:px-12" style={{ background: "linear-gradient(135deg,#1c0f2e,#0a0a0f 65%)" }}>
+      <div
+        className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
+        style={{ width: 700, height: 320, background: "radial-gradient(ellipse at center, rgba(244,183,63,0.16), transparent 70%)" }}
+      />
+      <div className="relative mx-auto flex max-w-4xl flex-col items-center gap-10 sm:flex-row sm:items-center sm:gap-14">
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="w-full max-w-[280px] shrink-0 sm:max-w-[300px]">
+          {/* eslint-disable-next-line @next/next/no-img-element -- dynamically generated PNG (next/og), real-time and uncacheable client-side */}
+          <img
+            src="/api/public/founding-member-preview-image"
+            alt="Preview of the Founding Member card you'd receive"
+            className="w-full rounded-[22px] shadow-2xl"
+            style={{ aspectRatio: "1080 / 1350" }}
+          />
+        </motion.div>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.3 }} variants={fadeUp} className="text-center sm:text-left">
+          <p className="text-xs font-semibold tracking-[0.15em] text-amber-300">LIMITED · FOUNDING MEMBERS ONLY</p>
+          <h2 className="mx-auto mt-2 max-w-md text-2xl font-bold tracking-tight sm:mx-0 sm:text-3xl">
+            You won&apos;t just download an app.
+            <br />
+            You&apos;ll become Founding Member{nextNumber ? ` #${nextNumber}` : ""}.
+          </h2>
+          <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-[#a0a0ac] sm:mx-0">
+            {remaining !== null
+              ? `Only ${remaining.toLocaleString("en-US")} of ${stats!.cap.toLocaleString("en-US")} founding spots are left. `
+              : ""}
+            Every founding member gets a permanent number and a card like this one — real, shareable, and yours for
+            good. Once we hit {(stats?.cap ?? FOUNDING_MEMBER_CAP).toLocaleString("en-US")}, it&apos;s gone.
+          </p>
+          <div className="mt-6 flex justify-center sm:justify-start">
+            <PlayStoreLink location="founding_member_banner" href={SINGULAR_TRACKING_LINK} size="lg" />
+          </div>
+        </motion.div>
+      </div>
+    </section>
+  );
 }
 
 // --- Phone mockups — faithful recreations of the real app screens -------
@@ -611,6 +675,13 @@ export function MarketingHome({
   // CTA for the rest of the page.
   const heroCtaRef = useRef<HTMLDivElement>(null);
 
+  // The real, live "N founding members so far" line -- see
+  // lib/useFoundingMemberCount.ts. Computed once here and reused for the
+  // hero, the closing CTA, and the sticky bar below, so there's exactly
+  // one number on the page at any moment, never three independently-timed
+  // fetches that could show slightly different counts.
+  const foundingMemberIncentiveText = useFoundingMemberIncentiveText();
+
   // Built inside the component (not as a module-level const) because
   // several answers reference the real, current pricing/trial props
   // instead of a hardcoded number that could drift out of sync with the
@@ -772,8 +843,29 @@ export function MarketingHome({
           <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-10 sm:mt-6">
             <PillButton />
           </motion.div>
+          {/* Unified with the sticky bar's incentive line below (and the
+              closing CTA's, further down) -- previously this said "Free
+              for {trialMonths} months · no card needed" while the sticky
+              bar (visible for most of the scroll, right up to the moment
+              someone actually taps "Get the App") said "Free for the
+              first 1,000 users". The founder had already explicitly chosen
+              that framing over the trial-length one for the sticky bar
+              (2026-09-26, see StickyGetAppBar.tsx's comment) -- it just
+              never got applied here or in the closing CTA, so a visitor
+              reading both saw two different offers and had a reason to
+              hesitate right before converting. This makes every CTA on
+              the page say the same thing.
+
+              Upgraded 2026-10-04 from that static claim to the real, live
+              count (see lib/useFoundingMemberCount.ts) -- the founder's
+              own "free for the first 1,000" framing now corresponds to an
+              actual Founding Member number every signup gets (see
+              founding_member_number's migration comment in lib/db.ts) and
+              a card they can see and share at /founding-member -- so this
+              line went from an aspirational tagline to something real and
+              checkable, not just a stronger hook. */}
           <motion.p variants={fadeUp} className="mt-5 text-xs text-[#5a5a66] sm:mt-2">
-            Free for {trialMonths} months · no card needed
+            {foundingMemberIncentiveText} · no card needed
           </motion.p>
           <motion.div variants={fadeUp} className="mx-auto mt-auto flex max-w-lg flex-wrap items-center justify-center gap-x-5 gap-y-4 pt-8 text-xs text-[#8a8a99] sm:mt-5 sm:gap-x-6 sm:gap-y-2 sm:pt-0 sm:text-sm">
             <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Interview tomorrow</span>
@@ -794,6 +886,8 @@ export function MarketingHome({
         </motion.div>
       </section>
 
+      <FoundingMemberShowcase />
+
       {/* Value props */}
       <section className="border-t border-[#1e1e26] px-8 py-16 text-center sm:px-12" style={{ background: "#0a0a0f" }}>
         <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="text-xs font-semibold tracking-[0.15em] text-brand-secondary">
@@ -812,64 +906,6 @@ export function MarketingHome({
               </div>
             </motion.div>
           ))}
-        </motion.div>
-      </section>
-
-      {/* Career Profile quiz teaser -- the top-of-funnel mechanic (Home
-          redesign: quizzes moved off the authenticated app entirely, see
-          the career_profile_public_shares comment in lib/db.ts). Anyone
-          landing on strivo.ai can take all 5 quizzes and get a shareable
-          Career Profile Card WITHOUT downloading the app first -- the
-          whole point is that this is how most people should first learn
-          what Strivo is, not something they discover only after installing
-          it. Links straight to /quiz (the public, no-login flow), reusing
-          the exact quiz roster/content the app itself used to host. */}
-      <section
-        className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 text-center sm:px-12"
-        style={{ background: "linear-gradient(135deg,#1c0f2e,#0a0a0f 65%)" }}
-      >
-        <div
-          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
-          style={{ width: 700, height: 320, background: "radial-gradient(ellipse at center, rgba(244,183,63,0.16), transparent 70%)" }}
-        />
-        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative text-xs font-semibold tracking-[0.15em] text-amber-300">
-          FREE · NO ACCOUNT NEEDED
-        </motion.p>
-        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mx-auto mb-3 mt-2 max-w-lg text-2xl font-bold tracking-tight sm:text-3xl">
-          Discover your Career Profile in 2 minutes
-        </motion.h2>
-        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mx-auto mb-10 max-w-md text-sm leading-relaxed text-[#8a8a99]">
-          5 quick quizzes about how you work. Get a shareable Career Profile Card at the end — send it to a friend or
-          coworker and compare.
-        </motion.p>
-
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="relative mx-auto flex max-w-2xl flex-wrap justify-center gap-2.5">
-          {CAREER_PROFILE_QUIZ_ORDER.map((quizId) => {
-            const meta = CAREER_PROFILE_QUIZZES[quizId];
-            return (
-              <motion.div key={quizId} variants={fadeUp}>
-                <Link
-                  href={`/quiz/${quizId}`}
-                  className="flex items-center gap-2 rounded-full border border-[#2a2a35] bg-[#13131a] py-2 pl-2.5 pr-4 transition-colors hover:border-[#3a3a48] hover:bg-[#1a1a22]"
-                >
-                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[13px]">{meta.icon}</span>
-                  <span className="text-xs font-semibold text-white/80">{meta.title}</span>
-                </Link>
-              </motion.div>
-            );
-          })}
-        </motion.div>
-
-        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mt-10">
-          <Magnetic>
-            <Link
-              href="/quiz"
-              className="inline-block rounded-full px-9 py-4 text-sm font-bold text-white transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
-              style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)", boxShadow: "0 8px 24px rgba(244,183,63,0.25)" }}
-            >
-              Take the free quiz →
-            </Link>
-          </Magnetic>
         </motion.div>
       </section>
 
@@ -906,6 +942,26 @@ export function MarketingHome({
             <p className="mt-4 text-sm font-bold">4. Find opportunities</p>
             <p className="mt-1 text-xs leading-relaxed text-[#8a8a99]">Jobs matched to your real history, with the reason you&apos;re a fit.</p>
           </motion.div>
+        </motion.div>
+      </section>
+
+      {/* Mid-page CTA #1 -- added as part of the 2026-10-04 "radical"
+          conversion push: before this, the page had a CTA in the hero and
+          another in the closing section, roughly 2,800px apart, with
+          NOTHING in between except the dismissible sticky bar -- anyone
+          who closed that bar (or whose browser doesn't surface it well)
+          saw zero "Get the App" moment for the entire middle of the page.
+          Placed right after "How it works", on the theory that someone
+          who just read exactly what using the app looks like is at a
+          natural decision point, not mid-thought the way inserting this
+          between two unrelated sections would feel. Kept visually light
+          (no separate dark/gradient section background, no big headline)
+          so it reads as a quiet nudge rather than a second hero -- the
+          persuasion work still happens in the surrounding content. */}
+      <section className="border-t border-[#1e1e26] px-8 py-10 text-center sm:px-12" style={{ background: "#0a0a0f" }}>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.6 }} variants={fadeUp} className="flex flex-col items-center gap-4">
+          <p className="text-sm text-[#8a8a99]">That whole loop takes under a minute, start to finish.</p>
+          <PlayStoreLink location="after_how_it_works" href={SINGULAR_TRACKING_LINK} size="md" />
         </motion.div>
       </section>
 
@@ -1106,6 +1162,20 @@ export function MarketingHome({
         </motion.div>
       </section>
 
+      {/* Mid-page CTA #2 -- see the comment on the first mid-page CTA above
+          for why this exists at all. Placed right after the page's most
+          persuasive section (what Strivo does that a generic chatbot
+          can't) -- this is the emotional peak of the page, so it's the
+          other natural place to actually ask for the click rather than
+          let the momentum carry into the founder's note/pricing/FAQ with
+          no CTA in sight. */}
+      <section className="border-t border-[#1e1e26] px-8 py-10 text-center sm:px-12" style={{ background: "#0a0a0f" }}>
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.6 }} variants={fadeUp} className="flex flex-col items-center gap-4">
+          <p className="text-sm text-[#8a8a99]">Convinced? Your memory starts the moment you open the app.</p>
+          <PlayStoreLink location="after_differentiator" href={SINGULAR_TRACKING_LINK} size="md" />
+        </motion.div>
+      </section>
+
       {/* Why I built this -- an honest founder's note in place of the
           fabricated-testimonials pattern many AI-built apps ship with
           (invented names/quotes attributed to people who don't exist is a
@@ -1178,6 +1248,79 @@ export function MarketingHome({
         </motion.div>
       </section>
 
+      {/* Career Profile quiz teaser -- the top-of-funnel mechanic (Home
+          redesign: quizzes moved off the authenticated app entirely, see
+          the career_profile_public_shares comment in lib/db.ts). Anyone
+          landing on strivo.ai can take all 5 quizzes and get a shareable
+          Career Profile Card WITHOUT downloading the app first.
+          MOVED here 2026-10-04 (part of the same "radical" conversion
+          push as the two mid-page CTAs above) -- this used to sit
+          immediately after the hero, as the very first thing a visitor
+          saw after the hero's own "Get the App" button. That meant the
+          page offered a SECOND, different conversion path (take a quiz
+          instead) before a visitor had seen how the product works, the
+          use cases, or the differentiator section -- actively competing
+          with the primary install goal at the moment intent was highest.
+          It's still a real, deliberate funnel (not being removed), just
+          repositioned as a lower-commitment fallback for people who've
+          read the whole pitch and still aren't ready to install, instead
+          of the first fork in the road. The "Not ready to install yet?"
+          lead-in line (new) makes that framing explicit instead of the
+          quiz just appearing to fire at a visitor out of nowhere. Links
+          straight to /quiz (the public, no-login flow), reusing the
+          exact quiz roster/content the app itself used to host. */}
+      <section
+        className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 text-center sm:px-12"
+        style={{ background: "linear-gradient(135deg,#1c0f2e,#0a0a0f 65%)" }}
+      >
+        <div
+          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
+          style={{ width: 700, height: 320, background: "radial-gradient(ellipse at center, rgba(244,183,63,0.16), transparent 70%)" }}
+        />
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative text-xs font-semibold tracking-[0.2em] text-[#6a6a75]">
+          NOT READY TO INSTALL YET?
+        </motion.p>
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mt-2 text-xs font-semibold tracking-[0.15em] text-amber-300">
+          FREE · NO ACCOUNT NEEDED
+        </motion.p>
+        <motion.h2 initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mx-auto mb-3 mt-2 max-w-lg text-2xl font-bold tracking-tight sm:text-3xl">
+          Discover your Career Profile in 2 minutes
+        </motion.h2>
+        <motion.p initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mx-auto mb-10 max-w-md text-sm leading-relaxed text-[#8a8a99]">
+          5 quick quizzes about how you work. Get a shareable Career Profile Card at the end — send it to a friend or
+          coworker and compare.
+        </motion.p>
+
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.1 }} variants={stagger} className="relative mx-auto flex max-w-2xl flex-wrap justify-center gap-2.5">
+          {CAREER_PROFILE_QUIZ_ORDER.map((quizId) => {
+            const meta = CAREER_PROFILE_QUIZZES[quizId];
+            return (
+              <motion.div key={quizId} variants={fadeUp}>
+                <Link
+                  href={`/quiz/${quizId}`}
+                  className="flex items-center gap-2 rounded-full border border-[#2a2a35] bg-[#13131a] py-2 pl-2.5 pr-4 transition-colors hover:border-[#3a3a48] hover:bg-[#1a1a22]"
+                >
+                  <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/10 text-[13px]">{meta.icon}</span>
+                  <span className="text-xs font-semibold text-white/80">{meta.title}</span>
+                </Link>
+              </motion.div>
+            );
+          })}
+        </motion.div>
+
+        <motion.div initial="hidden" whileInView="show" viewport={{ once: true, amount: 0.5 }} variants={fadeUp} className="relative mt-10">
+          <Magnetic>
+            <Link
+              href="/quiz"
+              className="inline-block rounded-full px-9 py-4 text-sm font-bold text-white transition-transform hover:-translate-y-0.5 active:scale-[0.98]"
+              style={{ background: "linear-gradient(135deg,#fbbf24,#f472b6)", boxShadow: "0 8px 24px rgba(244,183,63,0.25)" }}
+            >
+              Take the free quiz →
+            </Link>
+          </Magnetic>
+        </motion.div>
+      </section>
+
       {/* Closing CTA */}
       <section className="relative overflow-hidden border-t border-[#1e1e26] px-8 py-20 text-center" style={{ background: "#0a0a0f" }}>
         <div
@@ -1190,8 +1333,11 @@ export function MarketingHome({
             <br />
             everything that matters?
           </motion.h2>
+          {/* See the matching comment on the hero's incentive line above --
+              unified to the sticky bar's offer framing, and upgraded to
+              the real, live count, for the same reasons. */}
           <motion.p variants={fadeUp} className="mt-3 text-sm text-[#8a8a99]">
-            Free for {trialMonths} months. No card needed to start.
+            {foundingMemberIncentiveText}. No card needed to start.
           </motion.p>
           <motion.div variants={fadeUp} className="mt-8">
             <PillButton />
@@ -1214,7 +1360,7 @@ export function MarketingHome({
         location="sticky_bar"
         href={SINGULAR_TRACKING_LINK}
         headline="You're missing out on your next opportunity. Strivo prepares you for it."
-        incentive="Free for the first 1,000 users"
+        incentive={foundingMemberIncentiveText}
         triggerRef={heroCtaRef}
       />
     </div>

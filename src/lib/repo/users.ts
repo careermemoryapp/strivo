@@ -123,6 +123,14 @@ export type User = {
   // shouldShowPhoneBanner() below, same "ask again later, don't nag every
   // visit" pattern as preferred_plan_chosen_at/PLAN_NUDGE_AFTER_MS.
   phone_banner_dismissed_at: string | null;
+  // Sequential, permanent "Founding Member" number -- see the migration
+  // comment on this column in lib/db.ts for why it exists and
+  // lib/repo/foundingMember.ts for the share/card flow built on it.
+  // Assigned once, atomically, in createUser() below (and backfilled for
+  // every account that predates this column); never reassigned or
+  // recomputed. Null is only possible for the brief window, if any,
+  // between that migration shipping and actually running.
+  founding_member_number: number | null;
   created_at: string;
 };
 
@@ -220,9 +228,20 @@ export function createUser(input: {
   // Every new account starts with a free trial (see TRIAL_MONTHS above).
   const trialEnd = new Date();
   trialEnd.setMonth(trialEnd.getMonth() + TRIAL_MONTHS);
+  // Next sequential Founding Member number (see that column's migration
+  // comment in lib/db.ts). MAX rather than COUNT so this stays correct
+  // even if a row is ever hard-deleted (deleteUser below) -- COUNT would
+  // let a later signup reuse a number someone already has a generated
+  // card/share showing, which must never happen once that number's been
+  // handed out. better-sqlite3/node:sqlite runs this whole function
+  // synchronously on Next.js's single Node process with no `await`
+  // between the read and the INSERT below, so there's no interleaving
+  // window for two signups to race onto the same number.
+  const nextFoundingMemberNumber =
+    (db.prepare(`SELECT COALESCE(MAX(founding_member_number), 0) + 1 AS n FROM users`).get() as { n: number }).n;
   db.prepare(
-    `INSERT INTO users (id, first_name, last_name, email, password_hash, profile_image, subscription_status, trial_ends_at, created_at)
-     VALUES (?, ?, ?, ?, ?, NULL, 'trial', ?, ?)`
+    `INSERT INTO users (id, first_name, last_name, email, password_hash, profile_image, subscription_status, trial_ends_at, created_at, founding_member_number)
+     VALUES (?, ?, ?, ?, ?, NULL, 'trial', ?, ?, ?)`
   ).run(
     id,
     input.firstName,
@@ -230,7 +249,8 @@ export function createUser(input: {
     input.email.toLowerCase().trim(),
     input.passwordHash,
     trialEnd.toISOString(),
-    created_at
+    created_at,
+    nextFoundingMemberNumber
   );
   return getUserById(id)!;
 }

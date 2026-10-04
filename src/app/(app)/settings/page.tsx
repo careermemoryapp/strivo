@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import {
   User, CreditCard, Download, Bell, Shield, Palette, HelpCircle, Info, LogOut, Trash2, ChevronRight, X, FileText,
-  Sparkles, CheckCircle2, FileUp, Newspaper, Folder,
+  Sparkles, CheckCircle2, FileUp, Newspaper, Folder, Award,
 } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Button } from "@/components/Button";
@@ -44,7 +44,13 @@ function Row({
   );
 }
 
-type ProfileSummary = { firstName: string; lastName: string; email: string; createdAt: string };
+type ProfileSummary = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  createdAt: string;
+  foundingMemberNumber: number | null;
+};
 
 export default function SettingsPage() {
   const router = useRouter();
@@ -66,6 +72,7 @@ export default function SettingsPage() {
           lastName: data.user.last_name,
           email: data.user.email,
           createdAt: data.user.created_at,
+          foundingMemberNumber: data.user.founding_member_number,
         });
       })
       .catch(() => {});
@@ -131,6 +138,37 @@ export default function SettingsPage() {
       </DarkHeader>
 
       <div className="px-5 pt-5 space-y-6">
+        {/* Deliberately its own standalone button, not just another Row
+            inside a Discover/Account list -- the whole point (direct
+            founder request, 2026-10-04: "people should feel proud that
+            they downloaded the app") is that this reads as a badge
+            someone earned, not a settings toggle buried among "Blog" and
+            "Appearance". Only rendered once the profile fetch has
+            actually returned a number, so there's no flash of "#null"
+            while that request is still in flight. */}
+        {profile?.foundingMemberNumber != null && (
+          <button
+            onClick={() => router.push("/founding-member")}
+            className="flex w-full items-center gap-3 rounded-[14px] p-4 text-left"
+            style={{
+              background: "linear-gradient(135deg, rgba(244,183,63,0.16), rgba(124,58,237,0.16))",
+              border: "1px solid rgba(244,183,63,0.35)",
+            }}
+          >
+            <span
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-[#f4b73f]"
+              style={{ background: "rgba(244,183,63,0.18)" }}
+            >
+              <Award size={20} />
+            </span>
+            <span className="flex-1">
+              <span className="block text-sm font-bold text-ink">Founding Member #{profile.foundingMemberNumber}</span>
+              <span className="block text-xs text-ink-soft">Tap to see your card</span>
+            </span>
+            <ChevronRight size={16} className="text-[#cec7dd]" />
+          </button>
+        )}
+
         <div>
           <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-[#a8a2bd]">Account</h3>
           <div className="rounded-[14px] bg-surface border border-[#f0ecf7] divide-y divide-[#f0ecf7] overflow-hidden">
