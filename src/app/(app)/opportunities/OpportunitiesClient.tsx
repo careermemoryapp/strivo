@@ -15,6 +15,7 @@ import {
   Sparkles,
   CheckCircle2,
   Crown,
+  Settings,
 } from "lucide-react";
 import { DarkHeader } from "@/components/DarkHeader";
 import { Avatar } from "@/components/Avatar";
@@ -517,6 +518,16 @@ export function OpportunitiesClient() {
   const [geoSupported, setGeoSupported] = useState(false);
   const [geoStatus, setGeoStatus] = useState<"idle" | "requesting" | "error">("idle");
   const [geoError, setGeoError] = useState<string | null>(null);
+  // Distinguishes a PERMISSION_DENIED result from any other geolocation
+  // failure (no signal, timeout, etc). Once the OS has denied this once,
+  // tapping the button again just re-triggers the exact same instant
+  // denial -- navigator.geolocation never re-shows the native permission
+  // prompt on its own at that point, on Android or iOS. A plain "denied"
+  // error with nothing else actionable was a dead end for anyone in that
+  // state; this flag switches the UI to the one thing that actually un-
+  // sticks it, pointing them at the phone's own Settings app instead of
+  // inviting another tap that can only fail the same way again.
+  const [geoPermissionBlocked, setGeoPermissionBlocked] = useState(false);
   useEffect(() => {
     // Deferred via setTimeout, not called directly -- same reasoning as
     // load()'s own effect above (see its comment): keeps the actual
@@ -529,6 +540,7 @@ export function OpportunitiesClient() {
   function requestLocation() {
     setGeoStatus("requesting");
     setGeoError(null);
+    setGeoPermissionBlocked(false);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         fetch("/api/opportunities/detect-location", {
@@ -562,9 +574,15 @@ export function OpportunitiesClient() {
       },
       (err) => {
         setGeoStatus("error");
-        setGeoError(
-          err.code === err.PERMISSION_DENIED ? "Location access was denied." : "Couldn't get your location -- try again."
-        );
+        if (err.code === err.PERMISSION_DENIED) {
+          // Re-tapping the button from here would just fail the same way
+          // again -- see geoPermissionBlocked's comment above. Point them
+          // at Settings instead of leaving them stuck on a dead-end error.
+          setGeoPermissionBlocked(true);
+          setGeoError("Location access is turned off for Strivo.");
+        } else {
+          setGeoError("Couldn't get your location -- try again.");
+        }
       },
       { enableHighAccuracy: false, timeout: 10000, maximumAge: 5 * 60 * 1000 }
     );
@@ -733,21 +751,45 @@ export function OpportunitiesClient() {
             resume-text guess. Shown once personalized so it sits with the
             rest of the real matching UI, not the locked-state card. */}
         {!loading && !error && data?.personalized && geoSupported && (
-          <div className="flex flex-wrap items-center gap-2 px-0.5">
-            <button
-              type="button"
-              onClick={requestLocation}
-              disabled={geoStatus === "requesting"}
-              className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12px] font-semibold text-ink-soft transition hover:border-brand-primary/40 hover:bg-brand-primary-soft hover:text-brand-primary active:scale-95 disabled:opacity-60"
-            >
-              <MapPin size={12} className="shrink-0" />
-              {geoStatus === "requesting"
-                ? "Getting your location…"
-                : data.statedPreferences?.city
-                  ? `Matching near ${data.statedPreferences.city} — update`
-                  : "Share your location for closer matches"}
-            </button>
-            {geoStatus === "error" && geoError && <span className="text-[11.5px] text-red-500">{geoError}</span>}
+          <div className="flex flex-col gap-2 px-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={requestLocation}
+                disabled={geoStatus === "requesting"}
+                className="flex items-center gap-1.5 rounded-pill border border-border px-3 py-1.5 text-[12px] font-semibold text-ink-soft transition hover:border-brand-primary/40 hover:bg-brand-primary-soft hover:text-brand-primary active:scale-95 disabled:opacity-60"
+              >
+                <MapPin size={12} className="shrink-0" />
+                {geoStatus === "requesting"
+                  ? "Getting your location…"
+                  : data.statedPreferences?.city
+                    ? `Matching near ${data.statedPreferences.city} — update`
+                    : "Share your location for closer matches"}
+              </button>
+              {/* Only shown for the OTHER kind of failure (no signal,
+                  timeout) -- a blocked permission gets the richer card
+                  below instead, since a one-line "denied" with nothing to
+                  do about it is a dead end (see geoPermissionBlocked). */}
+              {geoStatus === "error" && geoError && !geoPermissionBlocked && (
+                <span className="text-[11.5px] text-red-500">{geoError}</span>
+              )}
+            </div>
+            {geoStatus === "error" && geoPermissionBlocked && (
+              <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-[12px] text-ink-soft">
+                <Settings size={14} className="mt-0.5 shrink-0 text-red-500" />
+                <div>
+                  <p className="font-semibold text-red-600">Location access is turned off for Strivo.</p>
+                  <p className="mt-0.5">
+                    Your phone only asks for this once. To turn it on: open your phone&apos;s{" "}
+                    <span className="font-semibold text-ink">Settings</span> app →{" "}
+                    <span className="font-semibold text-ink">Apps</span> →{" "}
+                    <span className="font-semibold text-ink">Strivo</span> →{" "}
+                    <span className="font-semibold text-ink">Permissions</span> →{" "}
+                    <span className="font-semibold text-ink">Location</span>, then allow it and come back here.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
