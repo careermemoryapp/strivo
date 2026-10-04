@@ -340,7 +340,29 @@ export const LOW_QUALITY_COMPANY_NAMES = [
   "client",
   "our client",
   "a client",
+  // Added 2026-10-05 after a direct founder report: this exact company
+  // showed up as the TOP MATCH, "Business Development Engineer -- OEM
+  // Sales" -- it's a resume-writing service (happiestresume.com), not an
+  // employer, so whatever Adzuna listing attributed it as the "company"
+  // was never a genuine job to begin with. Kept as its own entry (not
+  // relying solely on the word-pattern check below) so it's caught even
+  // if that pattern is ever narrowed.
+  "happiest resume",
 ];
+
+// Company names containing one of these WORDS (not a placeholder value,
+// an actual business name) are near-certainly a resume-writing / career-
+// services / content business that got attributed as the "company" on a
+// scraped or templated listing -- never a genuine hiring employer. Added
+// 2026-10-05 alongside the "happiest resume" entry above, same founder
+// report. Deliberately narrow and NOT the broad recruiter/staffing-agency
+// name filter LOW_QUALITY_COMPANY_NAMES's own top comment already
+// explains avoiding (a "Consultants" or "Manpower" company can genuinely
+// be hiring for a real client role) -- "resume" is specific enough that a
+// real employer legitimately named with that word is effectively
+// impossible, so this is a safe generalization rather than a slippery
+// slope toward that broader filter.
+const LOW_QUALITY_COMPANY_WORD_PATTERNS = [/\bresume\b/i];
 
 // A null/empty company (Adzuna sent no company.display_name at all -- see
 // adzuna.ts, stored as null by upsertJobPosting) is the OTHER half of "no
@@ -352,7 +374,8 @@ export function isLowQualityCompanyName(name: string | null | undefined): boolea
   if (!name) return true;
   const lower = name.trim().toLowerCase();
   if (!lower) return true;
-  return LOW_QUALITY_COMPANY_NAMES.includes(lower);
+  if (LOW_QUALITY_COMPANY_NAMES.includes(lower)) return true;
+  return LOW_QUALITY_COMPANY_WORD_PATTERNS.some((re) => re.test(name));
 }
 
 // Fixed allow-list of Career Wrapped analytics events (see the spec's

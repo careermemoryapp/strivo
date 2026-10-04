@@ -396,7 +396,18 @@ function buildProfileText(
           ", "
         )}. This is a stated target/wish, NOT evidence of experience -- do not describe it as something they have done, have worked in, or are experienced in. Only the roles and resume sections above are actual evidence.`
       : null;
-  const resumeExcerpt = resumeText ? resumeText.slice(0, 3000) : null;
+  // Widened 3000 -> 4500 on 2026-10-05, a direct founder call: a flat
+  // character slice has no idea where a person's Education section
+  // actually falls in their own resume layout (top, for most Indian
+  // MBA/engineering resumes; bottom, in plenty of others), so on a
+  // longer resume the old 3000-char cutoff could silently cut education
+  // out of what rankOpportunities ever sees -- this founder's own
+  // specific complaint was that matches weren't respecting his education
+  // level (an MBA) at all. Not a full fix (a resume long enough could
+  // still lose it), but a meaningfully lower-risk cutoff; see
+  // rankOpportunities' own system prompt in lib/ai.ts for where this text
+  // actually gets judged against education level now.
+  const resumeExcerpt = resumeText ? resumeText.slice(0, 4500) : null;
   // Stated explicitly, ahead of the resume excerpt, rather than trusting
   // the model to notice a city name buried in it -- see rankOpportunities'
   // system prompt in lib/ai.ts for how this is judged.
