@@ -19,7 +19,12 @@ import { buildFoundingMemberCardElement, FOUNDING_MEMBER_CARD_SIZE } from "@/lib
 // (buildFoundingMemberCardElement), so what a visitor sees here is
 // exactly what they'd actually receive, not a separate "marketing version"
 // that could drift from the real thing.
-export const revalidate = 60;
+//
+// `force-dynamic` (not `revalidate = 60`) -- same fix and same reasoning
+// as founding-member-count/route.ts: this image's whole job is to show the
+// REAL next number right now, so it can't be allowed to lag behind an
+// actual signup even briefly.
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const stats = getFoundingMemberStats();
@@ -31,6 +36,12 @@ export async function GET() {
       cap: stats.cap,
       joinedDateLabel: "today",
     }),
-    { ...FOUNDING_MEMBER_CARD_SIZE }
+    {
+      ...FOUNDING_MEMBER_CARD_SIZE,
+      // Same belt-and-suspenders reasoning as founding-member-count/route.ts
+      // -- explicit header rather than trusting `dynamic = "force-dynamic"`
+      // alone to stop an intermediary (CDN/reverse proxy) from caching this.
+      headers: { "Cache-Control": "no-store, max-age=0" },
+    }
   );
 }

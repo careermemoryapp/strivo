@@ -5,7 +5,7 @@ import { personalize, renderCampaignBodyHtml, htmlToPlainText, wrapBrandedEmail 
 import { renderWelcomeEmailHtml, renderWelcomeEmailText } from "@/lib/emailWelcome";
 import { renderGiftEmailHtml, renderGiftEmailText, type GiftPlan } from "@/lib/emailGift";
 import { renderProductUpdateEmailHtml, renderProductUpdateEmailText } from "@/lib/emailProductUpdate";
-import { renderAppLinkEmailHtml, renderAppLinkEmailText } from "@/lib/emailAppLink";
+import { getOrCreateFoundingMemberShare } from "@/lib/repo/foundingMember";
 
 // Sends outbound email via AWS SES. Uses the standard AWS SDK env vars
 // (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) so it picks up
@@ -156,42 +156,6 @@ export async function sendWelcomeEmail(params: { toEmail: string; firstName: str
     return true;
   } catch (e) {
     console.error(`Failed to send welcome email to ${params.toEmail} via SES:`, e);
-    Sentry.captureException(e);
-    return false;
-  }
-}
-
-// Sent the moment a desktop (or iOS) visitor on strivo.ai types their email
-// into the QR modal's "email me the link instead" option -- see
-// PlayStoreLink.tsx and emailAppLink.ts for the full reasoning. No account
-// is touched or created by this; `toEmail` is whatever the visitor typed
-// into that one-off form, not a Strivo user's account email. Never throws;
-// returns false on any failure so the caller can show a generic error
-// without crashing the request.
-export async function sendAppLinkEmail(params: { toEmail: string; downloadUrl: string }): Promise<boolean> {
-  if (!sesConfigured()) {
-    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping app-link email.");
-    return false;
-  }
-
-  try {
-    await getClient().send(
-      new SendEmailCommand({
-        Source: FROM_EMAIL,
-        Destination: { ToAddresses: [params.toEmail] },
-        Message: {
-          Subject: { Data: "Your Strivo download link", Charset: "UTF-8" },
-          Body: {
-            Html: { Data: renderAppLinkEmailHtml(params.downloadUrl), Charset: "UTF-8" },
-            Text: { Data: renderAppLinkEmailText(params.downloadUrl), Charset: "UTF-8" },
-          },
-        },
-      })
-    );
-    console.log(`App-link email sent to ${params.toEmail} via SES.`);
-    return true;
-  } catch (e) {
-    console.error(`Failed to send app-link email to ${params.toEmail} via SES:`, e);
     Sentry.captureException(e);
     return false;
   }
@@ -361,8 +325,33 @@ export async function sendCampaignEmail(params: {
     return false;
   }
 
-  const subject = personalize(params.subject, params.firstName);
-  const bodyHtml = personalize(params.bodyHtml, params.firstName);
+  // Per-recipient Founding Member badge -- added 2026-10-06, direct founder
+  // request: "send mail to founding member with their badge in the email."
+  // getOrCreateFoundingMemberShare returns null for anyone without a
+  // founding_member_number (everyone outside the "founding_member" segment,
+  // see EMAIL_SEGMENTS in repo/emailCampaigns.ts), in which case
+  // {{foundingMemberCardUrl}} falls back to the generic, non-personalized
+  // public preview image rather than a broken <img> -- this function has no
+  // way to know which segment an admin picked, so it has to stay correct
+  // even if {{foundingMemberCardUrl}} ends up in a body sent to "all".
+  // {{foundingMemberNumber}} is the plain number alone, for copy like
+  // "You're Founding Member #{{foundingMemberNumber}}" -- empty string (not
+  // "null") when the recipient doesn't have one, so the sentence can be
+  // written to read sensibly either way rather than printing "null".
+  const foundingShare = getOrCreateFoundingMemberShare(params.toUserId);
+  const foundingCardUrl = foundingShare
+    ? `${APP_ORIGIN}/api/founding-member/share-image/${foundingShare.id}`
+    : `${APP_ORIGIN}/api/public/founding-member-preview-image`;
+  const foundingNumber = foundingShare ? String(foundingShare.member_number) : "";
+
+  function withFoundingMemberTokens(input: string): string {
+    return input
+      .replace(/\{\{foundingMemberCardUrl\}\}/g, foundingCardUrl)
+      .replace(/\{\{foundingMemberNumber\}\}/g, foundingNumber);
+  }
+
+  const subject = withFoundingMemberTokens(personalize(params.subject, params.firstName));
+  const bodyHtml = withFoundingMemberTokens(personalize(params.bodyHtml, params.firstName));
   const unsubscribeUrl = `${APP_ORIGIN}/api/email/unsubscribe?t=${createUnsubscribeToken(params.toUserId)}`;
   const html = wrapBrandedEmail({
     bodyHtml: renderCampaignBodyHtml(bodyHtml),

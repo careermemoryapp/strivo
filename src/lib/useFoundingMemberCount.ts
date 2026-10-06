@@ -27,7 +27,13 @@ export type FoundingMemberStats = { count: number; cap: number };
 export function useFoundingMemberStats(): FoundingMemberStats | null {
   const [stats, setStats] = useState<FoundingMemberStats | null>(null);
   useEffect(() => {
-    fetch("/api/public/founding-member-count")
+    // cache: "no-store" -- belt-and-suspenders alongside the route's own
+    // `dynamic = "force-dynamic"` (see founding-member-count/route.ts):
+    // without this, the BROWSER's own HTTP cache can still serve a stale
+    // response for this exact URL on a later page load even once the
+    // server itself stops caching, which looked identical to the server
+    // being stale from the outside ("the number is still the same").
+    fetch("/api/public/founding-member-count", { cache: "no-store" })
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data && typeof data.count === "number" && typeof data.cap === "number") setStats(data);

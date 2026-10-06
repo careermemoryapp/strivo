@@ -110,6 +110,13 @@ const EMAIL_SEGMENT_OPTIONS: { value: EmailSegment; label: string; hint: string 
   { value: "paid_annual", label: "Paid · Yearly", hint: "Active, reserved yearly" },
   { value: "expired", label: "Trial ended", hint: "Ran out, never converted" },
   { value: "decide_later", label: "Chose: decide later", hint: "Picked 'I'll choose later' at signup" },
+  // Added 2026-10-06 for the Founding Member badge email: the only segment
+  // where {{foundingMemberCardUrl}} in the body resolves to each person's
+  // OWN real card (see sendCampaignEmail in lib/email.ts) -- anyone outside
+  // this segment has no founding_member_number, so the token falls back to
+  // the generic public preview image instead, which isn't what a founding-
+  // member-specific send is for.
+  { value: "founding_member", label: "Founding Members", hint: "Has a Founding Member number" },
 ];
 
 function emailSegmentLabel(segment: EmailSegment): string {

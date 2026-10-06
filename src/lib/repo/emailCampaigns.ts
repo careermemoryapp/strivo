@@ -10,7 +10,19 @@ import type { User } from "@/lib/repo/users";
 // Play Billing webhooks are wired up (see task tracker #115) -- "expired"
 // (trial ran out, never converted) is the closest real signal available
 // today. Once real billing lands, add "cancelled" here the same way.
-export type EmailSegment = "all" | "trial" | "paid_monthly" | "paid_annual" | "expired" | "decide_later";
+// "founding_member" added 2026-10-06, direct founder request: a campaign
+// to tell Founding Members about their own badge needs an audience of
+// EXACTLY the people who actually have one (founding_member_number not
+// null) -- sending it to "all" would show the card-preview fallback image
+// to everyone else too, which defeats the point of a personalized send.
+export type EmailSegment =
+  | "all"
+  | "trial"
+  | "paid_monthly"
+  | "paid_annual"
+  | "expired"
+  | "decide_later"
+  | "founding_member";
 
 export const EMAIL_SEGMENTS: EmailSegment[] = [
   "all",
@@ -19,17 +31,26 @@ export const EMAIL_SEGMENTS: EmailSegment[] = [
   "paid_annual",
   "expired",
   "decide_later",
+  "founding_member",
 ];
 
 export type EmailRecipient = { id: string; email: string; firstName: string };
 
 type CandidateRow = Pick<
   User,
-  "id" | "email" | "first_name" | "subscription_status" | "trial_ends_at" | "preferred_plan" | "email_opt_out"
+  | "id"
+  | "email"
+  | "first_name"
+  | "subscription_status"
+  | "trial_ends_at"
+  | "preferred_plan"
+  | "email_opt_out"
+  | "founding_member_number"
 >;
 
 function matchesSegment(segment: EmailSegment, row: CandidateRow): boolean {
   if (segment === "all") return true;
+  if (segment === "founding_member") return row.founding_member_number !== null;
   const info = getSubscriptionInfo(row);
   if (segment === "trial") return info.status === "trial";
   if (segment === "expired") return info.status === "expired";
@@ -53,7 +74,7 @@ function candidateRows(): CandidateRow[] {
   const db = getDb();
   return db
     .prepare(
-      `SELECT id, email, first_name, subscription_status, trial_ends_at, preferred_plan, email_opt_out
+      `SELECT id, email, first_name, subscription_status, trial_ends_at, preferred_plan, email_opt_out, founding_member_number
        FROM users WHERE email_opt_out = 0`
     )
     .all() as CandidateRow[];
