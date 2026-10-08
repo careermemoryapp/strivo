@@ -3,9 +3,11 @@ import * as Sentry from "@sentry/nextjs";
 import { createUnsubscribeToken } from "@/lib/emailUnsubscribe";
 import { personalize, renderCampaignBodyHtml, htmlToPlainText, wrapBrandedEmail } from "@/lib/emailTemplate";
 import { renderWelcomeEmailHtml, renderWelcomeEmailText } from "@/lib/emailWelcome";
+import { renderFoundingMemberWelcomeEmailHtml, renderFoundingMemberWelcomeEmailText } from "@/lib/emailFoundingMemberWelcome";
 import { renderGiftEmailHtml, renderGiftEmailText, type GiftPlan } from "@/lib/emailGift";
 import { renderProductUpdateEmailHtml, renderProductUpdateEmailText } from "@/lib/emailProductUpdate";
 import { getOrCreateFoundingMemberShare } from "@/lib/repo/foundingMember";
+import { FOUNDING_MEMBER_CAP } from "@/lib/config";
 
 // Sends outbound email via AWS SES. Uses the standard AWS SDK env vars
 // (AWS_REGION, AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY) so it picks up
@@ -156,6 +158,67 @@ export async function sendWelcomeEmail(params: { toEmail: string; firstName: str
     return true;
   } catch (e) {
     console.error(`Failed to send welcome email to ${params.toEmail} via SES:`, e);
+    Sentry.captureException(e);
+    return false;
+  }
+}
+
+// Sent automatically the moment a brand-new signup lands inside the first
+// FOUNDING_MEMBER_CAP accounts (see the signIn callback in lib/auth.ts,
+// which checks dbUser.founding_member_number !== null right after
+// createUser() and fires this un-awaited/fire-and-forget alongside
+// sendWelcomeEmail -- founder's own words, 2026-10-08: "as soon as
+// somebody registered within the first 1000, they receive a mail of
+// becoming the founding member"). Deliberately separate from
+// sendWelcomeEmail: that one explains how the product works for everyone;
+// this one is the special-status notification, with the recipient's own
+// real card, sent only to the subset who actually qualify.
+//
+// toUserId must already be known to have a founding_member_number (the
+// caller's job to check -- see repo/users.ts' createUser()) -- but this
+// still defends itself: getOrCreateFoundingMemberShare returns null for
+// anyone who somehow doesn't qualify, and this bails out rather than
+// sending a card-less "Founding Member" email with a broken image. Never
+// throws; returns false on any failure (including "doesn't qualify") so
+// the caller can log without risking the signup flow itself.
+export async function sendFoundingMemberWelcomeEmail(params: {
+  toEmail: string;
+  toUserId: string;
+  firstName: string;
+}): Promise<boolean> {
+  if (!sesConfigured()) {
+    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping founding member welcome email.");
+    return false;
+  }
+
+  const share = getOrCreateFoundingMemberShare(params.toUserId);
+  if (!share) {
+    console.error(`sendFoundingMemberWelcomeEmail called for ${params.toUserId}, who has no founding_member_number — skipping.`);
+    return false;
+  }
+
+  const name = params.firstName.trim() || "there";
+  const cardUrl = `${APP_ORIGIN}/api/founding-member/share-image/${share.id}`;
+  const emailParams = { firstName: name, memberNumber: share.member_number, cap: FOUNDING_MEMBER_CAP, cardUrl };
+
+  try {
+    await getClient().send(
+      new SendEmailCommand({
+        Source: FROM_EMAIL,
+        Destination: { ToAddresses: [params.toEmail] },
+        Message: {
+          Subject: { Data: `You're officially Strivo Founding Member #${share.member_number}`, Charset: "UTF-8" },
+          Body: {
+            Html: { Data: renderFoundingMemberWelcomeEmailHtml(emailParams), Charset: "UTF-8" },
+            Text: { Data: renderFoundingMemberWelcomeEmailText(emailParams), Charset: "UTF-8" },
+          },
+        },
+      })
+    );
+    console.log(`Founding member welcome email sent to ${params.toEmail} (#${share.member_number}) via SES.`);
+    return true;
+  } catch (e) {
+    console.error(`Failed to send founding member welcome email to ${params.toEmail} via SES:`, e);
     Sentry.captureException(e);
     return false;
   }

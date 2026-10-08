@@ -3,7 +3,7 @@ import GoogleProvider from "next-auth/providers/google";
 import AppleProvider from "next-auth/providers/apple";
 import crypto from "node:crypto";
 import { getUserByEmail, getUserById, createUser, updateUserProfile, markLoggedOut } from "@/lib/repo/users";
-import { sendWelcomeEmail } from "@/lib/email";
+import { sendWelcomeEmail, sendFoundingMemberWelcomeEmail } from "@/lib/email";
 import { tryGenerateAppleClientSecret } from "@/lib/appleClientSecret";
 import * as Sentry from "@sentry/nextjs";
 
@@ -112,6 +112,20 @@ export const authOptions: AuthOptions = {
             console.error("Welcome email failed:", e);
             Sentry.captureException(e);
           });
+          // Separate, additional email for the subset who landed inside the
+          // first FOUNDING_MEMBER_CAP accounts -- createUser() already
+          // decided that and stamped founding_member_number (see
+          // repo/users.ts), so this is just acting on it. Founder's own
+          // words, 2026-10-08: "as soon as somebody registered within the
+          // first 1000, they receive a mail of becoming the founding
+          // member." Fire-and-forget for the same reason as the welcome
+          // email above -- never block or delay sign-in on an email send.
+          if (dbUser.founding_member_number !== null) {
+            sendFoundingMemberWelcomeEmail({ toEmail: dbUser.email, toUserId: dbUser.id, firstName: dbUser.first_name }).catch((e) => {
+              console.error("Founding member welcome email failed:", e);
+              Sentry.captureException(e);
+            });
+          }
         }
         if (user.image && user.image !== dbUser.profile_image) {
           updateUserProfile(dbUser.id, { profile_image: user.image });
