@@ -12,6 +12,7 @@ import { LogoMark } from "@/components/Logo";
 import { APP_NAME } from "@/lib/config";
 import { isNativeApp, markExpectedResume } from "@/lib/nativePlatform";
 import { trackEvent } from "@/lib/trackEvent";
+import { getAnonDeviceId } from "@/lib/anonDeviceId";
 
 function GoogleIcon() {
   return (
@@ -58,21 +59,10 @@ function AppleIcon() {
 // fully intact, this only controls whether the button renders.
 const APPLE_SIGNIN_ENABLED = false;
 
-const SIGNIN_FAILED_MESSAGE = "That sign-in didn't go through. Please try again.";
-
 function LoginForm() {
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const searchParams = useSearchParams();
-  // /api/auth/mobile-consume redirects here with ?error=signin_failed when
-  // the one-time token it got handed was missing, expired, or already
-  // used -- previously a bare /login with nothing on screen, which looked
-  // exactly like "my tap did nothing" and gave someone no reason to try
-  // again. Reading it straight into the initial state (rather than an
-  // effect calling setError) shows the banner on the very first render
-  // instead of flashing in a frame later.
-  const [error, setError] = useState<string | null>(() =>
-    searchParams.get("error") === "signin_failed" ? SIGNIN_FAILED_MESSAGE : null
-  );
   // /api/auth/mobile-bridge sets this when it sends the system browser back
   // here so the *app's* handleGoogle (below) doesn't run — this instance of
   // the page is being viewed inside a real Chrome tab, not the app WebView,
@@ -87,16 +77,8 @@ function LoginForm() {
   // strivo.ai/login on desktop), and only the installed-app path is what
   // this instrumentation is trying to see.
   useEffect(() => {
-    if (isNativeApp()) trackEvent("onboarding_login_viewed");
+    if (isNativeApp()) trackEvent("onboarding_login_viewed", { deviceId: getAnonDeviceId() });
   }, []);
-
-  // Same ?error=signin_failed case as the error state above -- just the
-  // analytics side of it, split out since trackEvent isn't state.
-  useEffect(() => {
-    if (searchParams.get("error") === "signin_failed" && isNativeApp()) {
-      trackEvent("onboarding_google_token_failed");
-    }
-  }, [searchParams]);
 
   // handleGoogle/handleApple below set `loading` true right before handing
   // off to the system browser, and only reset it in a `finally` that runs
@@ -121,7 +103,7 @@ function LoginForm() {
       // locked) with sign-in still pending -- there's no way to tell those
       // apart from this event alone. Read as "still on the login screen
       // after a trip to the background," not strictly "abandoned."
-      trackEvent("onboarding_resumed_incomplete");
+      trackEvent("onboarding_resumed_incomplete", { deviceId: getAnonDeviceId() });
     });
     return () => {
       handle.then((h) => h.remove());
@@ -150,7 +132,7 @@ function LoginForm() {
       // hand-off, so a later missing "browser_opened" event can be read as
       // "tapped Google but Browser.open() never came back" rather than "never
       // tapped it at all."
-      trackEvent("onboarding_google_tapped");
+      trackEvent("onboarding_google_tapped", { deviceId: getAnonDeviceId() });
       try {
         // Opening the system browser backgrounds the app the same way the
         // native file picker does, and returning from it fires the exact
@@ -161,7 +143,7 @@ function LoginForm() {
         // likely why sign-in sometimes needed several tries.
         markExpectedResume();
         await Browser.open({ url: bridgeUrl });
-        trackEvent("onboarding_google_browser_opened");
+        trackEvent("onboarding_google_browser_opened", { deviceId: getAnonDeviceId() });
       } catch {
         // Most likely cause: this device still has an older build of the
         // app installed that predates the @capacitor/browser plugin being
@@ -171,7 +153,7 @@ function LoginForm() {
         setError(
           "Couldn't open the sign-in page. Make sure you have the latest version of the app installed."
         );
-        trackEvent("onboarding_google_browser_open_failed");
+        trackEvent("onboarding_google_browser_open_failed", { deviceId: getAnonDeviceId() });
       } finally {
         setLoading(false);
       }
@@ -223,8 +205,8 @@ function LoginForm() {
         <div className="mb-4" style={{ filter: "drop-shadow(0 8px 20px rgba(124,58,237,0.25))" }}>
           <LogoMark size={76} />
         </div>
-        <h1 className="text-2xl font-semibold text-ink">Let&apos;s get started</h1>
-        <p className="mt-1 text-sm text-ink-soft">One tap to start building your career memory</p>
+        <h1 className="text-2xl font-semibold text-ink">Welcome back</h1>
+        <p className="mt-1 text-sm text-ink-soft">Log in to {APP_NAME}</p>
       </div>
 
       {error && <ErrorBanner message={error} />}

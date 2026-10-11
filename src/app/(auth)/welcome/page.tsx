@@ -6,6 +6,7 @@ import { LogoMark } from "@/components/Logo";
 import { APP_NAME, APP_TAGLINE } from "@/lib/config";
 import { isNativeApp } from "@/lib/nativePlatform";
 import { trackEvent } from "@/lib/trackEvent";
+import { getAnonDeviceId } from "@/lib/anonDeviceId";
 
 // The very first thing a signed-out person sees when they open the app —
 // a full-bleed animated moment before landing on the Continue with Google
@@ -24,7 +25,7 @@ export default function WelcomePage() {
   // instrumentation). isNativeApp()-gated so a stray web visitor landing
   // here never mixes into what's specifically an installed-app question.
   useEffect(() => {
-    if (isNativeApp()) trackEvent("onboarding_welcome_viewed");
+    if (isNativeApp()) trackEvent("onboarding_welcome_viewed", { deviceId: getAnonDeviceId() });
   }, []);
 
   useEffect(() => {
@@ -71,12 +72,6 @@ export default function WelcomePage() {
           style={{ animationDelay: "0.3s" }}
         >
           {APP_TAGLINE}
-        </p>
-        <p
-          className="mt-3 max-w-xs text-xs text-white/50 animate-fade-in-up"
-          style={{ animationDelay: "0.45s" }}
-        >
-          Speak your wins. Never forget them.
         </p>
 
         <div className="mt-9 flex items-center gap-1.5">
