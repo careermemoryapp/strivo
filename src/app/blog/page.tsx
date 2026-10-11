@@ -1,11 +1,12 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
-import { ChatGptComparisonSection } from "@/components/marketing/ChatGptComparisonSection";
-import { TestimonialMarquee } from "@/components/marketing/TestimonialMarquee";
+import { MarketingHero } from "@/components/marketing/MarketingHero";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
+import { categoryAccent, estimateReadingTime } from "@/lib/blogCategoryStyle";
 import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
 import { listBlogPosts, BLOG_CATEGORIES } from "@/lib/repo/blogPosts";
+import { TRIAL_MONTHS } from "@/lib/repo/users";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +27,14 @@ export default async function BlogIndexPage({
 }) {
   const { category } = await searchParams;
   const posts = listBlogPosts({ category });
+  // The newest post is pulled out as a large "Latest" feature card (see
+  // below) instead of sitting in the grid like every other post -- added
+  // 2026-10-11, direct founder request ("the blog is very boring right
+  // now, make it exciting"). Only on the unfiltered "All" view -- picking
+  // a category is a reader saying "show me a list," not "surprise me with
+  // one," so a filtered view goes straight to the plain grid.
+  const [featured, ...rest] = posts;
+  const gridPosts = category ? posts : rest;
 
   return (
     <div id="blog-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
@@ -51,56 +60,22 @@ export default async function BlogIndexPage({
         Free for 2 months · no card needed
       </div>
 
-      {/* Hero */}
-      <section className="relative overflow-hidden border-b border-[#1e1e26] px-8 py-20 text-center sm:py-28" style={{ background: "#0a0a0f" }}>
-        <div
-          aria-hidden
-          className="pointer-events-none absolute left-1/2 top-0 -translate-x-1/2"
-          style={{
-            width: 640,
-            height: 420,
-            background: "radial-gradient(ellipse at center, rgba(124,58,237,0.35), rgba(79,110,247,0.12) 45%, transparent 75%)",
-          }}
-        />
-        <div className="relative">
-          <p className="inline-flex items-center gap-2 rounded-full border border-[#2a2a35] bg-[#12081f] px-4 py-1.5 text-xs font-semibold tracking-[0.15em] text-brand-primary">
-            THE {APP_NAME.toUpperCase()} BLOG
-          </p>
-          <h1 className="mx-auto mt-6 max-w-2xl text-4xl font-extrabold leading-[1.1] tracking-tight sm:text-6xl">
-            Career advice,
-            <br />
-            <span
-              className="bg-clip-text text-transparent"
-              style={{ backgroundImage: "linear-gradient(90deg,#6d8bff,#c266f2,#e879f9)" }}
-            >
-              interview prep, and stories
-            </span>{" "}
-            to help you tell yours better.
-          </h1>
-          <p className="mx-auto mt-5 max-w-md text-sm leading-relaxed text-[#a0a0ac] sm:text-base">
-            Practical, specific advice on interviews, resumes, and career growth — no fluff.
-          </p>
-        </div>
+      {/* The opening section of strivo.ai itself -- badge, headline,
+          testimonial marquee, CTA, incentive line -- MINUS the app-demo
+          video that follows it on the homepage. Direct founder request
+          (2026-10-11): "I just want the opening section of strivo.ai...
+          before the video part... then start the normal blog." Shared
+          with MarketingHome.tsx via MarketingHero.tsx, same section
+          classes as the homepage's hero for a pixel-identical opener. The
+          Founding Member badge inside points `/#founding-member` -- the
+          real section only exists on the homepage, so this navigates
+          there instead of a dead in-page anchor. */}
+      <section className="relative flex min-h-[100svh] flex-col overflow-hidden px-8 pb-16 pt-6 text-center sm:block sm:min-h-0 sm:pt-8" style={{ background: "#0a0a0f" }}>
+        <MarketingHero trialMonths={TRIAL_MONTHS} foundingMemberAnchorHref="/#founding-member" />
       </section>
-
-      {/* Social proof + differentiator -- added 2026-10-11, direct founder
-          request: the blog's job is converting readers into app
-          downloads, not just ranking for keywords, and the page read as
-          "empty" with nothing on it but a hero and a list of links. Same
-          real testimonials and ChatGPT-comparison copy as the homepage
-          (lib/marketingContent.ts) via the shared, non-animated
-          components -- see TestimonialMarquee.tsx and
-          ChatGptComparisonSection.tsx for why these are plain server
-          components instead of reusing MarketingHome.tsx's
-          framer-motion versions directly. */}
-      <section className="border-b border-[#1e1e26] px-8 py-14 sm:px-12" style={{ background: "#0a0a0f" }}>
-        <TestimonialMarquee />
-      </section>
-
-      <ChatGptComparisonSection />
 
       {/* Category filter */}
-      <section className="border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
+      <section className="border-b border-t border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>
         <div className="mx-auto flex max-w-4xl flex-wrap justify-center gap-2">
           <Link
             href="/blog"
@@ -132,26 +107,75 @@ export default async function BlogIndexPage({
               {category ? `No posts in ${category} yet — check back soon.` : "New posts are on the way — check back soon."}
             </p>
           ) : (
-            <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              {posts.map((p) => (
+            <>
+              {/* Featured/latest post -- big card, colored category badge,
+                  reading time. The visual anchor that was missing before:
+                  everything used to be the same size, same blue label, so
+                  the page read as a flat wall of identical cards. */}
+              {featured && !category && (
                 <Link
-                  key={p.id}
-                  href={`/blog/${p.slug}`}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-[#2a2a35] transition-colors hover:border-[#3a3a4a]"
+                  href={`/blog/${featured.slug}`}
+                  className="group mb-10 flex flex-col overflow-hidden rounded-3xl border border-[#2a2a35] transition-all hover:-translate-y-0.5 hover:border-[#4a4a5a] hover:shadow-[0_20px_60px_rgba(124,58,237,0.15)] sm:flex-row"
                 >
-                  <div className="aspect-[1200/630] w-full overflow-hidden bg-[#12081f]">
+                  <div className="aspect-[1200/630] w-full overflow-hidden bg-[#12081f] sm:aspect-auto sm:w-1/2">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={`/blog/${p.slug}/opengraph-image`} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={`/blog/${featured.slug}/opengraph-image`}
+                      alt=""
+                      className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                    />
                   </div>
-                  <div className="p-5">
-                    <p className="text-[10px] font-semibold tracking-[0.1em] text-brand-secondary">{p.category.toUpperCase()}</p>
-                    <p className="mt-2 text-base font-bold leading-snug text-white">{p.title}</p>
-                    <p className="mt-1.5 text-sm leading-relaxed text-[#8a8a99]">{p.excerpt}</p>
-                    <p className="mt-3 text-xs text-[#5a5a66]">{formatDate(p.created_at)}</p>
+                  <div className="flex flex-col justify-center p-6 sm:w-1/2 sm:p-8">
+                    <div className="flex items-center gap-2.5">
+                      <span
+                        className="rounded-full px-2.5 py-1 text-[10px] font-bold tracking-[0.1em]"
+                        style={{ background: `${categoryAccent(featured.category)}26`, color: categoryAccent(featured.category) }}
+                      >
+                        {featured.category.toUpperCase()}
+                      </span>
+                      <span className="text-[10px] font-bold tracking-[0.1em] text-[#5a5a66]">LATEST</span>
+                    </div>
+                    <p className="mt-3 text-xl font-bold leading-snug text-white sm:text-2xl">{featured.title}</p>
+                    <p className="mt-2.5 text-sm leading-relaxed text-[#8a8a99]">{featured.excerpt}</p>
+                    <p className="mt-4 text-xs text-[#5a5a66]">
+                      {formatDate(featured.created_at)} · {estimateReadingTime(featured.content_html)} min read
+                    </p>
                   </div>
                 </Link>
-              ))}
-            </div>
+              )}
+
+              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                {gridPosts.map((p) => (
+                  <Link
+                    key={p.id}
+                    href={`/blog/${p.slug}`}
+                    className="group flex flex-col overflow-hidden rounded-2xl border border-[#2a2a35] transition-all hover:-translate-y-0.5 hover:border-[#4a4a5a] hover:shadow-[0_12px_32px_rgba(124,58,237,0.12)]"
+                  >
+                    <div className="aspect-[1200/630] w-full overflow-hidden bg-[#12081f]">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`/blog/${p.slug}/opengraph-image`}
+                        alt=""
+                        className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      />
+                    </div>
+                    <div className="p-5">
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-bold tracking-[0.1em]"
+                        style={{ background: `${categoryAccent(p.category)}26`, color: categoryAccent(p.category) }}
+                      >
+                        {p.category.toUpperCase()}
+                      </span>
+                      <p className="mt-2.5 text-base font-bold leading-snug text-white">{p.title}</p>
+                      <p className="mt-1.5 text-sm leading-relaxed text-[#8a8a99]">{p.excerpt}</p>
+                      <p className="mt-3 text-xs text-[#5a5a66]">
+                        {formatDate(p.created_at)} · {estimateReadingTime(p.content_html)} min read
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </>
           )}
         </div>
       </section>

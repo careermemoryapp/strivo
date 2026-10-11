@@ -1,10 +1,11 @@
 import { HERO_TESTIMONIALS } from "@/lib/marketingContent";
 
-// Extracted 2026-10-11 from MarketingHome.tsx's hero so the blog pages
-// (the index at /blog, and conversion pass on individual posts -- see
-// BlogSidebar.tsx and ChatGptComparisonSection.tsx) can show the exact
-// same real testimonials/marquee the homepage does, instead of a second
-// copy that could drift. Deliberately NOT wrapped in framer-motion here
+// Extracted 2026-10-11 from MarketingHome.tsx's hero -- rendered inside
+// MarketingHero.tsx, which both the homepage and the blog index
+// (app/blog/page.tsx) now share, plus a trimmed copy in BlogSidebar.tsx --
+// so this exact real testimonials/marquee strip shows up everywhere
+// without a second copy that could drift. Deliberately NOT wrapped in
+// framer-motion here
 // (unlike MarketingHome.tsx's usage, which wraps this in its own
 // <motion.div variants={fadeUp}>) -- the blog pages are plain server
 // components with no other client-side animation on them, and the CSS

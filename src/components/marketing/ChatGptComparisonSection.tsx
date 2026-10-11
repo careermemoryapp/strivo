@@ -3,12 +3,13 @@ import { COMPARISON_POINTS } from "@/lib/marketingContent";
 
 // Non-animated twin of the homepage's "Things ChatGPT and Claude can't
 // do" section (MarketingHome.tsx) -- same real COMPARISON_POINTS source
-// of truth, no framer-motion (the blog pages are plain server components,
-// same reasoning as TestimonialMarquee.tsx). Added 2026-10-11, direct
-// founder request: the blog's whole job is converting readers into app
-// downloads, not just ranking for keywords, so the index page needed the
-// same "why Strivo, not just ChatGPT" argument the homepage leads with
-// instead of reading as a bare list of article links.
+// of truth, no framer-motion (for a plain server component, same
+// reasoning as TestimonialMarquee.tsx). Built 2026-10-11 for the blog
+// index, then pulled back out of it the same day on direct founder
+// feedback: the index should open with exactly the homepage's hero
+// (MarketingHero.tsx) and go straight into the post list, not a second
+// comparison section. Kept here, unused for now, in case a future
+// placement wants it rather than rebuilding it.
 export function ChatGptComparisonSection() {
   return (
     <section className="border-t border-[#1e1e26] px-8 py-16 sm:px-12" style={{ background: "#0a0a0f" }}>

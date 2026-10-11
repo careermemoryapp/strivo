@@ -14,7 +14,7 @@ import { APP_NAME, FOUNDING_MEMBER_CAP, FOUNDING_MEMBER_TRIAL_MONTHS, SINGULAR_T
 import { useFoundingMemberIncentiveText, useFoundingMemberStats } from "@/lib/useFoundingMemberCount";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES } from "@/lib/careerProfile";
 import { COMPARISON_POINTS } from "@/lib/marketingContent";
-import { TestimonialMarquee } from "@/components/marketing/TestimonialMarquee";
+import { MarketingHero, PillButton } from "@/components/marketing/MarketingHero";
 
 // Strivo's official social accounts — shown as icon links in the header
 // and footer. Kept as one list so both spots can't drift out of sync.
@@ -146,95 +146,6 @@ function TiltCard({ children, className = "", style }: { children: React.ReactNo
     >
       {children}
     </motion.div>
-  );
-}
-
-// The main "Get the app" CTA -- used in the hero and again in the closing
-// CTA section.
-//
-// No longer wrapped in <Magnetic> (removed 2026-09-28, direct founder
-// report: "why are these buttons not stable" -- shaking/jittery on mouse
-// move). Magnetic's lean effect was tuned for the single wide pill button
-// this used to be (up to 50vw on desktop) -- a large target where small
-// mouse movements produced a gentle, barely-perceptible lean. Once this
-// became two small side-by-side store badges (same day, same founder call:
-// no popup, show both platforms as badges), the same spring math was
-// applied to a much smaller bounding box, so the identical mouse movement
-// now produces a proportionally much bigger, jittery-looking offset --
-// exactly the instability reported. Static badges (no lean/follow effect)
-// also just reads more like real app-store badges, which was the other
-// half of that same request.
-function PillButton({ className = "" }: { className?: string }) {
-  return <PlayStoreLink location="hero" href={SINGULAR_TRACKING_LINK} size="lg" className={className} />;
-}
-
-// Added 2026-10-04, direct founder follow-up to the Founding Member
-// feature: the hero/closing-CTA/sticky-bar incentive lines all upgraded
-// to the real, live count, but none of them make "become a founding
-// member" the actual REASON to click -- it's one line of small subtext
-// under a button whose headline is about something else entirely. The
-// founder's own framing: "how will the user initially get motivated to
-// download... we need to create a sense of pride... before they
-// download, not just after."
-//
-// This section makes that the headline, right after the hero (prime,
-// above-the-fold-adjacent real estate, before the generic "what Strivo
-// offers" feature list), and makes it concrete rather than abstract: the
-// card shown is the ACTUAL card a visitor would get, with the ACTUAL
-// number waiting for them right now (see
-// /api/public/founding-member-preview-image, which renders the exact same
-// buildFoundingMemberCardElement function every real member's card uses,
-// fed the live count) -- not a mockup or an illustration of the idea.
-// Someone can see, before installing anything, exactly what they'd be
-// claiming.
-// Added 2026-10-04 (second direct founder follow-up, same day as
-// FoundingMemberShowcase below): that section carries the full pitch with
-// the real card, but it sits one scroll past the hero -- only someone who
-// scrolls down ever sees it. Founder's own words: "it should be visible
-// instantly... he or she should not scroll." This card puts the SAME real,
-// live claim (the actual next number, the actual spots remaining -- not a
-// mockup) at the very top of the hero, before even the headline, so it's
-// part of the very first paint on any device. Tapping it jumps straight
-// down to the full card/showcase section (#founding-member, below) for
-// anyone who wants more than this.
-//
-// Upgraded same day, third founder follow-up, from a one-line pill to this
-// (still short, but three concrete claims instead of one): the founder's
-// own words were "only 1,000 founding members are getting one year free...
-// they will get a lifetime founding member badge... they can use on
-// LinkedIn and social media... they will always be the founding member of
-// Strivo, even if it reaches billions of users." All three are real,
-// enforced facts now, not just copy -- see createUser() in
-// repo/users.ts: the 12-month trial (FOUNDING_MEMBER_TRIAL_MONTHS, vs. the
-// standard TRIAL_MONTHS everyone else gets) and the founding_member_number
-// itself are only ever handed out to the first FOUNDING_MEMBER_CAP
-// signups, enforced by a real count check, not just a display cap.
-function FoundingMemberHeroBadge({ trialMonths }: { trialMonths: number }) {
-  const stats = useFoundingMemberStats();
-  const nextNumber = stats ? Math.min(stats.count + 1, stats.cap) : null;
-  const remaining = stats ? Math.max(stats.cap - stats.count, 0) : null;
-
-  return (
-    <motion.a
-      href="#founding-member"
-      variants={fadeUp}
-      className="mx-auto mb-7 block w-full max-w-xl rounded-2xl border p-4 text-left transition-colors hover:border-amber-300/60 sm:mb-6"
-      style={{ borderColor: "rgba(244,183,63,0.4)", background: "linear-gradient(135deg, rgba(244,183,63,0.12), rgba(124,58,237,0.1))" }}
-    >
-      <div className="flex items-center gap-2">
-        <Award size={15} className="shrink-0" style={{ color: "#f4b73f" }} />
-        <span className="text-[10px] font-bold tracking-[0.14em]" style={{ color: "#f4b73f" }}>
-          FOUNDING MEMBER OFFER · {remaining !== null ? `${remaining.toLocaleString("en-US")} SPOTS LEFT` : "LIMITED"}
-        </span>
-      </div>
-      <p className="mt-2 text-[15px] font-bold leading-snug text-white sm:text-base">
-        Become Founding Member{nextNumber ? ` #${nextNumber}` : ""} — free for {FOUNDING_MEMBER_TRIAL_MONTHS} months, not {trialMonths}.
-      </p>
-      <p className="mt-1.5 text-xs leading-relaxed text-[#b7b7c2]">
-        Plus a permanent, lifetime Founding Member badge to show on LinkedIn and social media — you&apos;ll always be
-        Strivo&apos;s Founding Member{nextNumber ? ` #${nextNumber}` : ""}, even if we reach a billion users.
-      </p>
-    </motion.a>
   );
 }
 
@@ -752,76 +663,10 @@ export function MarketingHome({
           gap under the sticky header was pushing that whole stack below the
           first screen on a typical laptop viewport. */}
       <section className="relative flex min-h-[100svh] flex-col overflow-hidden px-8 pb-16 pt-6 text-center sm:block sm:min-h-0 sm:pt-8" style={{ background: "#0a0a0f" }}>
-        <div
-          className="pointer-events-none absolute left-1/2 top-[-120px] -translate-x-1/2"
-          style={{
-            width: 640,
-            height: 420,
-            background: "radial-gradient(ellipse at center, rgba(124,58,237,0.35), rgba(79,110,247,0.15) 45%, transparent 75%)",
-            filter: "blur(10px)",
-          }}
-        />
-        <motion.div initial="hidden" animate="show" variants={stagger} className="relative flex flex-1 flex-col sm:block">
-          <FoundingMemberHeroBadge trialMonths={trialMonths} />
-          <motion.p variants={fadeUp} className="mb-8 text-xs font-semibold tracking-[0.2em] text-brand-primary sm:mb-3">
-            YOUR AI CAREER MEMORY
-          </motion.p>
-          <motion.h1 variants={fadeUp} className="mx-auto text-4xl font-extrabold leading-[1.05] tracking-tight sm:text-6xl md:text-7xl">
-            You&apos;re missing out on your next opportunity.
-            <br />
-            <span
-              className="mt-3 block bg-clip-text text-transparent sm:mt-0 sm:inline"
-              style={{ backgroundImage: "linear-gradient(90deg,#6d8bff,#c266f2,#e879f9)" }}
-            >
-              Strivo prepares you for it.
-            </span>
-          </motion.h1>
-
-          {/* Real testimonials -- see lib/marketingContent.ts. Rendered
-              through the shared TestimonialMarquee component (extracted
-              2026-10-11) so this exact strip -- real names, uniform
-              brand-gradient avatars, same marquee animation -- also shows
-              up on the blog pages without a second, divergent copy. */}
-          <motion.div variants={fadeUp} className="mx-auto mt-8 w-full max-w-3xl sm:mt-6">
-            <TestimonialMarquee />
-          </motion.div>
-
-          <motion.p variants={fadeUp} className="mx-auto mt-7 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:mt-4 sm:text-lg">
-            Speak your wins the moment they happen. So when an interview, resume, or performance review comes up, the story&apos;s already there — not buried in a memory you can&apos;t quite reconstruct.
-          </motion.p>
-          <motion.div ref={heroCtaRef} variants={fadeUp} className="mt-10 sm:mt-6">
-            <PillButton />
-          </motion.div>
-          {/* Unified with the sticky bar's incentive line below (and the
-              closing CTA's, further down) -- previously this said "Free
-              for {trialMonths} months · no card needed" while the sticky
-              bar (visible for most of the scroll, right up to the moment
-              someone actually taps "Get the App") said "Free for the
-              first 1,000 users". The founder had already explicitly chosen
-              that framing over the trial-length one for the sticky bar
-              (2026-09-26, see StickyGetAppBar.tsx's comment) -- it just
-              never got applied here or in the closing CTA, so a visitor
-              reading both saw two different offers and had a reason to
-              hesitate right before converting. This makes every CTA on
-              the page say the same thing.
-
-              Upgraded 2026-10-04 from that static claim to the real, live
-              count (see lib/useFoundingMemberCount.ts) -- the founder's
-              own "free for the first 1,000" framing now corresponds to an
-              actual Founding Member number every signup gets (see
-              founding_member_number's migration comment in lib/db.ts) and
-              a card they can see and share at /founding-member -- so this
-              line went from an aspirational tagline to something real and
-              checkable, not just a stronger hook. */}
-          <motion.p variants={fadeUp} className="mt-5 text-xs text-[#5a5a66] sm:mt-2">
-            {foundingMemberIncentiveText} · no card needed
-          </motion.p>
-          <motion.div variants={fadeUp} className="mx-auto mt-auto flex max-w-lg flex-wrap items-center justify-center gap-x-5 gap-y-4 pt-8 text-xs text-[#8a8a99] sm:mt-5 sm:gap-x-6 sm:gap-y-2 sm:pt-0 sm:text-sm">
-            <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Interview tomorrow</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Updating your resume</span>
-            <span className="inline-flex items-center gap-1.5"><Check size={14} className="text-brand-secondary" />Performance review</span>
-          </motion.div>
-        </motion.div>
+        {/* The shared opening section -- see MarketingHero.tsx for why
+            this was extracted (same hero now also opens the blog index,
+            minus this video). */}
+        <MarketingHero trialMonths={trialMonths} heroCtaRef={heroCtaRef} />
 
         <motion.div
           initial={{ opacity: 0, y: 30 }}

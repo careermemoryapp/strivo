@@ -6,6 +6,7 @@ import { BlogSidebar } from "@/components/blog/BlogSidebar";
 import { RelatedPosts } from "@/components/blog/RelatedPosts";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
+import { categoryAccent, estimateReadingTime } from "@/lib/blogCategoryStyle";
 import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
 import { getBlogPostBySlug, listBlogPosts } from "@/lib/repo/blogPosts";
 
@@ -35,13 +36,26 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
   const post = getBlogPostBySlug(slug);
   if (!post) notFound();
 
-  // Up to 3 other posts in the same category, newest first, excluding
-  // this one -- fed to RelatedPosts below the article. Fetching 4 and
-  // slicing to 3 (rather than asking for exactly 3) covers the case where
-  // this post itself is among the 3 most recent in its category.
-  const relatedPosts = listBlogPosts({ category: post.category, limit: 4 })
-    .filter((p) => p.id !== post.id)
-    .slice(0, 3);
+  // Prefer up to 3 other posts in the SAME category; if the category is
+  // too new to have 3 of its own yet (e.g. this is its first article),
+  // backfill with the newest posts from any other category so the
+  // section is never empty -- added 2026-10-11 after exactly that case
+  // (a brand-new category's only post had nothing to point to). The
+  // heading reflects whichever mix this post actually got.
+  const sameCategory = listBlogPosts({ category: post.category, limit: 4 }).filter((p) => p.id !== post.id);
+  let relatedPosts = sameCategory.slice(0, 3);
+  let relatedHeading = `More in ${post.category}`;
+  if (relatedPosts.length < 3) {
+    const usedIds = new Set([post.id, ...relatedPosts.map((p) => p.id)]);
+    const backfill = listBlogPosts({ limit: 3 + usedIds.size }).filter((p) => !usedIds.has(p.id));
+    if (backfill.length > 0) {
+      relatedPosts = [...relatedPosts, ...backfill].slice(0, 3);
+      relatedHeading = "More from the blog";
+    }
+  }
+
+  const readingTime = estimateReadingTime(post.content_html);
+  const accent = categoryAccent(post.category);
 
   const url = `https://strivo.ai/blog/${post.slug}`;
   const jsonLd = {
@@ -77,36 +91,46 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
         <PlayStoreLink location="blog_post_nav" href={SINGULAR_TRACKING_LINK} size="sm" />
       </header>
 
-      {/* Added 2026-10-01: Clarity shows ~14% average scroll depth across
-          the site, so most visitors never reach BlogCta at the bottom of
-          the post or scroll far enough to trigger StickyGetAppBar. This is
-          the one concrete incentive line nearly everyone who opens the
-          page will actually see. */}
-      <div className="border-b border-[#1e1e26] px-5 py-2 text-center text-[11px] font-semibold tracking-wide text-[#c4b5fd] sm:px-8" style={{ background: "#0a0a0f" }}>
-        Free for 2 months · no card needed
-      </div>
-
       {/* Two-column layout -- added 2026-10-11, direct founder request: the
           blog's job is converting readers into downloads, not just
-          hosting an article, so a bare centered column with nothing else
-          on the page read as "empty" even with a full post in it. Left:
-          the article itself (unchanged width/typography from before).
-          Right: BlogSidebar (testimonials + the ChatGPT differentiator +
-          a CTA), `sticky` so it travels with the reader down a long post
-          instead of disappearing after the first screen. Sidebar is
-          desktop-only (`hidden lg:block`) -- see BlogSidebar.tsx's own
-          comment for why mobile relies on BlogCta + RelatedPosts + the
-          sticky bottom bar instead. */}
+          hosting an article. Left: the article. Right: BlogSidebar
+          (About Strivo + testimonials), `sticky` so it travels with the
+          reader down a long post. The standalone "Free for 2 months, no
+          card needed" bar that used to sit above the article was dropped
+          in this pass -- the sidebar now carries that job, and repeating
+          it right above the article too read as redundant once the
+          sidebar was added (direct founder feedback).
+
+          `items-stretch` (the default -- NOT `items-start`) on the row is
+          deliberate: it makes the <aside> stretch to the article's full
+          height, which is what actually lets `sticky` inside it travel
+          the WHOLE scroll instead of unsticking after one screen. With
+          `items-start` the aside only gets as tall as its own content
+          (roughly the same height as the sticky div itself), so the
+          sticky element has almost no room to stick before running out of
+          containing block -- confirmed the actual cause after a direct
+          founder report ("it should stay sticky even scrolling the
+          article"). Sidebar is desktop-only (`hidden lg:block`) -- on
+          mobile, BlogCta + RelatedPosts + the sticky bottom bar carry the
+          conversion job instead of stacking all of this under the
+          article. */}
       <div className="px-8 py-14 sm:px-12" style={{ background: "#0a0a0f" }}>
-        <div className="mx-auto flex max-w-6xl gap-12 lg:items-start">
+        <div className="mx-auto flex max-w-6xl gap-12">
           <article className="min-w-0 max-w-2xl flex-1">
             <Link href="/blog" className="text-xs font-medium text-[#8a8a99] hover:text-white">
               &larr; Back to blog
             </Link>
 
-            <p className="mt-6 text-xs font-semibold tracking-[0.15em] text-brand-secondary">{post.category.toUpperCase()}</p>
-            <h1 className="mt-2 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">{post.title}</h1>
-            <p className="mt-3 text-xs text-[#5a5a66]">{formatDate(post.created_at)}</p>
+            <span
+              className="mt-6 inline-block rounded-full px-2.5 py-1 text-[10px] font-bold tracking-[0.1em]"
+              style={{ background: `${accent}26`, color: accent }}
+            >
+              {post.category.toUpperCase()}
+            </span>
+            <h1 className="mt-3 text-3xl font-extrabold leading-tight tracking-tight sm:text-4xl">{post.title}</h1>
+            <p className="mt-3 text-xs text-[#5a5a66]">
+              {formatDate(post.created_at)} · {readingTime} min read
+            </p>
 
             <div className="mt-8 overflow-hidden rounded-2xl border border-[#2a2a35]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -130,7 +154,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
         {relatedPosts.length > 0 && (
           <div className="mx-auto mt-16 max-w-6xl border-t border-[#1e1e26] pt-12">
-            <RelatedPosts posts={relatedPosts} category={post.category} />
+            <RelatedPosts posts={relatedPosts} heading={relatedHeading} />
           </div>
         )}
       </div>

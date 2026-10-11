@@ -1,11 +1,12 @@
 // Shared marketing content -- extracted 2026-10-11 from MarketingHome.tsx
-// so the blog pages (the index at /blog and each post's sidebar/related
-// section -- see components/blog/BlogSidebar.tsx and
-// components/marketing/TestimonialMarquee.tsx /
-// ChatGptComparisonSection.tsx) can reuse the exact same real testimonials
-// and differentiator copy as the homepage, instead of a second, divergent
-// copy that could drift out of sync (or worse, get re-fabricated) over
-// time. MarketingHome.tsx imports these instead of defining them locally.
+// so the blog pages (the index at /blog, via MarketingHero.tsx, and each
+// post's sidebar -- components/blog/BlogSidebar.tsx) can reuse the exact
+// same real testimonials and differentiator copy as the homepage, instead
+// of a second, divergent copy that could drift out of sync (or worse, get
+// re-fabricated) over time. MarketingHome.tsx imports these instead of
+// defining them locally. COMPARISON_POINTS is still used in full by
+// ChatGptComparisonSection.tsx, which the homepage doesn't currently
+// render but is kept available for a future placement.
 
 // Comparison copy deliberately understates what ChatGPT/Claude can do --
 // e.g. not claiming "no memory at all" when custom instructions and
