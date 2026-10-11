@@ -5,6 +5,7 @@ import { personalize, renderCampaignBodyHtml, htmlToPlainText, wrapBrandedEmail 
 import { renderWelcomeEmailHtml, renderWelcomeEmailText } from "@/lib/emailWelcome";
 import { renderFoundingMemberWelcomeEmailHtml, renderFoundingMemberWelcomeEmailText } from "@/lib/emailFoundingMemberWelcome";
 import { renderGiftEmailHtml, renderGiftEmailText, type GiftPlan } from "@/lib/emailGift";
+import { renderAppLinkEmailHtml, renderAppLinkEmailText } from "@/lib/emailAppLink";
 import { renderProductUpdateEmailHtml, renderProductUpdateEmailText } from "@/lib/emailProductUpdate";
 import { getOrCreateFoundingMemberShare } from "@/lib/repo/foundingMember";
 import { FOUNDING_MEMBER_CAP } from "@/lib/config";
@@ -281,6 +282,44 @@ export async function sendGiftEmail(params: {
     return true;
   } catch (e) {
     console.error(`Failed to send gift email to ${params.toEmail} via SES:`, e);
+    Sentry.captureException(e);
+    return false;
+  }
+}
+
+// Backs POST /api/send-app-link -- the "email me the link instead" option
+// in the QR modal (PlayStoreLink.tsx) for desktop/iOS visitors who can't
+// install straight from a click. See emailAppLink.ts for the full
+// reasoning. This was the missing half of that feature: emailAppLink.ts
+// had the render functions, but nothing in email.ts actually sent them --
+// the route importing this function has been broken since it was added.
+// Same transactional shell pattern as sendWelcomeEmail/sendGiftEmail:
+// never throws, returns false on any failure so the route can report a
+// clean error instead of a 500.
+export async function sendAppLinkEmail(params: { toEmail: string; downloadUrl: string }): Promise<boolean> {
+  if (!sesConfigured()) {
+    console.error("SES not configured (missing AWS_ACCESS_KEY_ID/AWS_SECRET_ACCESS_KEY) — skipping app link email.");
+    return false;
+  }
+
+  try {
+    await getClient().send(
+      new SendEmailCommand({
+        Source: FROM_EMAIL,
+        Destination: { ToAddresses: [params.toEmail] },
+        Message: {
+          Subject: { Data: "Your Strivo download link", Charset: "UTF-8" },
+          Body: {
+            Html: { Data: renderAppLinkEmailHtml(params.downloadUrl), Charset: "UTF-8" },
+            Text: { Data: renderAppLinkEmailText(params.downloadUrl), Charset: "UTF-8" },
+          },
+        },
+      })
+    );
+    console.log(`App link email sent to ${params.toEmail} via SES.`);
+    return true;
+  } catch (e) {
+    console.error(`Failed to send app link email to ${params.toEmail} via SES:`, e);
     Sentry.captureException(e);
     return false;
   }
