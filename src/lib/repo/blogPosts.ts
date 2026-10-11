@@ -9,6 +9,7 @@ export const BLOG_CATEGORIES = [
   "Resume Tips",
   "Career Growth",
   "Leadership",
+  "Performance Reviews",
   "Product Updates",
 ] as const;
 export type BlogCategory = (typeof BLOG_CATEGORIES)[number];
