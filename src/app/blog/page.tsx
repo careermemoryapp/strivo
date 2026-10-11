@@ -1,5 +1,7 @@
 import Link from "next/link";
 import { LogoMark } from "@/components/Logo";
+import { ChatGptComparisonSection } from "@/components/marketing/ChatGptComparisonSection";
+import { TestimonialMarquee } from "@/components/marketing/TestimonialMarquee";
 import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
 import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
@@ -80,6 +82,22 @@ export default async function BlogIndexPage({
           </p>
         </div>
       </section>
+
+      {/* Social proof + differentiator -- added 2026-10-11, direct founder
+          request: the blog's job is converting readers into app
+          downloads, not just ranking for keywords, and the page read as
+          "empty" with nothing on it but a hero and a list of links. Same
+          real testimonials and ChatGPT-comparison copy as the homepage
+          (lib/marketingContent.ts) via the shared, non-animated
+          components -- see TestimonialMarquee.tsx and
+          ChatGptComparisonSection.tsx for why these are plain server
+          components instead of reusing MarketingHome.tsx's
+          framer-motion versions directly. */}
+      <section className="border-b border-[#1e1e26] px-8 py-14 sm:px-12" style={{ background: "#0a0a0f" }}>
+        <TestimonialMarquee />
+      </section>
+
+      <ChatGptComparisonSection />
 
       {/* Category filter */}
       <section className="border-b border-[#1e1e26] px-8 py-5" style={{ background: "#0a0a0f" }}>

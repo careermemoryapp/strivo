@@ -13,6 +13,8 @@ import { StickyGetAppBar } from "@/components/StickyGetAppBar";
 import { APP_NAME, FOUNDING_MEMBER_CAP, FOUNDING_MEMBER_TRIAL_MONTHS, SINGULAR_TRACKING_LINK } from "@/lib/config";
 import { useFoundingMemberIncentiveText, useFoundingMemberStats } from "@/lib/useFoundingMemberCount";
 import { CAREER_PROFILE_QUIZ_ORDER, CAREER_PROFILE_QUIZZES } from "@/lib/careerProfile";
+import { COMPARISON_POINTS } from "@/lib/marketingContent";
+import { TestimonialMarquee } from "@/components/marketing/TestimonialMarquee";
 
 // Strivo's official social accounts — shown as icon links in the header
 // and footer. Kept as one list so both spots can't drift out of sync.
@@ -637,88 +639,7 @@ const OVER_TIME_FEATURES = [
 // as "ChatGPT has no memory at all" (it does, to a degree) -- the real,
 // defensible gap is that a general-purpose chatbot never acts on its own:
 // it only ever responds inside a conversation someone started.
-const COMPARISON_POINTS = [
-  {
-    title: "Follows up, unprompted",
-    strivo: "You mention an interview next Tuesday. Five days later — completely on its own, no chat open, no reminder set — Strivo asks how it went, and turns your answer into a story you can actually use.",
-    others: "The moment you close the tab, the conversation is gone. Nothing comes back to check on you — ever.",
-  },
-  {
-    title: "Organizes your stories by competency",
-    strivo: "Every memory is auto-tagged the second you record it — Leadership, Problem-Solving, and 20 more. Open your Story Bank and know exactly which \"tell me about a time...\" questions you can already answer, and which you can't yet.",
-    others: "No memory of the shape of what you've told it. Finding that one story again means scrolling back through old chats and hoping you remember which one.",
-  },
-  {
-    title: "Reacts to what you just said",
-    strivo: "You finish talking. Before you've even opened a new screen, it tells you — unprompted — \"that's a strong Leadership example.\" You didn't have to ask. It noticed.",
-    others: "Says nothing unless you explicitly ask it to evaluate your story. Most people never think to ask, so most good stories go unnoticed.",
-  },
-  {
-    title: "Writes the resume line for you",
-    strivo: "A polished, numbers-included bullet — built automatically the moment you finish your story, sitting there ready to copy straight into your resume.",
-    others: "You have to ask for it, re-explain the context, and hope it gets the numbers right — every single time.",
-  },
-  {
-    title: "Sends real check-ins automatically",
-    strivo: "A recap of your week. A read on how you've grown. A quarter measured honestly against the one before it. All pushed to your phone — you never once have to go looking for them.",
-    others: "Nothing arrives on its own. Every insight, every recap, every reflection has to be requested, from scratch, by you.",
-  },
-];
 
-// Four real testimonials -- sourced directly from people who actually
-// used the app (a Play Store review, a WhatsApp message, a recap call),
-// quoted in their own words with their name/role as confirmed by the
-// founder (2026-10-01). Order is the founder's choice, not rating-sorted.
-const HERO_TESTIMONIALS = [
-  {
-    initial: "B",
-    name: "Bhupender K.",
-    role: "Program Manager",
-    quote:
-      "It can tell me stories about my own career — things I didn't even realize I could leverage.",
-  },
-  {
-    initial: "R",
-    name: "Rakesh G.",
-    role: "Director",
-    quote: "I've been using Strivo — you record a moment as it happens, and it's ready as a resume line or interview story when you need it.",
-  },
-  {
-    initial: "S",
-    name: "Sudhakar J.",
-    role: "Chief Digital Officer",
-    quote: "You make your career a project — set up the memory, and it remembers you. A good initiative.",
-  },
-  {
-    initial: "A",
-    name: "Arjun V.",
-    role: "Director",
-    quote: "The idea seems novel and promising.",
-  },
-  // Three more pulled from real Play Store reviews (2026-10-02), trimmed
-  // to fit the card the same way Rakesh's was -- see this array's comment
-  // above for why these are real, attributed quotes, not placeholders.
-  {
-    initial: "H",
-    name: "Harsha G.",
-    role: "Software Developer",
-    quote:
-      "It surfaced career stories I didn't even realize I had — a point I thought was ordinary turned out to be a strong leadership story for interviews.",
-  },
-  {
-    initial: "R",
-    name: "Rohit K.",
-    role: "Manager",
-    quote:
-      "I often forget what I've done at work. I just speak freely about it, and Strivo organizes everything into structured career memories for me.",
-  },
-  {
-    initial: "S",
-    name: "Sagar",
-    role: "Product Manager",
-    quote: "Really liked the clean, user-friendly interface — very intuitive and self-explanatory.",
-  },
-];
 
 export function MarketingHome({
   trialMonths,
@@ -856,47 +777,13 @@ export function MarketingHome({
             </span>
           </motion.h1>
 
-          {/* Real testimonials -- see HERO_TESTIMONIALS above. Uniform
-              card size/color (brand gradient avatar, not per-person
-              colors) so the row reads as one aligned strip rather than a
-              patchwork -- direct founder feedback (2026-10-01) after the
-              first pass used mismatched widths and colorful avatars. */}
+          {/* Real testimonials -- see lib/marketingContent.ts. Rendered
+              through the shared TestimonialMarquee component (extracted
+              2026-10-11) so this exact strip -- real names, uniform
+              brand-gradient avatars, same marquee animation -- also shows
+              up on the blog pages without a second, divergent copy. */}
           <motion.div variants={fadeUp} className="mx-auto mt-8 w-full max-w-3xl sm:mt-6">
-            <p className="mb-2.5 text-center text-[10px] font-bold tracking-[0.16em] text-[#6a6a75]">
-              WHAT PEOPLE ARE SAYING
-            </p>
-            <div
-              className="w-full overflow-hidden"
-              style={{
-                WebkitMaskImage: "linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)",
-                maskImage: "linear-gradient(90deg, transparent, #000 8%, #000 92%, transparent)",
-              }}
-            >
-              <div className="animate-testimonial-marquee flex w-max gap-3.5">
-                {[...HERO_TESTIMONIALS, ...HERO_TESTIMONIALS].map((t, i) => (
-                  <div
-                    key={`${t.name}-${i}`}
-                    className="flex h-[168px] w-60 shrink-0 flex-col justify-start rounded-2xl border border-[#2a2a35] p-4"
-                    style={{ background: "linear-gradient(160deg,#15121c,#0e0c12)", boxShadow: "0 10px 26px rgba(0,0,0,0.3)" }}
-                  >
-                    <div className="mb-2.5 flex items-center gap-2.5">
-                      <div
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[13px] font-extrabold text-white"
-                        style={{ background: "linear-gradient(135deg,#7c3aed,#4f6ef7)" }}
-                      >
-                        {t.initial}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-[12.5px] font-bold text-white">{t.name}</p>
-                        <p className="truncate text-[10.5px] text-[#8a8a99]">{t.role}</p>
-                      </div>
-                    </div>
-                    <p className="mb-1.5 text-[11px] tracking-[1.5px] text-[#fbbf24]">&#9733;&#9733;&#9733;&#9733;&#9733;</p>
-                    <p className="text-[12px] leading-relaxed text-[#d4d4db]">{t.quote}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
+            <TestimonialMarquee />
           </motion.div>
 
           <motion.p variants={fadeUp} className="mx-auto mt-7 max-w-md text-base leading-relaxed text-[#a0a0ac] sm:mt-4 sm:text-lg">
