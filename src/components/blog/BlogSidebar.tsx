@@ -22,6 +22,12 @@ import { HERO_TESTIMONIALS } from "@/lib/marketingContent";
 // MarketingHero.tsx) -- so the full comparison today lives only on the
 // homepage.
 //
+// Padding tightened 2026-10-11 (second founder pass, from a live
+// screenshot): the original p-5/gap-6/gap-4 spacing pushed the testimonial
+// card's content past the visible area in the sticky column -- the last
+// testimonial was getting cut off. Trimmed throughout so the same content
+// fits in less vertical space.
+//
 // Only 3 of the 7 HERO_TESTIMONIALS fit here without the sidebar running
 // longer than most articles -- same source of truth as the homepage and
 // the blog index's TestimonialMarquee, just trimmed for a ~300px column.
@@ -29,12 +35,12 @@ const SIDEBAR_TESTIMONIALS = HERO_TESTIMONIALS.slice(0, 3);
 
 export function BlogSidebar() {
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-4">
       {/* About Strivo -- the same core pitch as BlogCta (end of article)
           and StickyGetAppBar, just framed for a sidebar card instead of a
           full-width banner. */}
       <div
-        className="rounded-2xl border border-[#2a2a35] p-5"
+        className="rounded-2xl border border-[#2a2a35] p-4"
         style={{ background: "linear-gradient(135deg,#160a26,#0a0a0f)" }}
       >
         <p className="text-xs font-semibold tracking-[0.15em] text-brand-primary">YOUR AI CAREER MEMORY</p>
@@ -46,25 +52,25 @@ export function BlogSidebar() {
           location="blog_sidebar_cta"
           href={SINGULAR_TRACKING_LINK}
           size="md"
-          className="mt-4 w-full justify-center"
+          className="mt-3.5 w-full justify-center"
         />
-        <p className="mt-2.5 text-center text-[11px] font-semibold text-[#8a8a99]">
+        <p className="mt-2 text-center text-[11px] font-semibold text-[#8a8a99]">
           Free for the first 1,000 users
         </p>
       </div>
 
       {/* Real testimonials -- see lib/marketingContent.ts. */}
       <div
-        className="rounded-2xl border border-[#2a2a35] p-5"
+        className="rounded-2xl border border-[#2a2a35] p-4"
         style={{ background: "linear-gradient(160deg,#15121c,#0e0c12)" }}
       >
-        <p className="mb-4 text-[10px] font-bold tracking-[0.16em] text-[#6a6a75]">WHAT PEOPLE ARE SAYING</p>
-        <div className="flex flex-col gap-4">
+        <p className="mb-3 text-[10px] font-bold tracking-[0.16em] text-[#6a6a75]">WHAT PEOPLE ARE SAYING</p>
+        <div className="flex flex-col gap-3">
           {SIDEBAR_TESTIMONIALS.map((t, i) => (
-            <div key={t.name} className={i > 0 ? "border-t border-[#232330] pt-4" : ""}>
-              <div className="mb-2 flex items-center gap-2.5">
+            <div key={t.name} className={i > 0 ? "border-t border-[#232330] pt-3" : ""}>
+              <div className="mb-1.5 flex items-center gap-2">
                 <div
-                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[12px] font-extrabold text-white"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[11px] font-extrabold text-white"
                   style={{ background: "linear-gradient(135deg,#7c3aed,#4f6ef7)" }}
                 >
                   {t.initial}

@@ -1,7 +1,6 @@
 import Link from "next/link";
-import { LogoMark } from "@/components/Logo";
+import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { MarketingHero } from "@/components/marketing/MarketingHero";
-import { PlayStoreLink } from "@/components/PlayStoreLink";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
 import { categoryAccent, estimateReadingTime } from "@/lib/blogCategoryStyle";
 import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
@@ -38,27 +37,16 @@ export default async function BlogIndexPage({
 
   return (
     <div id="blog-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
-      {/* Nav -- sticky, and a real button, not a gray text link (see the
-          same comment in MarketingHome.tsx's header -- this is the CTA
-          that stays visible while someone browses the post list). */}
-      <header
-        className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-5 py-5 sm:px-8"
-        style={{ background: "#0a0a0f" }}
-      >
-        <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <LogoMark size={28} />
-          <span className="hidden text-[15px] font-extrabold tracking-tight sm:inline">{APP_NAME.toUpperCase()}</span>
-        </Link>
-        <div className="flex items-center gap-3 sm:gap-5">
-          <span className="text-xs font-semibold text-white">Blog</span>
-          <PlayStoreLink location="blog_nav" href={SINGULAR_TRACKING_LINK} size="sm" />
-        </div>
-      </header>
-
-      {/* Added 2026-10-01 -- see the matching comment in blog/[slug]/page.tsx. */}
-      <div className="border-b border-[#1e1e26] px-5 py-2 text-center text-[11px] font-semibold tracking-wide text-[#c4b5fd] sm:px-8" style={{ background: "#0a0a0f" }}>
-        Free for 2 months · no card needed
-      </div>
+      {/* Nav -- the exact same shared header as the homepage and every
+          blog post (see MarketingHeader.tsx). Direct founder feedback
+          (2026-10-11): "the blog top bar should be same as the top bar of
+          the marketing page" -- this used to be a simplified header (plain
+          "Blog" text, no social icons); now it's one component everywhere.
+          The standalone "Free for 2 months, no card needed" bar that used
+          to sit directly under this header was also dropped in the same
+          pass -- the real strivo.ai homepage never had it, so matching the
+          homepage means not having it here either. */}
+      <MarketingHeader navLocation="blog_nav" />
 
       {/* The opening section of strivo.ai itself -- badge, headline,
           testimonial marquee, CTA, incentive line -- MINUS the app-demo

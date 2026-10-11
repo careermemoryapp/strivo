@@ -1,10 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { LogoMark } from "@/components/Logo";
 import { BlogCta } from "@/components/blog/BlogCta";
 import { BlogSidebar } from "@/components/blog/BlogSidebar";
 import { RelatedPosts } from "@/components/blog/RelatedPosts";
-import { PlayStoreLink } from "@/components/PlayStoreLink";
+import { MarketingHeader } from "@/components/marketing/MarketingHeader";
 import { StickyGetAppBar } from "@/components/StickyGetAppBar";
 import { categoryAccent, estimateReadingTime } from "@/lib/blogCategoryStyle";
 import { APP_NAME, SINGULAR_TRACKING_LINK } from "@/lib/config";
@@ -75,21 +74,12 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
     <div id="blog-root" className="min-h-screen font-sans text-white" style={{ background: "#0a0a0f" }}>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
 
-      {/* Sticky + a real button, not a gray text link -- see the same
-          comment in MarketingHome.tsx's header. This is the ONE CTA that
-          stays on screen for the entire time someone's reading a post,
-          which can run well past a screen's worth of scrolling before
-          they'd otherwise reach BlogCta at the bottom. */}
-      <header
-        className="sticky top-0 z-50 flex items-center justify-between border-b border-[#1e1e26] px-5 py-5 sm:px-8"
-        style={{ background: "#0a0a0f" }}
-      >
-        <Link href="/" className="flex shrink-0 items-center gap-2.5">
-          <LogoMark size={28} />
-          <span className="hidden text-[15px] font-extrabold tracking-tight sm:inline">{APP_NAME.toUpperCase()}</span>
-        </Link>
-        <PlayStoreLink location="blog_post_nav" href={SINGULAR_TRACKING_LINK} size="sm" />
-      </header>
+      {/* The exact same shared header as the homepage and the blog index
+          (see MarketingHeader.tsx) -- direct founder feedback (2026-10-11):
+          "the blog top bar should be same as the top bar of the marketing
+          page." This used to be a trimmed-down header with no "Blog" link
+          and no social icons; now it's one component everywhere. */}
+      <MarketingHeader navLocation="blog_post_nav" />
 
       {/* Two-column layout -- added 2026-10-11, direct founder request: the
           blog's job is converting readers into downloads, not just
