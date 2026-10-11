@@ -2,13 +2,17 @@ import { ImageResponse } from "next/og";
 import { APP_NAME } from "@/lib/config";
 import { getBlogPostBySlug } from "@/lib/repo/blogPosts";
 
-// Branded cover graphic per blog post — used both as the link-preview image
-// (WhatsApp/LinkedIn/Twitter) and as the actual cover shown inline on the
-// blog listing and post pages (see the <img src={`/blog/${slug}/opengraph-image`}>
-// references there). No photo-realistic AI image generator is wired up, so
-// this is a designed graphic (title + category + brand mark on the dark
-// theme) rather than a photo — rendered at request time with next/og, so a
-// freshly published post gets a cover immediately with no extra step.
+// Branded cover graphic per blog post, used for the real link-preview image
+// on WhatsApp/LinkedIn/Twitter (Next.js wires this up automatically via the
+// opengraph-image.tsx file convention — no explicit metadata.openGraph.images
+// needed). No photo-realistic AI image generator is wired up, so this is a
+// designed graphic (title + category + brand mark on the dark theme) rather
+// than a photo — rendered at request time with next/og, so a freshly
+// published post gets a cover immediately with no extra step.
+//
+// NOT used for the in-page thumbnails on the blog listing/post pages
+// anymore (2026-10-11) -- see ./cover/route.tsx for why those switched to a
+// plain, textless version of this same graphic.
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 

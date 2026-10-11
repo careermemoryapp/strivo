@@ -124,7 +124,7 @@ export default async function BlogPostPage({ params }: { params: Promise<{ slug:
 
             <div className="mt-8 overflow-hidden rounded-2xl border border-[#2a2a35]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`/blog/${post.slug}/opengraph-image`} alt="" className="w-full" />
+              <img src={`/blog/${post.slug}/cover`} alt="" className="w-full" />
             </div>
 
             <div

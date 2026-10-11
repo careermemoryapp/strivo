@@ -36,7 +36,7 @@ export function RelatedPosts({ posts, heading }: { posts: BlogPost[]; heading: s
             <div className="aspect-[1200/630] w-full overflow-hidden bg-[#12081f]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`/blog/${p.slug}/opengraph-image`}
+                src={`/blog/${p.slug}/cover`}
                 alt=""
                 className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105"
               />
