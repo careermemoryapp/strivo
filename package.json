@@ -20,7 +20,7 @@
     "@capacitor/push-notifications": "^8.1.2",
     "@capacitor/share": "^8.0.1",
     "@capawesome/capacitor-file-picker": "^8.0.6",
-    "@sentry/nextjs": "^10.70.0",
+    "@sentry/nextjs": "^10.75.2",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
     "firebase-admin": "^14.2.0",
